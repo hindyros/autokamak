@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+
+<html lang="en" style="height: 100%">
+    <head>
+        
+            <!-- Google tag (gtag.js) -->
+            <script async src="https://www.googletagmanager.com/gtag/js?id=G-DHJF51F24N"></script>
+            <script>
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+
+              gtag('config', 'G-DHJF51F24N');
+            </script>
+        
+
+        <meta charset="utf-8">
+        <title>Host, run, and code Python in the cloud: PythonAnywhere</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="Host, run, and code Python in the cloud: PythonAnywhere">
+        <meta name="author" content="PythonAnywhere LLP">
+        <meta name="google-site-verification" content="O4UxDrfcHjC44jybs2vajc1GgRkTKCTRgVzeV6I9V14" />
+
+
+        <!-- Le styles -->
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i" />
+
+        <link rel="stylesheet" href="/static/CACHE/css/output.562ba3d8506e.css" type="text/css" media="screen">
+        <link rel="stylesheet" href="/static/CACHE/css/output.b9a4961a16f7.css" type="text/css"><link rel="stylesheet" href="/static/CACHE/css/output.4d5edab1d566.css" type="text/css" media="screen">
+
+        <!-- Le javascript -->
+        <script type="text/javascript">
+            var Anywhere = {};
+            Anywhere.urls = {};
+            Anywhere.csrfToken = "3kLbr9k1DNPP2CRpUWrgVK1HuI0MO40eInmNSpGO3AnQYOw6lnJyJAQOgyK4GzB6";
+        </script>
+        <script src="/static/CACHE/js/output.33398915ce6a.js"></script>
+        
+
+        
+        
+        
+
+    </head>
+
+    <body style="height:100%;">
+       <div style="min-height: 100%; position: relative;">
+        
+  
+    <nav class="navbar alert alert-warning alert-dismissible cookie-warning" style="padding: 10px 35px 5px 35px; min-height: auto;" id="id_cookie_warning_marker_for_response_middleware">
+      <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+      <p>
+        <small>
+          We use cookies to provide social media features and to analyse our traffic. We also share information about your use of our site with our social media and analytics partners. <a href="/privacy/#cookies">Details here</a>.
+        </small>
+      </p>
+    </nav>
+  
+
+        
+  <nav class="navbar top-nav hidden-xs">
+    <div class="container">
+      <ul class="nav navbar-nav navbar-right">
+        
+<li class="">
+        <a href="" data-testid="contact_support_link" target="_parent" class="feedback_link">
+                
+                Send Feedback
+                
+        </a>
+</li>
+
+
+<li class=""><a href="/forums/" target="_parent" class="forums_link">Forums</a></li>
+<li class=""><a href="https://help.pythonanywhere.com/" target="_parent" class="help_link">Help</a>
+</li>
+<li class=""><a href="https://blog.pythonanywhere.com/" target="_parent" class="blog_link">Blog</a>
+</li>
+
+<li class=""><a style="font-weight: bold;" href="/pricing/" target="_parent"
+                class="pricing_link">Pricing & signup</a></li>
+<li class=""><a href="/login/?next=/" class="login_link"
+                target="_parent">Log in</a></li>
+
+      </ul>
+    </div>
+  </nav>
+
+  
+
+
+
+
+  <nav class="navbar primary-navbar">
+    <div class="container">
+      <div class="navbar-header">
+        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#main_nav" aria-expanded="false">
+          <span class="sr-only">Toggle navigation</span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="navbar-brand" href="/">
+          <img id='id_logo' src="/static/anywhere/images/PA-logo.svg" width="225">
+        </a>
+      </div>
+
+      <div class="collapse navbar-collapse" id="main_nav">
+        <ul class="nav navbar-nav navbar-right">
+          
+            
+
+          
+          
+<li class="visible-xs">
+        <a href="" data-testid="contact_support_link" target="_parent" class="feedback_link">
+                
+                Send Feedback
+                
+        </a>
+</li>
+
+
+<li class="visible-xs"><a href="/forums/" target="_parent" class="forums_link">Forums</a></li>
+<li class="visible-xs"><a href="https://help.pythonanywhere.com/" target="_parent" class="help_link">Help</a>
+</li>
+<li class="visible-xs"><a href="https://blog.pythonanywhere.com/" target="_parent" class="blog_link">Blog</a>
+</li>
+
+<li class="visible-xs"><a style="font-weight: bold;" href="/pricing/" target="_parent"
+                class="pricing_link">Pricing & signup</a></li>
+<li class="visible-xs"><a href="/login/?next=/" class="login_link"
+                target="_parent">Log in</a></li>
+
+        </ul>
+      </div>
+
+    </div>
+  </nav>
+
+  <div class="container">
+    
+
+  </div>
+
+  
+
+    
+  
+
+
+        
+  
+
+
+        
+    <div class="jumbotron">
+        <div class="container">
+            <div class="row">
+                <h1>Host, run, and code Python in the cloud!</h1>
+
+                <div class="bumf-left">
+                    <p style="padding-bottom: 13px; font-size: 20px;">
+                        Get started for free.  Our basic plan gives you
+                        access to machines with
+                        <a href="/batteries_included/">a full Python environment</a> already installed.
+                        You can develop and host your website or any other code directly from
+                        your browser
+                        without having to install software or manage your
+                        own server.
+                    </p>
+
+                    <p style="padding-bottom: 13px; font-size: 20px;">
+                      Need more power?  Upgraded plans start at $5/month.
+                    </p>
+
+                    <p>
+                        <a id="id_plans_pricing_signup_link" class="btn btn-success btn-large" href="/pricing/">
+                            <span style="font-size: larger">Start running Python online in less than a minute! &raquo;</span><br/>
+                        </a>
+                    </p>
+
+                    <p>
+                        <a id="id_plans_pricing_signup_link" class="btn btn-info" href="https://www.youtube.com/watch?v=yhqYFyo7dAM">
+                            <span style="font-size: larger">Watch our short video &raquo;</span>
+                        </a>
+                    </p>
+
+                    <p>
+                        Not convinced?  <a href="/about/testimonials/">Read what our users are saying!</a>
+                    </p>
+
+                </div>
+
+                <img src="/static/anywhere/images/screenshot-fp.png" width="560px" id="id_main_screenshot" />
+            </div>
+        </div>
+    </div>
+
+
+    <div id="id_buttons" class="details-stripe">
+
+        <div class="container">
+
+            <div class="row">
+                <div class="col-md-3">
+                    <img style="float: left; margin: 7px 10px 0 0; opacity: 0.8;"  src="/static/glyphicons/glyphicons_232_cloud.png">
+                    <h3>Start hosting quickly</h3>
+                    <p>
+                        Just write your application. No need to configure or maintain
+                        a web server &mdash; everything is set up and ready
+                        to go.
+                    </p>
+                    <p><a id="id_hosting_button" href="#id_hosting_details">More &raquo;</a></p>
+                </div>
+
+                <div class="col-md-3">
+                    <img style="float: left; margin: 7px 10px 0 0; opacity: 0.8;" src="/static/glyphicons/glyphicons_138_computer_proces.png">
+                    <h3>Develop anywhere</h3>
+                    <p>
+                        Take your development environment with you! If you have a browser
+                        and an Internet connection, you've got everything you need.
+                    </p>
+                    <p><a id="id_develop_anywhere_button" href="#id_develop_anywhere_details">More &raquo;</a></p>
+                </div>
+
+                <div class="col-md-3">
+                    <img style="float: left; margin: 7px 10px 0 0; opacity: 0.8;" src="/static/glyphicons/glyphicons_064_lightbulb.png">
+                    <h3>Teach and learn</h3>
+                    <p>
+                        PythonAnywhere is a fully-fledged Python environment, ready
+                        to go, for students and teachers &mdash; concentrate on teaching,
+                        not on installation hassles.
+                    </p>
+                    <p><a id="id_education_button" href="#id_education_details">More &raquo;</a></p>
+                </div>
+
+
+                <div class="col-md-3">
+                    <img style="float: left; margin: 7px 10px 0 0; opacity: 0.8;" src="/static/glyphicons/glyphicons_043_group.png">
+                    <h3>Tech support</h3>
+                    <p>
+                        Looking for help with PythonAnywhere? Visit our Help pages for
+                        guides and FAQs, or join the conversation on our Forums to get
+                        advice from other developers (and the team!). For news and
+                        insights, take a look at our Blog.
+                    </p>
+                    <p><a id="id_support_button" href="#id_support_details">More &raquo;</a></p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="id_hosting_details" class="details-stripe">
+
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h1>Get a Python website in minutes</h1>
+                </div>
+                <div class="col-md-7">
+                    <p>
+                        We
+                        make a normally complicated process very simple, letting you
+                        focus on creating exciting applications for your users.
+                        Launching a new Django project is
+                        <a href="https://help.pythonanywhere.com/pages/FollowingTheDjangoTutorial/">a simple process taking just a couple of minutes</a>.
+                        No need to manage a web server or maintain a Linux
+                        machine.  No need to install security patches.  It just
+                        works.
+                    </p>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-7">
+
+
+                    <h2>Your choice</h2>
+                    <p>
+                        We have quickstart installers for <a href="/details/django_hosting">Django</a>,
+                        <a href="/details/web2py_hosting">web2py</a>,
+                        <a href="/details/flask_hosting">Flask</a>,
+                        and
+                        <a href="/details/bottle_hosting">Bottle</a> &mdash;
+                        we can also handle any other WSGI web framework that you want to use, and it's
+                        <a href="/batteries_included/">probably already installed</a>.
+                    </p>
+
+                    <div class="carousel slide">
+                        <div class="carousel-inner">
+
+                            <div class="item active">
+            <p class="testimonial-content">
+                Absolutely loving PythonAnywhere — it's been a total game changer for us!
+                We're Python developers building AI apps, and we're using PythonAnywhere
+                to host our Flask API app.
+                ...
+                We're genuinely impressed with the platform, and it's accelerating our
+                development and capabilities tenfold.
+                We'll definitely continue migrating more of our processes over to
+                PythonAnywhere.
+            </p>
+            <p class="testimonial-person">Eddie Baliviera, Caelus Labs</p>
+            <p class="testimonial-date">13 January 2025 </p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                PythonAnywhere is the perfect place for hosting projects. With
+                a free plan, a user-friendly interface that even beginners can
+                navigate effortlessly, and a variety of features available for
+                a minimal fee in their paid services, it offers a seamless
+                experience.
+            </p>
+            <p class="testimonial-person">Dmitry Korshunov</p>
+            <p class="testimonial-date">15 November 2023</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                I'm so glad that I came across PythonAnywhere! It's
+                seriously amazing how easy it was to get my app up and
+                running ... Thanks for creating such an
+                awesome service!
+            </p>
+            <p class="testimonial-person">Adam Ploof</p>
+            <p class="testimonial-date">22 May 2022</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                I just launched my first-ever Django project, and I'm so happy that
+                I chose Python Anywhere. Deployment was as smooth as I possibly
+                could have hoped for.
+            </p>
+            <p class="testimonial-person">Michael H</p>
+            <p class="testimonial-date">6 August 2020</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                The deployment process for a django website has never been easier.
+                It's really neat and intuitive - so impressed with it.
+            </p>
+            <p class="testimonial-person">Nitish Sahni</p>
+            <p class="testimonial-date">17 April 2020</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                I spent several hours beating my head against mod_wsgi on my server
+                before I finally got frustrated and gave up. It only took me 20 minutes
+                on your platform to pull and stand up the site and everything just
+                seems to work. Amazing product.
+            </p>
+            <p class="testimonial-person">Rob Kimball</p>
+            <p class="testimonial-date">9 April 2020</p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="col-md-5">
+                    <h2>Your website</h2>
+                    <p>
+                        Want to host your own domain at PythonAnywhere?  Our
+                        <a href="/pricing/">paid accounts</a>
+                        do that for you.  And free users don't get left out &mdash;
+                        <code>http://<i>yourusername</i>.pythonanywhere.com/</code>
+                        works for everyone.
+                    </p>
+
+                    <h2>Easy scaling</h2>
+                    <p>
+                      A $5 Hacker account at PythonAnywhere can easily support
+                        a 10,000 hit/day website.  But when your site grows and
+                        you need to support 100 times that traffic, we're still
+                        there &mdash; you just need to upgrade your account.
+                    </p>
+
+                    <p>
+                        <a class="btn btn-success btn-large" href="/pricing/">
+                            Sign up and try it out! &raquo;
+                        </a>
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="id_develop_anywhere_details" class="details-stripe">
+
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h1>Python coding on the web: <span id="id_console_count">45,802,406</span> consoles served!</h1>
+                </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-5">
+                <p>
+                    PythonAnywhere makes it easy to create and run Python programs
+                    in the cloud.  You can write your programs in a web-based editor
+                    or just run a console session from any modern web browser.
+                    There's storage space on our servers, and you can preserve your
+                    session state and access it from anywhere, with no need to pay
+                    for, or configure, your own server.  Start work on your work
+                    desktop, then later pick up from where you left off by accessing
+                    exactly the same session from your laptop.
+                </p>
+                <p>
+                  <a class="btn btn-success btn-large" href="/pricing/">
+                    Sign up and try it out! &raquo;
+                  </a>
+                </p>
+              </div>
+
+              <div class="col-md-7">
+                <div class="carousel slide">
+                  <div class="carousel-inner">
+
+                    <div class="item active">
+            <p class="testimonial-content">
+                PythonAnywhere is the perfect fit for us as we want to scale up
+                our SaaS product as more customers are arriving. The server is
+                super easy to set up and there are plenty of blog posts for when
+                you get stuck.
+            </p>
+            <p class="testimonial-person">Teun Kortekaas</p>
+            <p class="testimonial-date">5 September 2023</p>
+                    </div>
+
+                    <div class="item">
+            <p class="testimonial-content">
+                I just wanted to say that I love your service. We use PythonAnywhere
+                at work to run our internal site / database and also to update our
+                IP Phones ...
+                I like that I can do actual work here as well as creative projects
+                from the same UI.
+            </p>
+            <p class="testimonial-person">Erich Pfister</p>
+            <p class="testimonial-date">2 August 2021</p>
+                    </div>
+
+
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+
+                <div class="col-md-5">
+                    <h2>Batteries included</h2>
+                    <p>
+                        With Python versions 2.7, 3.6, 3.7, 3.8, 3.9 and 3.10, and all the goodies
+                        you normally find in a Python installation, PythonAnywhere is also
+                        preconfigured with loads of useful libraries, like NumPy, SciPy,
+                        Mechanize, BeautifulSoup, pycrypto, and many others. Check out
+                        our full list of
+                        <a href="/batteries_included/">batteries included</a>.
+                    </p>
+
+                    <h2>Powerful servers</h2>
+                    <p>
+                        PythonAnywhere runs on super-powerful servers hosted by Amazon
+                        EC2, and you can take full advantage of that.  Without paying a
+                        penny, you can run simple Python programs to help you explore
+                        your ideas. For heavy-duty processing, you only pay for what you
+                        use, so you can get access to teraflops of power without needing
+                        to explain yourself to the electricity company.
+                    </p>
+
+
+                </div>
+
+
+                <div class="col-md-7">
+                    <h2>Coding on the go</h2>
+
+                    <a href="#" data-toggle="modal" data-target="#id_ipad_image_modal" style="float: right; margin: 10px;" class="thumbnail">
+                        <img width="180" src="/static/anywhere/images/ipad_running_pythonanywhere.png" title="PythonAnywhere running on an iPad" alt="PythonAnywhere running on an iPad" />
+                    </a>
+
+                    <p>
+                        It's hard to write programs or play with ideas on the go.
+                        Because PythonAnywhere runs on our servers and displays in your
+                        web browser, you can write Python applications from your iPad,
+                        phone, or smart TV just as easily as you can from your computer.
+                        It works on the iPad, and we are in beta for Android devices.
+                    </p>
+
+                    <h2>Your files, everywhere</h2>
+                    <p>
+                        It's easy to get your stuff into and out of PythonAnywhere
+                        &mdash; you can upload and download files from our web UI,
+                        or bring up a command line to work with your git,
+                        mercurial or subversion projects from GitHub, Bitbucket, or from
+                        any public source code repository.  With 512Mb of free disk
+                        space, you don't need
+                        to worry about running out of space.  And
+                        <a href="/pricing/">paying users</a>
+                        can get more space, and use scp and SFTP.
+                    </p>
+
+                    <h2>Simple automation</h2>
+                    <p>
+                        Use PythonAnywhere's scheduled tasks to run your Python scripts
+                        periodically. Scrape websites, archive tweets, connect back to
+                        your home automation system to turn the toaster on... the choice is yours!
+                    </p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="id_education_details" class="details-stripe">
+
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h1>A Python learning environment with everything ready to go</h1>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-7">
+                    <p>
+    Python is a great language for teaching, but getting it
+    installed and set up on all your students' computers can
+    be less than easy.  PythonAnywhere provides an environment
+    that's ready to go &mdash; including a syntax-highlighting,
+    error-checking editor, Python 2 and 3 consoles, and a full set
+    of <a href="/batteries_included/">batteries included</a>.
+    Avoid all the hassles of getting Python installed on everyone's laptop,
+    and making sure everyone can pip install all the right packages.
+</p>
+<p>
+    <img src="/static/anywhere/images/education_screenshot.png" style="max-width: 100%; padding: 5px; border: solid 1px rgba(0, 0, 0, 0.2); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)" />
+</p>
+
+<h3>Distributing assignments and monitoring progress is easy</h3>
+
+<p>
+    Once a student has nominated you as their teacher,
+    you can see their files and Python consoles, so you can help them more
+    easily.  You can copy files
+    into their accounts so that you can give them a starting point for their
+    assignments, and you can see their solutions.
+</p>
+
+<p>
+    We can even create student accounts in bulk for you, and
+    pre-populate them with files that you provide &mdash;
+    <a href="" class="feedback_link">just let us know!</a>
+</p>
+
+<h3>All your students have the same environment</h3>
+
+<p>
+    The same operating system, the same console, the same text editor &mdash; save
+    yourself from having to customise your lessons and instructions for
+    Windows/Mac/Linux, and from having to debug issues in different shells and
+    editors.
+</p>
+
+<h3>...and they can work together</h3>
+
+<p>
+    Your students can choose to share their consoles with each other, too
+    &mdash; so they can work on group projects remotely, or help each other
+    in-class.
+</p>
+
+                </div>
+
+                <div class="col-md-5">
+                    <div class="carousel slide">
+                        <div class="carousel-inner">
+                            <div class="item active">
+            <p class="testimonial-content">
+                I teach large worldwide online courses that cover Python,
+                Django, and PostgreSQL ... By using PythonAnywhere beginner accounts
+                in those courses there is nothing to install and everything
+                works in a browser. PythonAnywhere is a great resource that
+                lets me teach these these courses to over 100,000 students
+                around the world for free.
+            </p>
+            <p class="testimonial-person">Chuck Severance</p>
+            <p class="testimonial-date">25 October 2020</p>
+</div>
+
+<div class="item">
+            <p class="testimonial-content">
+                I would like to sincerely thank you for your service. I am a university
+                professor in Pakistan and we are unable to host servers for our research.
+                We have been using PA for hosting our programs in the field of biomedical
+                informatics and data science. It has significantly improved our quality of
+                research with a very limited budget.
+            </p>
+            <p class="testimonial-person">Fayyaz</p>
+            <p class="testimonial-date">13 May 2019</p>
+</div>
+
+<div class="item">
+            <p class="testimonial-content">
+                Thank you for the wonderful platform! Our students really enjoyed working on the platform this semester.
+            </p>
+            <p class="testimonial-person">Vasundhara</p>
+            <p class="testimonial-date">19 December 2018</p>
+</div>
+
+                        </div>
+                    </div>
+
+                    <p>
+                        <a class="btn btn-success btn-large" href="/pricing/">
+                            Sign up and try it out! &raquo;
+                        </a>
+                    </p>
+
+                    <p>
+                        <a class="btn btn-primary" href="/wiki/Education">PythonAnywhere education help pages &raquo;</a>
+                    </p>
+
+                    <h3>Start work at work or at school, and continue at home</h3>
+
+<p>
+    Because PythonAnywhere is web-based, it can follow you around on any computer
+    (or iPad, or Chromebook) with a browser, so you or your students can work
+    from wherever you like.
+</p>
+
+
+<h3>What does it cost?</h3>
+
+<p>
+    It's free!  Our basic accounts are free, and we only charge for more advanced
+    services (like professional web app hosting, or big number-crunching
+    requirements), none of which are needed for basic "intro to programming" type
+    courses.  If you need larger amounts of processing power, then
+    <a href="" class="feedback_link">get in touch</a> &mdash; you can also
+    get an idea of our prices on <a href="/pricing/">the pricing page</a>.
+</p>
+
+
+<h3>Limitations</h3>
+
+<p>
+    Our education support is evolving rapidly, and there are a few
+    limitations right now; check out
+    <a href="https://help.pythonanywhere.com/pages/Education#some-limitations">this help page</a>
+    for the current list.
+</p>
+
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="id_support_details" class="details-stripe">
+
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <h1>Tech support for developers, from developers</h1>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-5">
+                    <p>
+                        Got a question
+                        or a comment about PythonAnywhere?  Need some help?
+                        Just post in our
+                        <a href="/forums/">forums</a>, or
+                        <a href="" class="feedback_link">send us feedback</a>,
+                        and one of our dev team will get back to you within 1 working day.
+                    </p>
+                </div>
+
+                <div class="col-md-7">
+                    <div class="carousel slide">
+                        <div class="carousel-inner">
+                            <div class="item active">
+            <p class="testimonial-content">
+                PythonAnywhere is the perfect place for hosting projects
+                ... Excellent customer support and prompt issue
+                resolution contribute to a pleasant user experience. I highly
+                recommend it! 10 out of 10.
+            </p>
+            <p class="testimonial-person">Dmitry Korshunov</p>
+            <p class="testimonial-date">15 November 2023</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                Thank you so much, I've had to deal with a lot of different
+                customer service reps this week and you're the first one that's
+                been legitimately helpful.
+            </p>
+            <p class="testimonial-person">Enoch Lindeman</p>
+            <p class="testimonial-date">22 October 2020</p>
+                            </div>
+
+                            <div class="item">
+            <p class="testimonial-content">
+                If you are mainly using Python, Pythonanywhere.com is an extremely
+                simple framework to get even an intricate application up and running
+                and achieve early validation of your value proposition without wasting
+                too much time on the infrastructure. On top of that, PythonAnywhere
+                is very affordable and has great support.
+            </p>
+            <p class="testimonial-person">
+                Markus Rummel
+            </p>
+            <p class="testimonial-date">18 April 2020</p>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="container">
+
+    <div class="row" id="id_company_info_strip">
+        <div class="col-md-3">
+            &nbsp;
+        </div>
+        <div class="col-md-6" style="text-align: center">
+            <a href="/about/company_details/">About PythonAnywhere</a>
+            -
+            <a href="/about/media_resources/">Media Resources</a>
+            -
+            <a href="/about/jobs/">Jobs</a>
+            -
+            <a href="/about/testimonials/">Testimonials</a>
+        </div>
+        <div class="col-md-3">
+            &nbsp;
+        </div>
+    </div>
+
+</div>
+    <div id="id_footer" class="container">
+      <div class="row">
+        <div class="col-md-3">
+          &nbsp;
+        </div>
+        <div class="col-md-6" style="text-align: center">
+          <footer id="id_copyright_div" class="footer">
+            <p>
+              Copyright &copy; 2011-2026 <a href="/about/company_details/">PythonAnywhere LLP</a>
+              &mdash;
+              <a href="/terms/">Terms</a>
+              &mdash;
+              <a href="/privacy/">Privacy & Cookies</a><br/>
+              "Python" is a registered trademark of the Python Software Foundation.
+            </p>
+          </footer>
+          <div class="col-md-3">
+            &nbsp;
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+        
+
+      </div>
+
+        
+    <div id="id_ipad_image_modal" class="modal fade" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <a class="close" data-dismiss="modal">&times;</a>
+                    <h4 class="modal-title">PythonAnywhere on an iPad</h4>
+                </div>
+
+                <div class="modal-body">
+                    <img src="/static/anywhere/images/ipad_running_pythonanywhere.png" title="PythonAnywhere running on an iPad" alt="PythonAnywhere running on an iPad" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+        
+
+<div id="id_feedback_dialog" title="Send Feedback"
+    style="display:none">
+    <div id="id_feedback_dialog_blurb_big" class="dialog_blurb_big">
+        
+        Thank you for your feedback.
+        
+    </div>
+    <div id="id_feedback_dialog_blurb_small">
+        <!-- CTA disclaimer section -->
+        
+        <div id="id_cta_disclaimer" class="cta_disclaimer">
+            <div id="id_disclaimer_text">
+                We review all feedback, but we cannot promise a response.
+                <br />
+                <br />
+                Did you know you can upgrade your plan to get access to Customer Support?
+            </div>
+            <div class="dialog_buttons center">
+                <button class="btn btn-primary" id="id_feedback_dialog_upgrade_button"
+                    onclick='window.top.location="/pricing/";'>
+                    
+                    Register Now
+                    
+                </button>
+            </div>
+        </div>
+        
+
+        To help us assist you as efficiently as possible, please include:
+        <ol>
+            <li>What you were trying to do.</li>
+            <li>What you expected to happen.</li>
+            <li>What actually happened including any error messages or screenshots.</li>
+            <li>Steps to reproduce the issue.</li>
+        </ol>
+    </div>
+
+    <textarea id="id_feedback_dialog_text" rows="6"></textarea>
+    <input id="id_feedback_dialog_email_address" type="text"
+        placeholder="Email address (optional - only necessary if you would like us to contact you)" />
+
+    <div id="id_feedback_dialog_error" style="display: none">
+        Sorry, there was a problem connecting to the server. Please try again in a few moments.
+    </div>
+    <div id="id_feedback_dialog_rate_limit_error" style="display: none">
+        
+        Sorry, you have reached the sending limit for feedback. Please try again in a few moments.
+        
+    </div>
+    <div id="id_feedback_dialog_success" style="display: none">
+        
+        Thank you for your feedback. We review all feedback, but we cannot promise a response.
+        
+    </div>
+
+    <div class="dialog_buttons">
+        <img id="id_feedback_dialog_spinner" src="/static/anywhere/images/spinner-small.gif" />
+        <button class="btn btn-primary" id="id_feedback_dialog_ok_button">OK</button>
+        <button class="btn btn-default" id="id_feedback_dialog_cancel_button">Cancel</button>
+    </div>
+
+    <div id="id_feedback_dialog_only_close_button" style="display: none">
+        <button class="btn btn-primary" id="id_feedback_dialog_close_button">Close</button>
+    </div>
+</div>
+
+        
+    <script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+    <script type="text/javascript">
+        $('.carousel').carousel()
+    </script>
+
+        <!-- preload font awesome fonts to avoid glitch when switching icons -->
+        <div style="width: 0; height: 0; overflow: hidden"><i class="fa fa-square-o fa-3x" ></i></div>
+    </body>
+</html>

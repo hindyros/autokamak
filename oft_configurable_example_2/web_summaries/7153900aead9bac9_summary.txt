@@ -1,0 +1,17 @@
+The retrieved content is only high-level GitHub/organization metadata; it does not include any actual code, examples, or API documentation relevant to **gs_Domain**, **create_isoflux**, or building a mesh from **LCFS boundary points + dx**.
+
+What it *does* indicate (useful for where to look next):
+
+- **Repositories to search for examples**
+  - `OpenFUSIONToolkit/GPEC` (Julia; updated Mar 16, 2026): likely contains recent development and possibly example usage if GPEC integrates with OFT/TokaMaker workflows.
+  - `OpenFUSIONToolkit/OpenFUSIONToolkit-Tutorials`: explicitly “Storage for tutorial and demonstrations for OFT” and is the most promising place to find *worked examples* of `gs_Domain` and `create_isoflux`, plus meshing workflows.
+  - `OpenFUSIONToolkit/OpenFUSIONToolkit`: main toolkit repo; likely contains the authoritative implementation and any Python bindings/API for `gs_Domain` (if exposed).
+  - `OpenFUSIONToolkit/.github`: org-level config; unlikely to contain technical examples.
+
+- **No direct answer to the task requirements**
+  - No snippet demonstrating `gs_Domain`.
+  - No snippet demonstrating `create_isoflux`.
+  - No evidence (from this text) of a Python API for `gs_Domain`.
+  - No method shown for generating a mesh from LCFS boundary points and `dx`.
+
+Net: this content helps identify *which repos* to inspect (Tutorials + main OFT), but provides **no concrete example code or API details** needed for your specific goals.

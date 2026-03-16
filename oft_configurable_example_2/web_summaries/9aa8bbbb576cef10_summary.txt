@@ -1,0 +1,23 @@
+The provided content is **not related to OpenFUSIONToolkit/TokaMaker** and contains **no official documentation or examples** for:
+
+- `create_isoflux`
+- `gs_Domain` mesh building
+- Equilibrium solve API calls / solve signatures
+- Minimal required inputs for those calls
+
+## What the content actually is
+The text (Russian) is a **user guide for Android ADB and Fastboot** usage, focused on:
+
+- Installing/configuring Android SDK tools and USB drivers on Windows
+- Enabling **USB Debugging** on an Android phone
+- Verifying connection via:
+  - `adb devices`
+  - `adb shell`
+- Listing common `adb` commands (push/pull/install/logcat/etc.)
+- Instructions for making a **backup of factory firmware** on rooted devices using `dd`, e.g.:
+  - `adb shell su -c "dd if=/dev/block/... of=/sdcard/... bs=4096"`
+- Packaging backup files into a **TAR** archive and restoring firmware using **Odin Multi Downloader**
+- Mentions of attached files/APKs and that a PDF with command screenshots was added
+
+## Relevance to the requested task
+None. There are **no references** to OpenFUSIONToolkit, TokaMaker, Grad–Shafranov, `gs_Domain`, isoflux constraints, mesh generation, or equilibrium solvers.

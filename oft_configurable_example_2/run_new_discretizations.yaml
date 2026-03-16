@@ -1,0 +1,45 @@
+task:
+  title: Create and run new OFT/TokaMaker discretization configs
+  objective: |
+    You are given a config-driven OFT/TokaMaker equilibrium example (run_equilibrium.py)
+    and a baseline configuration (discretization_config.yaml). Your job is to create
+    one or more NEW config files that vary equation parameters and/or discretization,
+    then run the solver for each config and record results.
+
+workspace:
+  root: .
+  read_only:
+    - ./OpenFUSIONToolkit/
+    - ./ursa/
+
+context:
+  key_files:
+    - run_equilibrium.py
+    - discretization_config.yaml
+    - discretization_sweep.yaml
+    - README.md
+
+instructions:
+  - Step 1: Read README.md and skim run_equilibrium.py to understand which config keys are supported.
+  - Step 2: Use discretization_sweep.yaml as a reference for valid "discretization changes",
+      required fields per case, and acceptance/metrics.
+
+  - Step 3: Create at least 2 new YAML configs (copy discretization_config.yaml and modify):
+      * Change one or more geometry.lcfs parameters (e.g. a, kappa, delta, n_pts).
+      * Change mesh.dx (coarser/finer).
+      * Optionally change solver.order or solver.settings (nl_tol, maxits, urf).
+      * Optionally change physics targets (F0, Ip, Ip_ratio) and/or physics.isoflux settings.
+    Keep each config self-contained with a unique case.name.
+  - Step 3: Run for each config:
+      python run_equilibrium.py --config <new_config.yaml>
+  - Step 4: For each run, inspect outputs/<case_name>/summary.yaml and figures.
+  - Step 5: Write a short text summary (in your final response) comparing:
+      * mesh sizes (np, nc)
+      * whether converged
+      * any error messages
+      * any notable equilibrium stats if present
+
+constraints:
+  - Do not edit ./OpenFUSIONToolkit/ or ./ursa/
+  - Do not install new packages or modify the environment
+  - Do not prompt for user input; run autonomously

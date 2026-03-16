@@ -1,0 +1,5 @@
+The provided content is **not relevant** to the task.
+
+- It describes a GitHub repository containing open-source resources for **Clickteam Fusion** (e.g., shaders, extensions, tutorial `.mfa` files) and instructions for contributing via forks/PRs.
+- It contains **no mentions** of **OpenFUSIONToolkit**, **OFT**, **TokaMaker**, **gs_Domain**, **create_isoflux**, or any **Python API** related to `gs_Domain`.
+- It does **not** provide any information about creating a mesh from **LCFS boundary points** and `dx`.

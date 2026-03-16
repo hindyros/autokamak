@@ -1,0 +1,1165 @@
+{
+  "context": {
+    "agent": "ExecutionAgent",
+    "thread_id": "demo_executor",
+    "run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+    "started_at": "2026-03-16T18:44:08.269859+00:00",
+    "ended_at": "2026-03-16T18:45:06.333005+00:00"
+  },
+  "tables": {
+    "runnable": [
+      {
+        "name": "graph:ExecutionAgent",
+        "count": 1,
+        "total_s": 58.062667999998666,
+        "avg_ms": 58062.667999998666,
+        "max_ms": 58062.667999998666
+      },
+      {
+        "name": "node:execution_agent:agent",
+        "count": 3,
+        "total_s": 16.45509820705047,
+        "avg_ms": 5485.03273568349,
+        "max_ms": 14316.929666034412
+      },
+      {
+        "name": "node:execution_agent:recap",
+        "count": 1,
+        "total_s": 9.95797925000079,
+        "avg_ms": 9957.97925000079,
+        "max_ms": 9957.97925000079
+      },
+      {
+        "name": "node:execution_agent:action",
+        "count": 2,
+        "total_s": 2.2683165009948425,
+        "avg_ms": 1134.1582504974212,
+        "max_ms": 2267.8695420036092
+      },
+      {
+        "name": "node:execution:agent",
+        "count": 3,
+        "total_s": 0.0016517909825779498,
+        "avg_ms": 0.55059699419265,
+        "max_ms": 0.6913330289535224
+      },
+      {
+        "name": "runnable",
+        "count": 6,
+        "total_s": 1.3792014215141535e-05,
+        "avg_ms": 0.0022986690358569226,
+        "max_ms": 0.0037499703466892242
+      }
+    ],
+    "tool": [
+      {
+        "name": "run_web_search",
+        "count": 1,
+        "total_s": 29.328295583021827,
+        "avg_ms": 29328.295583021827,
+        "max_ms": 29328.295583021827
+      },
+      {
+        "name": "run_command",
+        "count": 1,
+        "total_s": 2.303330749971792,
+        "avg_ms": 2303.330749971792,
+        "max_ms": 2303.330749971792
+      }
+    ],
+    "llm": [
+      {
+        "name": "llm:gpt-5.2",
+        "count": 5,
+        "total_s": 28.64893037494039,
+        "avg_ms": 5729.786074988078,
+        "max_ms": 14314.647458028048
+      }
+    ]
+  },
+  "totals": {
+    "graph_total_s": 58.062667999998666,
+    "llm_total_s": 28.64893037494039,
+    "tool_total_s": 31.63162633299362,
+    "unattributed_s": 0.0
+  },
+  "llm_events": [
+    {
+      "name": "llm:gpt-5.2",
+      "ms": 579.1242090053856,
+      "ok": true,
+      "tags": [
+        "ExecutionAgent",
+        "agent",
+        "execution_agent",
+        "graph"
+      ],
+      "metadata": {
+        "thread_id": "demo_executor",
+        "telemetry_run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+        "model": "gpt-5.2",
+        "langgraph_step": 1,
+        "langgraph_node": "agent",
+        "langgraph_triggers": [
+          "branch:to:agent"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "agent"
+        ],
+        "langgraph_checkpoint_ns": "agent:a766a591-43ae-6674-b49b-d37fbb9b1160",
+        "ursa_ns": "execution_agent",
+        "ursa_agent": "ExecutionAgent",
+        "checkpoint_ns": "agent:a766a591-43ae-6674-b49b-d37fbb9b1160",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-5.2",
+        "ls_model_type": "chat",
+        "ls_temperature": null
+      },
+      "metrics": {
+        "llm_output": {
+          "token_usage": {
+            "completion_tokens": 19,
+            "prompt_tokens": 2792,
+            "total_tokens": 2811,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1536
+            }
+          },
+          "model_provider": "openai",
+          "model_name": "gpt-5.2-2025-12-11",
+          "system_fingerprint": null,
+          "id": "chatcmpl-DK7D6lijnARNFkc3XFrRyiwopzO0t",
+          "service_tier": "default"
+        },
+        "llm_output_token_usage": {
+          "completion_tokens": 19,
+          "prompt_tokens": 2792,
+          "total_tokens": 2811,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 1536
+          }
+        },
+        "response_metadata": [
+          {
+            "token_usage": {
+              "completion_tokens": 19,
+              "prompt_tokens": 2792,
+              "total_tokens": 2811,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 1536
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-5.2-2025-12-11",
+            "system_fingerprint": null,
+            "id": "chatcmpl-DK7D6lijnARNFkc3XFrRyiwopzO0t",
+            "service_tier": "default",
+            "finish_reason": "tool_calls",
+            "logprobs": null
+          }
+        ],
+        "usage_metadata": [
+          {
+            "input_tokens": 2792,
+            "output_tokens": 19,
+            "total_tokens": 2811,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 1536
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        ],
+        "usage_source": "usage_metadata",
+        "usage_rollup": {
+          "input_tokens": 2792,
+          "output_tokens": 19,
+          "total_tokens": 2811,
+          "input_cost": 0.002198,
+          "output_cost": 0.000266,
+          "total_cost": 0.002733,
+          "prompt_tokens": 2792,
+          "completion_tokens": 19,
+          "reasoning_tokens": 0,
+          "cached_tokens": 1536
+        },
+        "cost_details": {
+          "source": "computed",
+          "model_resolved": "gpt-5.2",
+          "pricing_used": {
+            "input_per_1k": "Decimal('0.00175')",
+            "output_per_1k": "Decimal('0.014')",
+            "reasoning_per_1k": null,
+            "cached_input_multiplier": "Decimal('0.1')"
+          },
+          "components_usd": {
+            "input_cost": 0.002198,
+            "cached_input_cost": 0.000269,
+            "output_cost": 0.000266,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.002733
+          }
+        },
+        "cost_source": "computed"
+      },
+      "t_start": 1773686648.2715142,
+      "t_end": 1773686648.850639
+    },
+    {
+      "name": "llm:gpt-5.2",
+      "ms": 2266.179457947146,
+      "ok": true,
+      "tags": [
+        "seq:step:1",
+        "ExecutionAgent",
+        "action",
+        "execution_agent",
+        "graph"
+      ],
+      "metadata": {
+        "thread_id": "demo_executor",
+        "telemetry_run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+        "model": "gpt-5.2",
+        "langgraph_step": 2,
+        "langgraph_node": "action",
+        "langgraph_triggers": [
+          "branch:to:action"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "action"
+        ],
+        "langgraph_checkpoint_ns": "action:83b7253e-1885-8d80-1c26-a4ac5f79e970",
+        "ursa_ns": "execution_agent",
+        "ursa_agent": "ExecutionAgent",
+        "checkpoint_ns": "action:83b7253e-1885-8d80-1c26-a4ac5f79e970",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-5.2",
+        "ls_model_type": "chat",
+        "ls_temperature": null
+      },
+      "metrics": {
+        "llm_output": {
+          "token_usage": {
+            "completion_tokens": 90,
+            "prompt_tokens": 222,
+            "total_tokens": 312,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 0
+            }
+          },
+          "model_provider": "openai",
+          "model_name": "gpt-5.2-2025-12-11",
+          "system_fingerprint": null,
+          "id": "chatcmpl-DK7D6Ejzafi8upAHxnpEzwselmz6s",
+          "service_tier": "default"
+        },
+        "llm_output_token_usage": {
+          "completion_tokens": 90,
+          "prompt_tokens": 222,
+          "total_tokens": 312,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "response_metadata": [
+          {
+            "token_usage": {
+              "completion_tokens": 90,
+              "prompt_tokens": 222,
+              "total_tokens": 312,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 0
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-5.2-2025-12-11",
+            "system_fingerprint": null,
+            "id": "chatcmpl-DK7D6Ejzafi8upAHxnpEzwselmz6s",
+            "service_tier": "default",
+            "finish_reason": "stop",
+            "logprobs": null
+          }
+        ],
+        "usage_metadata": [
+          {
+            "input_tokens": 222,
+            "output_tokens": 90,
+            "total_tokens": 312,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        ],
+        "usage_source": "usage_metadata",
+        "usage_rollup": {
+          "input_tokens": 222,
+          "output_tokens": 90,
+          "total_tokens": 312,
+          "input_cost": 0.000389,
+          "output_cost": 0.00126,
+          "total_cost": 0.001649,
+          "prompt_tokens": 222,
+          "completion_tokens": 90,
+          "reasoning_tokens": 0,
+          "cached_tokens": 0
+        },
+        "cost_details": {
+          "source": "computed",
+          "model_resolved": "gpt-5.2",
+          "pricing_used": {
+            "input_per_1k": "Decimal('0.00175')",
+            "output_per_1k": "Decimal('0.014')",
+            "reasoning_per_1k": null,
+            "cached_input_multiplier": "Decimal('0.1')"
+          },
+          "components_usd": {
+            "input_cost": 0.000389,
+            "cached_input_cost": 0.0,
+            "output_cost": 0.00126,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.001649
+          }
+        },
+        "cost_source": "computed"
+      },
+      "t_start": 1773686648.858145,
+      "t_end": 1773686651.124328
+    },
+    {
+      "name": "llm:gpt-5.2",
+      "ms": 1556.8578749662265,
+      "ok": true,
+      "tags": [
+        "ExecutionAgent",
+        "agent",
+        "execution_agent",
+        "graph"
+      ],
+      "metadata": {
+        "thread_id": "demo_executor",
+        "telemetry_run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+        "model": "gpt-5.2",
+        "langgraph_step": 3,
+        "langgraph_node": "agent",
+        "langgraph_triggers": [
+          "branch:to:agent"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "agent"
+        ],
+        "langgraph_checkpoint_ns": "agent:cc11686b-5b86-a239-b228-8df80904ad68",
+        "ursa_ns": "execution_agent",
+        "ursa_agent": "ExecutionAgent",
+        "checkpoint_ns": "agent:cc11686b-5b86-a239-b228-8df80904ad68",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-5.2",
+        "ls_model_type": "chat",
+        "ls_temperature": null
+      },
+      "metrics": {
+        "llm_output": {
+          "token_usage": {
+            "completion_tokens": 88,
+            "prompt_tokens": 2996,
+            "total_tokens": 3084,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2688
+            }
+          },
+          "model_provider": "openai",
+          "model_name": "gpt-5.2-2025-12-11",
+          "system_fingerprint": null,
+          "id": "chatcmpl-DK7D9qkSO1yB5BMLyDgS3kyRii5e7",
+          "service_tier": "default"
+        },
+        "llm_output_token_usage": {
+          "completion_tokens": 88,
+          "prompt_tokens": 2996,
+          "total_tokens": 3084,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 2688
+          }
+        },
+        "response_metadata": [
+          {
+            "token_usage": {
+              "completion_tokens": 88,
+              "prompt_tokens": 2996,
+              "total_tokens": 3084,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 2688
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-5.2-2025-12-11",
+            "system_fingerprint": null,
+            "id": "chatcmpl-DK7D9qkSO1yB5BMLyDgS3kyRii5e7",
+            "service_tier": "default",
+            "finish_reason": "tool_calls",
+            "logprobs": null
+          }
+        ],
+        "usage_metadata": [
+          {
+            "input_tokens": 2996,
+            "output_tokens": 88,
+            "total_tokens": 3084,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 2688
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        ],
+        "usage_source": "usage_metadata",
+        "usage_rollup": {
+          "input_tokens": 2996,
+          "output_tokens": 88,
+          "total_tokens": 3084,
+          "input_cost": 0.000539,
+          "output_cost": 0.001232,
+          "total_cost": 0.002241,
+          "prompt_tokens": 2996,
+          "completion_tokens": 88,
+          "reasoning_tokens": 0,
+          "cached_tokens": 2688
+        },
+        "cost_details": {
+          "source": "computed",
+          "model_resolved": "gpt-5.2",
+          "pricing_used": {
+            "input_per_1k": "Decimal('0.00175')",
+            "output_per_1k": "Decimal('0.014')",
+            "reasoning_per_1k": null,
+            "cached_input_multiplier": "Decimal('0.1')"
+          },
+          "components_usd": {
+            "input_cost": 0.000539,
+            "cached_input_cost": 0.00047,
+            "output_cost": 0.001232,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.002241
+          }
+        },
+        "cost_source": "computed"
+      },
+      "t_start": 1773686651.161165,
+      "t_end": 1773686652.718027
+    },
+    {
+      "name": "llm:gpt-5.2",
+      "ms": 14314.647458028048,
+      "ok": true,
+      "tags": [
+        "ExecutionAgent",
+        "agent",
+        "execution_agent",
+        "graph"
+      ],
+      "metadata": {
+        "thread_id": "demo_executor",
+        "telemetry_run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+        "model": "gpt-5.2",
+        "langgraph_step": 5,
+        "langgraph_node": "agent",
+        "langgraph_triggers": [
+          "branch:to:agent"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "agent"
+        ],
+        "langgraph_checkpoint_ns": "agent:1bb91c01-3d8b-dd37-5183-6c60d850827c",
+        "ursa_ns": "execution_agent",
+        "ursa_agent": "ExecutionAgent",
+        "checkpoint_ns": "agent:1bb91c01-3d8b-dd37-5183-6c60d850827c",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-5.2",
+        "ls_model_type": "chat",
+        "ls_temperature": null
+      },
+      "metrics": {
+        "llm_output": {
+          "token_usage": {
+            "completion_tokens": 868,
+            "prompt_tokens": 3561,
+            "total_tokens": 4429,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 2944
+            }
+          },
+          "model_provider": "openai",
+          "model_name": "gpt-5.2-2025-12-11",
+          "system_fingerprint": null,
+          "id": "chatcmpl-DK7DeKvo9Yi60Fnfv5tpu7STgq6rE",
+          "service_tier": "default"
+        },
+        "llm_output_token_usage": {
+          "completion_tokens": 868,
+          "prompt_tokens": 3561,
+          "total_tokens": 4429,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 2944
+          }
+        },
+        "response_metadata": [
+          {
+            "token_usage": {
+              "completion_tokens": 868,
+              "prompt_tokens": 3561,
+              "total_tokens": 4429,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 2944
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-5.2-2025-12-11",
+            "system_fingerprint": null,
+            "id": "chatcmpl-DK7DeKvo9Yi60Fnfv5tpu7STgq6rE",
+            "service_tier": "default",
+            "finish_reason": "stop",
+            "logprobs": null
+          }
+        ],
+        "usage_metadata": [
+          {
+            "input_tokens": 3561,
+            "output_tokens": 868,
+            "total_tokens": 4429,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 2944
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        ],
+        "usage_source": "usage_metadata",
+        "usage_rollup": {
+          "input_tokens": 3561,
+          "output_tokens": 868,
+          "total_tokens": 4429,
+          "input_cost": 0.00108,
+          "output_cost": 0.012152,
+          "total_cost": 0.013747,
+          "prompt_tokens": 3561,
+          "completion_tokens": 868,
+          "reasoning_tokens": 0,
+          "cached_tokens": 2944
+        },
+        "cost_details": {
+          "source": "computed",
+          "model_resolved": "gpt-5.2",
+          "pricing_used": {
+            "input_per_1k": "Decimal('0.00175')",
+            "output_per_1k": "Decimal('0.014')",
+            "reasoning_per_1k": null,
+            "cached_input_multiplier": "Decimal('0.1')"
+          },
+          "components_usd": {
+            "input_cost": 0.00108,
+            "cached_input_cost": 0.000515,
+            "output_cost": 0.012152,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.013747
+          }
+        },
+        "cost_source": "computed"
+      },
+      "t_start": 1773686682.056426,
+      "t_end": 1773686696.371103
+    },
+    {
+      "name": "llm:gpt-5.2",
+      "ms": 9932.121374993585,
+      "ok": true,
+      "tags": [
+        "ExecutionAgent",
+        "execution_agent",
+        "graph",
+        "recap"
+      ],
+      "metadata": {
+        "thread_id": "demo_executor",
+        "telemetry_run_id": "bb3d5f2dfb394676a6e9122c26e2ec71",
+        "model": "gpt-5.2",
+        "langgraph_step": 6,
+        "langgraph_node": "recap",
+        "langgraph_triggers": [
+          "branch:to:recap"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "recap"
+        ],
+        "langgraph_checkpoint_ns": "recap:32c19615-3070-adff-1fc0-eccb670df721",
+        "ursa_ns": "execution_agent",
+        "ursa_agent": "ExecutionAgent",
+        "checkpoint_ns": "recap:32c19615-3070-adff-1fc0-eccb670df721",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-5.2",
+        "ls_model_type": "chat",
+        "ls_temperature": null
+      },
+      "metrics": {
+        "llm_output": {
+          "token_usage": {
+            "completion_tokens": 663,
+            "prompt_tokens": 4310,
+            "total_tokens": 4973,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "audio_tokens": 0,
+              "reasoning_tokens": 0,
+              "rejected_prediction_tokens": 0
+            },
+            "prompt_tokens_details": {
+              "audio_tokens": 0,
+              "cached_tokens": 1536
+            }
+          },
+          "model_provider": "openai",
+          "model_name": "gpt-5.2-2025-12-11",
+          "system_fingerprint": null,
+          "id": "chatcmpl-DK7Dscj8y822IYvAkVkMMxM73Xa4l",
+          "service_tier": "default"
+        },
+        "llm_output_token_usage": {
+          "completion_tokens": 663,
+          "prompt_tokens": 4310,
+          "total_tokens": 4973,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 1536
+          }
+        },
+        "response_metadata": [
+          {
+            "token_usage": {
+              "completion_tokens": 663,
+              "prompt_tokens": 4310,
+              "total_tokens": 4973,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 1536
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-5.2-2025-12-11",
+            "system_fingerprint": null,
+            "id": "chatcmpl-DK7Dscj8y822IYvAkVkMMxM73Xa4l",
+            "service_tier": "default",
+            "finish_reason": "stop",
+            "logprobs": null
+          }
+        ],
+        "usage_metadata": [
+          {
+            "input_tokens": 4310,
+            "output_tokens": 663,
+            "total_tokens": 4973,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 1536
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        ],
+        "usage_source": "usage_metadata",
+        "usage_rollup": {
+          "input_tokens": 4310,
+          "output_tokens": 663,
+          "total_tokens": 4973,
+          "input_cost": 0.004855,
+          "output_cost": 0.009282,
+          "total_cost": 0.014405,
+          "prompt_tokens": 4310,
+          "completion_tokens": 663,
+          "reasoning_tokens": 0,
+          "cached_tokens": 1536
+        },
+        "cost_details": {
+          "source": "computed",
+          "model_resolved": "gpt-5.2",
+          "pricing_used": {
+            "input_per_1k": "Decimal('0.00175')",
+            "output_per_1k": "Decimal('0.014')",
+            "reasoning_per_1k": null,
+            "cached_input_multiplier": "Decimal('0.1')"
+          },
+          "components_usd": {
+            "input_cost": 0.004855,
+            "cached_input_cost": 0.000269,
+            "output_cost": 0.009282,
+            "reasoning_cost": 0.0,
+            "total_cost": 0.014405
+          }
+        },
+        "cost_source": "computed"
+      },
+      "t_start": 1773686696.3763142,
+      "t_end": 1773686706.308456
+    }
+  ],
+  "raw_snapshot": {
+    "runnable": {
+      "_starts": {},
+      "agg": {
+        "records": [
+          [
+            "node:execution_agent:agent",
+            579.6879999688827,
+            true
+          ],
+          [
+            "node:execution:agent",
+            0.3422499867156148,
+            true
+          ],
+          [
+            "runnable",
+            0.001167005393654108,
+            true
+          ],
+          [
+            "node:execution_agent:action",
+            0.44695899123325944,
+            true
+          ],
+          [
+            "node:execution_agent:action",
+            2267.8695420036092,
+            true
+          ],
+          [
+            "runnable",
+            0.0037499703466892242,
+            true
+          ],
+          [
+            "node:execution_agent:agent",
+            1558.4805410471745,
+            true
+          ],
+          [
+            "node:execution:agent",
+            0.6913330289535224,
+            true
+          ],
+          [
+            "runnable",
+            0.002333021257072687,
+            true
+          ],
+          [
+            "runnable",
+            0.0022919848561286926,
+            true
+          ],
+          [
+            "node:execution_agent:agent",
+            14316.929666034412,
+            true
+          ],
+          [
+            "node:execution:agent",
+            0.6182079669088125,
+            true
+          ],
+          [
+            "runnable",
+            0.0023750471882522106,
+            true
+          ],
+          [
+            "node:execution_agent:recap",
+            9957.97925000079,
+            true
+          ],
+          [
+            "runnable",
+            0.0018749851733446121,
+            true
+          ],
+          [
+            "graph:ExecutionAgent",
+            58062.667999998666,
+            true
+          ]
+        ],
+        "_lock": "<unlocked _thread.lock object at 0x1658fa280>"
+      },
+      "buckets": [
+        [
+          "graph:ExecutionAgent",
+          1,
+          58.062667999998666,
+          58062.667999998666,
+          58062.667999998666
+        ],
+        [
+          "node:execution_agent:agent",
+          3,
+          16.45509820705047,
+          5485.03273568349,
+          14316.929666034412
+        ],
+        [
+          "node:execution_agent:recap",
+          1,
+          9.95797925000079,
+          9957.97925000079,
+          9957.97925000079
+        ],
+        [
+          "node:execution_agent:action",
+          2,
+          2.2683165009948425,
+          1134.1582504974212,
+          2267.8695420036092
+        ],
+        [
+          "node:execution:agent",
+          3,
+          0.0016517909825779498,
+          0.55059699419265,
+          0.6913330289535224
+        ],
+        [
+          "runnable",
+          6,
+          1.3792014215141535e-05,
+          0.0022986690358569226,
+          0.0037499703466892242
+        ]
+      ]
+    },
+    "tool": {
+      "_starts": {},
+      "agg": {
+        "records": [
+          [
+            "run_command",
+            2303.330749971792,
+            true
+          ],
+          [
+            "run_web_search",
+            29328.295583021827,
+            true
+          ]
+        ],
+        "_lock": "<unlocked _thread.lock object at 0x16849f040>"
+      },
+      "buckets": [
+        [
+          "run_web_search",
+          1,
+          29.328295583021827,
+          29328.295583021827,
+          29328.295583021827
+        ],
+        [
+          "run_command",
+          1,
+          2.303330749971792,
+          2303.330749971792,
+          2303.330749971792
+        ]
+      ]
+    },
+    "llm": {
+      "_starts": {},
+      "agg": {
+        "records": [
+          [
+            "llm:gpt-5.2",
+            579.1242090053856,
+            true
+          ],
+          [
+            "llm:gpt-5.2",
+            2266.179457947146,
+            true
+          ],
+          [
+            "llm:gpt-5.2",
+            1556.8578749662265,
+            true
+          ],
+          [
+            "llm:gpt-5.2",
+            14314.647458028048,
+            true
+          ],
+          [
+            "llm:gpt-5.2",
+            9932.121374993585,
+            true
+          ]
+        ],
+        "_lock": "<unlocked _thread.lock object at 0x1627ffe40>"
+      },
+      "buckets": [
+        [
+          "llm:gpt-5.2",
+          5,
+          28.64893037494039,
+          5729.786074988078,
+          14314.647458028048
+        ]
+      ]
+    }
+  },
+  "raw_records": {
+    "runnable": [
+      {
+        "name": "node:execution_agent:agent",
+        "ms": 579.6879999688827,
+        "ok": true
+      },
+      {
+        "name": "node:execution:agent",
+        "ms": 0.3422499867156148,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.001167005393654108,
+        "ok": true
+      },
+      {
+        "name": "node:execution_agent:action",
+        "ms": 0.44695899123325944,
+        "ok": true
+      },
+      {
+        "name": "node:execution_agent:action",
+        "ms": 2267.8695420036092,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.0037499703466892242,
+        "ok": true
+      },
+      {
+        "name": "node:execution_agent:agent",
+        "ms": 1558.4805410471745,
+        "ok": true
+      },
+      {
+        "name": "node:execution:agent",
+        "ms": 0.6913330289535224,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.002333021257072687,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.0022919848561286926,
+        "ok": true
+      },
+      {
+        "name": "node:execution_agent:agent",
+        "ms": 14316.929666034412,
+        "ok": true
+      },
+      {
+        "name": "node:execution:agent",
+        "ms": 0.6182079669088125,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.0023750471882522106,
+        "ok": true
+      },
+      {
+        "name": "node:execution_agent:recap",
+        "ms": 9957.97925000079,
+        "ok": true
+      },
+      {
+        "name": "runnable",
+        "ms": 0.0018749851733446121,
+        "ok": true
+      },
+      {
+        "name": "graph:ExecutionAgent",
+        "ms": 58062.667999998666,
+        "ok": true
+      }
+    ],
+    "tool": [
+      {
+        "name": "run_command",
+        "ms": 2303.330749971792,
+        "ok": true
+      },
+      {
+        "name": "run_web_search",
+        "ms": 29328.295583021827,
+        "ok": true
+      }
+    ],
+    "llm": [
+      {
+        "name": "llm:gpt-5.2",
+        "ms": 579.1242090053856,
+        "ok": true
+      },
+      {
+        "name": "llm:gpt-5.2",
+        "ms": 2266.179457947146,
+        "ok": true
+      },
+      {
+        "name": "llm:gpt-5.2",
+        "ms": 1556.8578749662265,
+        "ok": true
+      },
+      {
+        "name": "llm:gpt-5.2",
+        "ms": 14314.647458028048,
+        "ok": true
+      },
+      {
+        "name": "llm:gpt-5.2",
+        "ms": 9932.121374993585,
+        "ok": true
+      }
+    ]
+  },
+  "costs": {
+    "total_usd": 0.034775,
+    "by_model_usd": {
+      "gpt-5.2": 0.034775
+    },
+    "event_sources": {
+      "provider": 0,
+      "computed": 5,
+      "no_usage": 0,
+      "no_pricing": 0
+    },
+    "registry_note": "Edit pricing via DEFAULT_REGISTRY, pricing.json, or overrides."
+  }
+}

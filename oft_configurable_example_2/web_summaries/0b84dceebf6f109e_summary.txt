@@ -1,0 +1,8 @@
+No retrieved content was included in your message (the “content below” section is empty), so I can’t extract method names/signatures for `create_isoflux`, `gs_Domain`, setting `Ip`, `F0`, or solving.
+
+If you paste the relevant excerpt(s) from the OpenFUSIONToolkit/TokaMaker Python API docs (or provide a link/file), I’ll summarize specifically:
+- exact function/method names and signatures
+- minimal required inputs for `create_isoflux` and `gs_Domain`
+- how the API sets plasma current `Ip` and toroidal field function parameter `F0`
+- the equilibrium solve call (method name + required args)
+- a minimal “equilibrium example” call sequence (in order)

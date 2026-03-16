@@ -1,6 +1,6 @@
 # Structural reference for the config file the agent creates (example keys only).
 discretization_config_schema: |
-  # Example schema for the discretization/run config file.
+  # Example schema for the discretization/run config file. - Use these values to be used in the config file you create
   # The agent creates the actual config in the workspace; this is reference only.
 
   equation: "grad_shafranov"   # Which equation to solve (e.g. grad_shafranov for TokaMaker)
@@ -8,15 +8,41 @@ discretization_config_schema: |
 
   model:
     type: gs_plasma
-    
+
+  # --- Boundary: LCFS from create_isoflux(R0, Z0, a, kappa, delta) ---
+  # OFT create_isoflux(n_pts, R0, Z0, a, kappa, delta).
+  boundary:
+    type: "isoflux"           # or "polygon" with explicit points
+    R0: 0.42                  # Major radius (m)
+    Z0: 0.0                   # Vertical center (m)
+    a: 0.15                   # Minor radius (m)
+    kappa: 1.4                # Elongation
+    delta: 0.4                # Triangularity
+    n_pts: 80                 # Number of points on LCFS contour
+
+  # --- Physics ---
+  physics:
+    F0: 0.10752               # Toroidal field scale R*Bt (T·m)
+    targets:
+      Ip: 120000              # Plasma current (A)
+      Ip_ratio: 1.0           # 1/Beta_target - 1; 1.0 corresponds to Beta_target = 0.5
+
   # --- Discretization ---
-  mesh_dx: 0.015          # Characteristic mesh spacing for gs_Domain (smaller = finer mesh)
-  order: 2                 # Finite element order for TokaMaker (e.g. 2 = quadratic)
-  lcfs_n: 80               # Number of points for LCFS boundary contour (analytic case)
+  mesh:
+    method: "gs_domain"       # how to build mesh: gs_domain = single plasma region, LCFS as boundary
+    dx: 0.015                 # target edge size (m); used by define_region when method is gs_domain
+  order: 2                    # Finite element order for TokaMaker (e.g. 2 = quadratic)
+
+  other avaialable methods 
+  mygs = TokaMaker(myOFT)
+  gs_mesh.plot_mesh(fig,ax)
+  mygs.plot_psi(fig,ax)
+  mygs.init_psi()  # as in docs (initial flux before solve)
+
 
   # --- Solver / runtime ---
-  nthreads: 2              # Number of OFT threads
-  maxits: null              # Max Newton iterations (null = use solver default)
+  nthreads: 2
+  maxits: null                # Max Newton iterations (null = use solver default)
 
 
 problem: |
@@ -27,7 +53,7 @@ problem: |
 
   Implement the workflow using only:
   - The OpenFUSIONToolkit Python API (TokaMaker, meshing, util modules as needed)
-  - OFT documentation or in-package docstrings/source in ./OpenFUSIONToolkit/
+  - OFT documentation in ./OpenFUSIONToolkit/src/examples and https://openfusiontoolkit.github.io/OpenFUSIONToolkit/docs/v1.0.0-beta7/index.html 
   - The config file defines the equation, parameters, and discretisation variables. The script
     reads the config and uses it to build geometry/mesh, configure the solver, set targets,
     solve, and postprocess — without hardcoding problem or discretisation details.
@@ -39,9 +65,10 @@ problem: |
 
     2. The config file MUST specify the equation, the parameters of the problem, and the
        discretisation variables. Use the discretization_config_schema in this config (above)
-       only as a structural reference. If parameters are missing to fully define the precise
-       example you are solving, add them to the config file you create and document them
-       (e.g. in comments or the README).
+       as a structural reference. The example is the analytic case: LCFS from create_isoflux
+       (R0, Z0, a, kappa, delta, n_pts), F0, Ip, Ip_ratio, no custom profiles (TokaMaker defaults),
+       mesh_dx e.g. 0.015. If parameters are missing to fully define the example, add them and
+       document (e.g. in comments or README).
 
     3. Deliverables:
        - A config file (e.g. discretization_config.yaml) that defines the equation, parameters,
@@ -61,7 +88,9 @@ problem: |
          self-contained (problem, workspace, and any needed context) so that when an agent
          is given this prompt it can create new configs and run the script without the
          original problem text.
-       - Keep the generated number of files to a minimum just the necessary files listed above, no need to include schema validators or config validators. You can have an output folder to test. 
+       - Keep the generated number of files to a minimum just the necessary files listed above, no need to include schema validators or config validators, keep code concise and readable. 
+       - You can have an output folder to test the examples with the config you created, make sure to include mesh and equilibrium plots too. 
+       - The script must build the mesh according to the method in the config (e.g. mesh.method). When mesh.method is gs_domain, use gs_Domain function with a single plasma region and the LCFS as the boundary.
 
     4. You must RUN the example with the config you created and fix any errors until it completes.
        Do not hardcode parameters in the script; the script must use the config file.
@@ -74,7 +103,7 @@ problem: |
     * Do not prompt the user for input; the task is autonomous.
     * You may search the web only for OFT/TokaMaker API or relevant physics if needed.
 
-workspace: oft_configurable_example
+workspace: oft_configurable_example_2
 model: openai:gpt-5.2
 
 symlinks:
