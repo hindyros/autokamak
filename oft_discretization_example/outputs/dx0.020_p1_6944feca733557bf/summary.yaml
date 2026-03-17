@@ -1,0 +1,2 @@
+# YAML serialization failed for this environment; see summary.json
+# error: ('cannot represent an object', np.float64(1.3999815631532067))

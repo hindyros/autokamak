@@ -1,9 +1,0 @@
-The only “retrieved content” here is an access error:
-
-- The attempted source (`https://zenodo.org/records/11622052`) could not be fetched due to **HTTP 403 Forbidden**.
-- Because no page text, documentation, or code content was successfully retrieved, there’s **nothing available to summarize** regarding OpenFUSIONToolkit / TokaMaker APIs, workflow, or EQDSK output from that link.
-
-If you provide any of the following, I can summarize it specifically for “minimal working Python code with TokaMaker (mesh/geometry → Grad–Shafranov solve → write EQDSK)”:
-- the text/HTML/PDF contents of that Zenodo record,
-- a cached copy,
-- or another accessible URL (or pasted README/docs snippets).

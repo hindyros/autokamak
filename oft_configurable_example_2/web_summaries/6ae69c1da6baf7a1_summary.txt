@@ -1,9 +1,0 @@
-No retrieved content was included after “Summarize the content below:”, so I can’t extract or summarize any documentation/examples yet.
-
-Paste the retrieved text/snippets (or links, or files), and I will summarize specifically for:
-
-- **`create_isoflux`**: where it appears, what it does, required arguments/inputs, and an example call.
-- **`gs_Domain` mesh building**: how to construct the domain/mesh (e.g., points, boundary, regions/holes, resolution controls), and a minimal working example.
-- **Equilibrium solve API**: the solver entry point(s), **function/method signature**, minimal required inputs (profiles, coils/currents, boundary constraints), and a minimal solve example.
-
-If you want, I can also do the retrieval step (web search) if you tell me whether you prefer **official repo docs**, **examples in the GitHub tree**, or **published docs/readthedocs**.

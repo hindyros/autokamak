@@ -33,13 +33,6 @@ discretization_config_schema: |
     dx: 0.015                 # target edge size (m); used by define_region when method is gs_domain
   order: 2                    # Finite element order for TokaMaker (e.g. 2 = quadratic)
 
-  other avaialable methods 
-  mygs = TokaMaker(myOFT)
-  gs_mesh.plot_mesh(fig,ax)
-  mygs.plot_psi(fig,ax)
-  mygs.init_psi()  # as in docs (initial flux before solve)
-
-
   # --- Solver / runtime ---
   nthreads: 2
   maxits: null                # Max Newton iterations (null = use solver default)
@@ -53,7 +46,7 @@ problem: |
 
   Implement the workflow using only:
   - The OpenFUSIONToolkit Python API (TokaMaker, meshing, util modules as needed)
-  - OFT documentation in ./OpenFUSIONToolkit/src/examples and https://openfusiontoolkit.github.io/OpenFUSIONToolkit/docs/v1.0.0-beta7/index.html 
+  - OFT documentation in ./OpenFUSIONToolkit/src/examples and https://openfusiontoolkit.github.io/OpenFUSIONToolkit/docs/v1.0.0-beta7/index.html
   - The config file defines the equation, parameters, and discretisation variables. The script
     reads the config and uses it to build geometry/mesh, configure the solver, set targets,
     solve, and postprocess — without hardcoding problem or discretisation details.
@@ -90,7 +83,7 @@ problem: |
          original problem text.
        - Keep the generated number of files to a minimum just the necessary files listed above, no need to include schema validators or config validators, keep code concise and readable. 
        - You can have an output folder to test the examples with the config you created, make sure to include mesh and equilibrium plots too. 
-       - The script must build the mesh according to the method in the config (e.g. mesh.method). When mesh.method is gs_domain, use gs_Domain function with a single plasma region and the LCFS as the boundary.
+       - The script must build the mesh according to the method in the config (e.g. mesh.method). When mesh.method is gs_domain, use gs_Domain with a single plasma region and the LCFS as the boundary.
 
     4. You must RUN the example with the config you created and fix any errors until it completes.
        Do not hardcode parameters in the script; the script must use the config file.

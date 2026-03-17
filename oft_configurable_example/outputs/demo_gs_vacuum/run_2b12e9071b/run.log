@@ -1,6 +1,0 @@
-
-Saving mesh: /Users/samisyed/Documents/agentic_workflows/oft_configurable_example/outputs/demo_gs_vacuum/run_2b12e9071b/mesh.h5
-/Users/samisyed/Documents/agentic_workflows/venv/lib/python3.11/site-packages/numpy/ctypeslib/_ctypeslib.py:559: RuntimeWarning: A builtin ctypes object gave a PEP3118 format string that does not match its itemsize, so a best-guess will be made of the data type. Newer versions of python may behave correctly.
-  return np.asarray(obj)
-WARNING: get_stats failed: float division by zero
-Run completed successfully

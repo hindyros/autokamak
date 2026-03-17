@@ -1,9 +1,0 @@
-The provided “content” doesn’t include any OpenFUSIONToolkit / TokaMaker Python API documentation or equilibrium example details. It’s just GitHub UI text indicating you must be signed in to change notification settings / comment, with no references to:
-
-- `create_isoflux`
-- `gs_Domain`
-- setting `Ip` or `F0`
-- solving an equilibrium
-- any method names, signatures, or required inputs
-
-So there’s nothing here that can be used to extract the minimal required inputs or API call sequence for those functions. If you paste the actual docs page content (or the relevant code/example snippet), I can summarize the exact method names/signatures and the minimum inputs needed to set `Ip`, `F0`, and solve.

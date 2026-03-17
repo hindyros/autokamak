@@ -1,0 +1,27 @@
+# Downstream-agent instruction file: make new configs and run the example.
+#
+# Recommended edits:
+# - mesh.regions[0].dx : change discretization (e.g. 0.03 -> 0.02 -> 0.01)
+# - boundary.npts      : change boundary sampling (>= 16)
+# - solver.order       : polynomial order (1-4)
+#
+# Then run:
+#   python run_equilibrium_from_config.py <new_config.yaml>
+
+base_config: discretization_config.yaml
+
+suggested_new_configs:
+  - filename: config_dx_0p03.yaml
+    edits:
+      mesh:
+        regions:
+          - dx: 0.03
+  - filename: config_dx_0p02.yaml
+    edits:
+      mesh:
+        regions:
+          - dx: 0.02
+  - filename: config_order_3.yaml
+    edits:
+      solver:
+        order: 3

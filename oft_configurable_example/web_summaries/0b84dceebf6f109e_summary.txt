@@ -1,8 +1,0 @@
-I don’t see any “retrieved content” included after your prompt (it ends right after “Summarize the content below:” with nothing following). Please paste the text/snippets you want summarized (or upload the document), and I’ll summarize it specifically for:
-
-- Minimal working Python using **OpenFUSIONToolkit (OFT) / TokaMaker**
-- How to **build geometry/mesh**
-- How to **solve Grad–Shafranov** (vacuum and/or plasma)
-- Key **API/class/function names**, typical workflow, and **writing outputs (e.g., EQDSK)**
-
-If you share the source (e.g., docs page excerpts, README, code examples, error logs), I can also extract a “most likely to work” minimal script skeleton from it.

@@ -1,0 +1,40 @@
+# Discretization sweep file for run_equilibrium_from_config.py
+#
+# Usage:
+#   python run_discretization_sweep.py sweep_discretizations.yaml
+#
+# Each entry may either:
+#  - point to a full config YAML via `config: path/to/config.yaml`, or
+#  - specify `base_config` plus a nested `overrides` mapping that is deep-merged.
+#
+# Keep physics fixed; vary discretization settings.
+
+base_config: discretization_config.yaml
+
+cases:
+  - case_id: dx0.020_p1
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            dx: 0.020
+      solver:
+        order: 1
+
+  - case_id: dx0.015_p2
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            dx: 0.015
+      solver:
+        order: 2
+
+  - case_id: dx0.010_p2
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            dx: 0.010
+      solver:
+        order: 2

@@ -1,0 +1,85 @@
+# Configurable equilibrium example (v3): includes required OFT methods list and init_psi requirement.
+
+discretization_config_schema: |
+  # Example schema for the config file the agent creates. Use as structural reference.
+
+  equation: "grad_shafranov"
+  fixed_boundary: true
+
+  model:
+    type: gs_plasma
+
+  boundary:
+    type: "isoflux"
+    R0: 0.42
+    Z0: 0.0
+    a: 0.15
+    kappa: 1.4
+    delta: 0.4
+    n_pts: 80
+
+  physics:
+    F0: 0.10752
+    targets:
+      Ip: 120000
+      Ip_ratio: 1.0
+
+  mesh:
+    method: "gs_domain"
+    dx: 0.015
+  order: 2
+
+  nthreads: 2
+  maxits: null
+
+problem: |
+  TITLE: OpenFUSIONToolkit equilibrium example with configurable discretization
+
+  You have access to OpenFUSIONToolkit (OFT), a suite of modeling tools for plasma and fusion,
+  in ./OpenFUSIONToolkit/. You also have URSA (agentic toolkit) in ./ursa/.
+
+  Implement the workflow using only:
+  - The OpenFUSIONToolkit Python API (TokaMaker, meshing, util modules as needed)
+  - The config file defines the equation, parameters, and discretisation variables. The script
+    reads the config and uses it to build geometry/mesh, configure the solver, set targets,
+    solve, and postprocess — without hardcoding problem or discretisation details.
+
+  METHODS TO USE:
+    - create_isoflux(R0, Z0, a, kappa, delta, n_pts): Build the LCFS contour for the analytic case (isoflux boundary).
+    - gs_Domain: Build the mesh. gs_Domain(), define_region('plasma', mesh_dx, 'plasma'),
+    - TokaMaker.init_psi(): Required to initialize the flux function. Call after set_targets(), before solve().
+    - gs_mesh.plot_mesh(fig, ax): Plot the mesh.
+    - TokaMaker.plot_psi(fig, ax): Plot flux surfaces. Use this for the psi plot; do not plot
+      get_psi() on the raw mesh triangulation (dof layout may differ from mesh vertices).
+
+  TASKS:
+    1. Create an equilibrium example driven by a CONFIG FILE. No hardcoded physics or discretisation.
+
+    2. Config file must specify equation, parameters, and discretisation per the schema above - no custom profiles (TokaMaker defaults), mesh_dx e.g. 0.015.
+
+    3. Deliverables:
+       - Config file (e.g. discretization_config.yaml) with equation, parameters, discretisation.
+       - One Python script that loads the config and runs, builds the mesh and solves and plots the mesh and psi
+       - README.md: what the example does and how to run it.
+       - run_new_discretizations.yaml for a downstream agent to create new configs and run.
+       - Keep the generated number of files to a minimum just the necessary files listed above, no need to include schema validators or config validators, keep code concise and readable. 
+       - You can have an output folder to test the examples with the config you created, make sure to include mesh and equilibrium plots too. 
+
+    4. RUN the example with your config and fix errors until it completes.
+
+  CONSTRAINTS:
+    * Do NOT write into ./ursa/ or ./OpenFUSIONToolkit/; treat them as read-only.
+    * Do not use the 'git' command.
+    * Do not modify the Python environment; use only packages from requirements.txt.
+    * OpenFUSIONToolkit binary and PYTHONPATH are already set up; do not validate or reinstall.
+    * Do not prompt the user for input; the task is autonomous.
+    * You may search the web only for OFT/TokaMaker API or relevant physics if needed.
+    
+workspace: oft_discretization_example
+model: openai:gpt-5.2
+
+symlinks:
+  - source: ./ursa
+    dest: ursa
+  - source: ./OpenFUSIONToolkit
+    dest: OpenFUSIONToolkit
