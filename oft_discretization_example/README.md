@@ -24,6 +24,8 @@ No additional packages beyond those already in the environment are required.
 
 - `discretization_config.yaml` — example config specifying equation, parameters, targets, and discretization.
 - `run_equilibrium_from_config.py` — single-case runner (loads a config and runs one solve).
+- `run_invert_psi.py` — optional outer loop: tune YAML parameters so `get_psi()` matches a target ψ (see `README_INVERT_PSI.md`). Uses `forward_once.py` subprocesses so OFT is not re-initialized in-process between solves; `forward_plot_psi.py` writes stage **ψ** PNGs after a run.
+- `invert_psi_example.yaml` — small inversion demo (`F0` + `Ip`, `dof` ψ loss + regularization); see `README_INVERT_PSI.md`.
 - `run_discretization_sweep.py` — sweep runner (runs multiple cases by overriding discretization fields).
 - `sweep_discretizations.yaml` — example sweep definition.
 - `run_new_discretizations.yaml` — template/instructions for a downstream agent to generate new configs.

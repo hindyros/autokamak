@@ -1,0 +1,48 @@
+# Small inversion demo (recommended default).
+#
+# - Same boundary / mesh as ``discretization_config.yaml`` → use ``psi_loss: dof`` (valid
+#   per-degree-of-freedom ψ comparison).
+# - Only **two** parameters: ``solver.F0`` and ``targets.Ip``.
+# - Mild **regularization** toward the reference scalars so the problem is well posed
+#   (ψ-only fits can be flat / non-unique without it).
+#
+# Run from this directory:
+#   python run_invert_psi.py invert invert_psi_example.yaml
+
+base_config: discretization_config.yaml
+
+target:
+  mode: reference
+  reference_overrides:
+    solver:
+      F0: 0.114
+    targets:
+      Ip: 108000.0
+
+optimize:
+  psi_loss: dof
+  method: L-BFGS-B
+  maxiter: 50
+  ftol: 1.0e-7
+  fail_penalty: 1.0e15
+  regularization_lambda: 0.008
+  reference_parameters:
+    solver.F0: 0.114
+    targets.Ip: 108000.0
+  parameters:
+    - path: solver.F0
+      initial: 0.091
+      min: 0.086
+      max: 0.12
+    - path: targets.Ip
+      initial: 124000.0
+      min: 100000.0
+      max: 128000.0
+
+outputs:
+  out_dir: outputs/invert_example
+  # After inversion: ψ PNGs (each is a full subprocess solve + plot)
+  #   psi_reference.png  — target (reference_overrides)
+  #   psi_initial.png    — starting parameters (first evaluation)
+  #   psi_best.png       — optimized parameters
+  plot_psi_stages: true

@@ -1,0 +1,176 @@
+{
+  "invert_yaml": "/Users/samisyed/Documents/agentic_workflows/oft_discretization_example/invert_psi_example.yaml",
+  "base_config": "/Users/samisyed/Documents/agentic_workflows/oft_discretization_example/discretization_config.yaml",
+  "target": {
+    "mode": "reference"
+  },
+  "psi_loss": {
+    "mode": "dof",
+    "sorted_bins": 512
+  },
+  "regularization": {
+    "lambda": 0.008,
+    "reference_parameters": {
+      "solver.F0": 0.114,
+      "targets.Ip": 108000.0
+    },
+    "final_psi_loss": 4.103763474207205e-31,
+    "final_reg_term": 0.00261224489786699,
+    "final_objective": 0.00261224489786699
+  },
+  "optimizer": {
+    "method": "L-BFGS-B",
+    "success": true,
+    "message": "CONVERGENCE: NORM OF PROJECTED GRADIENT <= PGTOL",
+    "nit": 2,
+    "nfev": 9,
+    "final_objective": 0.00261224489786699,
+    "final_psi_loss": 4.103763474207205e-31
+  },
+  "best_parameters": {
+    "solver.F0": 0.11400000293005164,
+    "targets.Ip": 123999.99999971747
+  },
+  "history_tail": [
+    {
+      "loss": 0.006273144551938424,
+      "loss_psi": 1.0121279001072151e-30,
+      "loss_reg": 0.006273144551938424,
+      "x": [
+        0.091,
+        124000.0
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.091,
+      "targets.Ip": 124000.0
+    },
+    {
+      "loss": 0.006273141368548114,
+      "loss_psi": 1.0121279001072151e-30,
+      "loss_reg": 0.006273141368548114,
+      "x": [
+        0.09100000999999999,
+        124000.0
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.09100000999999999,
+      "targets.Ip": 124000.0
+    },
+    {
+      "loss": 0.006273144551941688,
+      "loss_psi": 5.09767986284558e-31,
+      "loss_reg": 0.006273144551941688,
+      "x": [
+        0.091,
+        124000.00000001
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.091,
+      "targets.Ip": 124000.00000001
+    },
+    {
+      "loss": 0.0028613798459494605,
+      "loss_psi": 4.305427669003397e-31,
+      "loss_reg": 0.0028613798459494605,
+      "x": [
+        0.12,
+        123999.99999967351
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.12,
+      "targets.Ip": 123999.99999967351
+    },
+    {
+      "loss": 0.0028613790155003257,
+      "loss_psi": 4.305427669003397e-31,
+      "loss_reg": 0.0028613790155003257,
+      "x": [
+        0.11999999,
+        123999.99999967351
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.11999999,
+      "targets.Ip": 123999.99999967351
+    },
+    {
+      "loss": 0.0028613798459527252,
+      "loss_psi": 4.969067493715356e-31,
+      "loss_reg": 0.0028613798459527252,
+      "x": [
+        0.12,
+        123999.99999968351
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.12,
+      "targets.Ip": 123999.99999968351
+    },
+    {
+      "loss": 0.00261224489786699,
+      "loss_psi": 4.103763474207205e-31,
+      "loss_reg": 0.00261224489786699,
+      "x": [
+        0.11400000293005164,
+        123999.99999971747
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.11400000293005164,
+      "targets.Ip": 123999.99999971747
+    },
+    {
+      "loss": 0.0026122448978680877,
+      "loss_psi": 4.103763474207205e-31,
+      "loss_reg": 0.0026122448978680877,
+      "x": [
+        0.11400001293005163,
+        123999.99999971747
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.11400001293005163,
+      "targets.Ip": 123999.99999971747
+    },
+    {
+      "loss": 0.002612244897870255,
+      "loss_psi": 2.9699168279551444e-31,
+      "loss_reg": 0.002612244897870255,
+      "x": [
+        0.11400000293005164,
+        123999.99999972747
+      ],
+      "paths": [
+        "solver.F0",
+        "targets.Ip"
+      ],
+      "solver.F0": 0.11400000293005164,
+      "targets.Ip": 123999.99999972747
+    }
+  ],
+  "psi_plots": {
+    "psi_reference": "/Users/samisyed/Documents/agentic_workflows/oft_discretization_example/outputs/invert_example/psi_reference.png",
+    "psi_initial": "/Users/samisyed/Documents/agentic_workflows/oft_discretization_example/outputs/invert_example/psi_initial.png",
+    "psi_best": "/Users/samisyed/Documents/agentic_workflows/oft_discretization_example/outputs/invert_example/psi_best.png"
+  }
+}
