@@ -1,8 +1,0 @@
-[2026-03-02T07:14:42.833757Z] Starting fixed-boundary equilibrium run
-[2026-03-02T07:14:42.833990Z] Arguments: {'case': 'eqdsk', 'outdir': 'outputs/fixed_boundary_ex1', 'run_id': 'milestone_setup_eqdsk', 'no_plots': True, 'nthreads': 2, 'mesh_dx': None, 'maxits': None, 'imports_only': False, 'setup_only': True, 'smoke_solve': False}
-[2026-03-02T07:14:43.021374Z] Environment probe: {'utc_start': '2026-03-02T07:14:42.834001Z', 'python': '3.11.1 (v3.11.1:a7a450f84a, Dec  6 2022, 15:24:06) [Clang 13.0.0 (clang-1300.0.29.30)]', 'platform': 'macOS-26.3-arm64-arm-64bit', 'executable': '/Users/samisyed/Documents/agentic_workflows/venv/bin/python3', 'cwd': '/Users/samisyed/Documents/agentic_workflows/oft_generation_example', 'OpenFUSIONToolkit.__file__': '/Applications/OpenFUSIONToolkit/python/OpenFUSIONToolkit/__init__.py', 'OpenFUSIONToolkit.__version__': None}
-[2026-03-02T07:14:43.032671Z] Loading EQDSK input via read_eqdsk('/Users/samisyed/Documents/agentic_workflows/OpenFusionToolkit/src/examples/TokaMaker/fixed_boundary/gNT_example')
-[2026-03-02T07:14:43.036968Z] Using LCFS contour from EQDSK. mesh_dx=0.15
-[2026-03-02T07:14:43.041398Z] Creating gs_Domain and building mesh from LCFS polygon
-[2026-03-02T07:14:43.052138Z] Mesh built: pts=(488, 2), lc=(907, 3), reg=(907,)
-[2026-03-02T07:14:43.052175Z] Milestone: --setup-only requested. Writing LCFS + mesh and exiting (no solve).

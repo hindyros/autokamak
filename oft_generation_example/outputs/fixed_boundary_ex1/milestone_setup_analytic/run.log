@@ -1,7 +1,0 @@
-[2026-03-02T07:14:07.081992Z] Starting fixed-boundary equilibrium run
-[2026-03-02T07:14:07.082279Z] Arguments: {'case': 'analytic', 'outdir': 'outputs/fixed_boundary_ex1', 'run_id': 'milestone_setup_analytic', 'no_plots': True, 'nthreads': 2, 'mesh_dx': None, 'maxits': None, 'imports_only': False, 'setup_only': True, 'smoke_solve': False}
-[2026-03-02T07:14:07.265735Z] Environment probe: {'utc_start': '2026-03-02T07:14:07.082291Z', 'python': '3.11.1 (v3.11.1:a7a450f84a, Dec  6 2022, 15:24:06) [Clang 13.0.0 (clang-1300.0.29.30)]', 'platform': 'macOS-26.3-arm64-arm-64bit', 'executable': '/Users/samisyed/Documents/agentic_workflows/venv/bin/python3', 'cwd': '/Users/samisyed/Documents/agentic_workflows/oft_generation_example', 'OpenFUSIONToolkit.__file__': '/Applications/OpenFUSIONToolkit/python/OpenFUSIONToolkit/__init__.py', 'OpenFUSIONToolkit.__version__': None}
-[2026-03-02T07:14:07.277535Z] Building analytic LCFS contour with create_isoflux (n=80). mesh_dx=0.015
-[2026-03-02T07:14:07.282202Z] Creating gs_Domain and building mesh from LCFS polygon
-[2026-03-02T07:14:07.292572Z] Mesh built: pts=(700, 2), lc=(1322, 3), reg=(1322,)
-[2026-03-02T07:14:07.292586Z] Milestone: --setup-only requested. Writing LCFS + mesh and exiting (no solve).

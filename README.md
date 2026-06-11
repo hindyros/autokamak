@@ -4,6 +4,16 @@ This repository is an example of using the **[Universal Research and Scientific 
 
 ---
 
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md) — high-level layering and data flow.
+- [docs/agent-workflows.md](docs/agent-workflows.md) — how runners and prompts work.
+- [docs/examples.md](docs/examples.md) — how to run and interpret example workspaces.
+- [docs/configs.md](docs/configs.md) — agent task YAML vs simulation config YAML.
+- [docs/development-notes.md](docs/development-notes.md) — migration notes and conventions.
+
+---
+
 ## Setup (macOS)
 
 1. **Create a virtual environment and install Python dependencies**
@@ -44,27 +54,38 @@ This repository is an example of using the **[Universal Research and Scientific 
 
 ## First example: Fixed-boundary equilibrium (OFT TokaMaker)
 
-The **first example** in this repo is the **OpenFUSIONToolkit TokaMaker fixed-boundary equilibrium** workflow in `oft_generation_example/`. It is a standalone Python script that:
+The **first example** in this repo is the **OpenFUSIONToolkit TokaMaker fixed-boundary equilibrium** workflow in `examples/fixed_boundary/`. It is a standalone Python script that:
 
 - Builds and solves a **fixed-boundary Grad–Shafranov equilibrium** using OFT’s TokaMaker in fixed-boundary mode.
 - Supports two cases:
   - **`--case analytic`**: the plasma boundary (LCFS) is generated analytically (e.g. an isoflux-shaped boundary).
   - **`--case eqdsk`**: the boundary is loaded from OFT’s bundled EQDSK example.
-- For each run it: creates or reads the LCFS boundary, builds a GS domain mesh, configures TokaMaker with targets (e.g. total plasma current) and optional profiles, solves the equilibrium, and writes outputs (NPZ/JSON and optional PNG plots) under `oft_generation_example/outputs/`.
+- For each run it: creates or reads the LCFS boundary, builds a GS domain mesh, configures TokaMaker with targets (e.g. total plasma current) and optional profiles, solves the equilibrium, and writes outputs (NPZ/JSON and optional PNG plots) under `examples/fixed_boundary/outputs/`.
 
 **Quick run (from repo root, with venv active and OFT on `PATH`/`PYTHONPATH`):**
 
 ```bash
-cd oft_generation_example
+cd examples/fixed_boundary
 python run_fixed_boundary_equilibrium.py --case analytic
 ```
 
 ---
 
-## Other content
+## Agent workflows
 
-- **Plan–execute workflow** (`plan_execute.py`): uses URSA’s Planning and Execution agents with a YAML config (e.g. `config.yaml`); can drive tasks that involve code and tool use.
-- **Fusion ExecutionAgent example** (`example1/examples/fusion_execution_agent/`): uses URSA’s ExecutionAgent for a toy tokamak performance scan (LangChain tools + Rich/JSON outputs); see that directory’s README for offline/online usage.
+All agent-related code lives under `agent/`:
+
+- **`agent/runners/plan_execute.py`** — plan → execute loop using URSA’s Planning and Execution agents.
+- **`agent/runners/plan_execute_feedback.py`** — same, with a re-planning feedback loop after failures.
+- **`agent/prompts/`** — YAML task configs (problem statement, workspace, model, symlinks).
+
+Run from the repo root (with venv active):
+
+```bash
+python -m agent.runners.plan_execute --config agent/prompts/oft_example_generation.yaml
+```
+
+See `agent/prompts/oft_discretization_example.yaml` for the more advanced config-driven equilibrium task.
 
 ---
 

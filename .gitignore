@@ -27,3 +27,12 @@ build/
 # Cloned repos
 OpenFUSIONToolkit/
 ursa/
+
+# Personal notes / RA study materials (not part of the public repo)
+TUTORIAL.md
+ra_next_steps.md
+notes/
+*.scratch.md
+
+# Run outputs (generated, never commit)
+outputs/

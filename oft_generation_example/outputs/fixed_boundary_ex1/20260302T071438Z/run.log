@@ -1,4 +1,0 @@
-[2026-03-02T07:14:38.204189Z] Starting fixed-boundary equilibrium run
-[2026-03-02T07:14:38.204274Z] Arguments: {'case': 'eqdsk', 'outdir': 'outputs/fixed_boundary_ex1', 'run_id': None, 'no_plots': True, 'nthreads': 2, 'mesh_dx': None, 'maxits': None, 'imports_only': True, 'setup_only': False, 'smoke_solve': False}
-[2026-03-02T07:14:38.395483Z] Environment probe: {'utc_start': '2026-03-02T07:14:38.204287Z', 'python': '3.11.1 (v3.11.1:a7a450f84a, Dec  6 2022, 15:24:06) [Clang 13.0.0 (clang-1300.0.29.30)]', 'platform': 'macOS-26.3-arm64-arm-64bit', 'executable': '/Users/samisyed/Documents/agentic_workflows/venv/bin/python3', 'cwd': '/Users/samisyed/Documents/agentic_workflows/oft_generation_example', 'OpenFUSIONToolkit.__file__': '/Applications/OpenFUSIONToolkit/python/OpenFUSIONToolkit/__init__.py', 'OpenFUSIONToolkit.__version__': None}
-[2026-03-02T07:14:38.395535Z] Milestone: --imports-only requested. Import probe completed; exiting.
