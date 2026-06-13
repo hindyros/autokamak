@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autotokamak"
+version = "0.1.0"
+description = "ML surrogates and agentic AI workflows for the Grad-Shafranov equation."
+readme = "README.md"
+requires-python = ">=3.11, <3.13"
+authors = [
+  { name = "Hindy Rossignol" },
+]
+license = { text = "MIT" }
+keywords = ["tokamak", "fusion", "grad-shafranov", "plasma", "surrogate", "agentic-ai"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+  "ursa-ai==0.15.1",
+  "langchain>=0.3",
+  "langchain-core",
+  "python-dotenv>=1.0",
+  "numpy",
+  "scipy",
+  "matplotlib",
+  "h5py",
+  "pydantic>=2",
+  "pyyaml",
+  "OpenFUSIONToolkit>=26.6",
+]
+
+[project.optional-dependencies]
+ml = [
+  "torch>=2.2",
+  "scikit-learn",
+]
+dev = [
+  "pytest>=7",
+  "pytest-cov",
+  "ruff",
+]
+
+[project.urls]
+Repository = "https://github.com/hindyros/autotokamak"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["autotokamak*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+  "slow: marks tests that require a full OFT solve (deselect with '-m \"not slow\"')",
+]
+addopts = "-m 'not slow'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]  # handled by formatter

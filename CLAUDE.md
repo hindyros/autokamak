@@ -1,30 +1,57 @@
-# CLAUDE.md — Repo guide for agentic_simulations
+# CLAUDE.md — Repo guide for `autotokamak`
 
 ## What this repo is
 
-A demo / scaffolding repo that connects two LANL-adjacent tools:
+The **`autotokamak`** package — an evolving platform for two complementary research threads:
 
-- **URSA** ([lanl/ursa](https://github.com/lanl/ursa)) — *Universal Research and Scientific Agent*. A LangChain/LangGraph-based agent framework with `PlanningAgent` + `ExecutionAgent`. It plans multi-step research tasks, then drives an executor that can write code, run shell commands, and inspect outputs.
-- **OpenFUSIONToolkit (OFT)** ([OpenFUSIONToolkit/OpenFUSIONToolkit](https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit)) — plasma/fusion modeling, including **TokaMaker** which solves the Grad–Shafranov equation for tokamak MHD equilibria.
+1. **ML surrogate models** for the Grad–Shafranov equation (fast approximations of TokaMaker's FEM solver).
+2. **LLM-driven agentic workflows** (via [URSA](https://github.com/lanl/ursa)) that plan and run equilibrium computations end-to-end.
 
-The point: let an LLM agent autonomously plan and run a TokaMaker simulation end-to-end (build LCFS → mesh → solve GS → postprocess), with the human only providing a high-level problem statement and a YAML config.
+It builds on:
+
+- **URSA** — LangChain/LangGraph-based `PlanningAgent` + `ExecutionAgent` pair.
+- **OpenFUSIONToolkit (OFT) / TokaMaker** — the ground-truth Grad–Shafranov solver. Installed via `pip install OpenFUSIONToolkit>=26.6`.
+
+## Top-level layout
+
+```
+agentic_simulations/                # repo root (will be renamed to autotokamak)
+├── pyproject.toml                  # package metadata, deps, optional [ml] [dev]
+├── src/autotokamak/                # the importable package
+│   ├── core/                       # shared utilities (geometry, solver, io, diagnostics, logging, schema)
+│   ├── agent/                      # URSA runners + prompts
+│   │   ├── runners/                # plan_execute.py, plan_execute_feedback.py
+│   │   └── prompts/                # YAML prompts the agent consumes
+│   ├── data/                       # (Week 2) sweep generators, HDF5 loaders
+│   ├── surrogate/                  # (Week 4) PINN, DeepONet, FNO, baselines
+│   ├── models/                     # (Week 4+) trained-model loaders
+│   └── eval/                       # (Week 3+) metrics, benchmarks, comparison plots
+├── examples/                       # runnable demos, now built on autotokamak.core
+│   ├── fixed_boundary/             # analytic + EQDSK demo (hardcoded physics)
+│   └── config_driven_equilibrium/  # YAML-driven runner + sweep + ψ inverter
+├── tests/                          # pytest suite (smoke + schema + geometry)
+├── data/                           # gitignored: raw/, processed/ for training datasets
+├── models/                         # gitignored: checkpoints/
+├── experiments/                    # gitignored: per-experiment configs and logs
+├── docs/                           # architecture diagrams and design notes
+└── outputs/                        # gitignored: per-run artifacts from example scripts
+```
 
 ## Two layers of code
 
-### Layer 1 — Agent drivers (`agent/`)
-These are the **agentic runners** you actually invoke. They read a YAML prompt and let URSA do the work.
+### Layer 1 — Agent drivers (`src/autotokamak/agent/`)
+These are the **agentic runners** that read a YAML prompt and let URSA do the work.
 
 | File | What it does |
 |---|---|
-| `agent/runners/plan_execute.py` | Plain plan → execute. PlanningAgent emits a list of steps; ExecutionAgent runs each in turn, threading "previous-step summary" through the prompts. |
-| `agent/runners/plan_execute_feedback.py` | Same, but with a **feedback loop**: after each execution round, re-invoke the planner with the execution history so it can patch failures or confirm completion. Configurable via `feedback_rounds`, `validate_after`. |
-| `agent/runners/config.py` | Shared YAML config loading and workspace path resolution (relative to repo root). |
+| `runners/plan_execute.py` | Plain plan → execute. PlanningAgent emits steps; ExecutionAgent runs each in turn, threading "previous-step summary" through the prompts. |
+| `runners/plan_execute_feedback.py` | Same, plus a **feedback loop**: after execution, re-invoke the planner with the execution history so it can patch failures. Configurable via `feedback_rounds`, `validate_after`. |
+| `runners/config.py` | Shared YAML loader and workspace-path resolver. |
 
 Both runners:
 - Load `.env` for `OPENAI_API_KEY`.
-- `init_chat_model(model=...)` for both planner and executor (default `openai:o4-mini`; YAML or `--model` overrides).
-- Create a `workspace/` dir; optionally symlink in `./ursa` and `./OpenFUSIONToolkit` so the agent can read them.
-- Invoke: `python -m agent.runners.plan_execute --config agent/prompts/oft_example_generation.yaml`.
+- `init_chat_model(model=...)` for both planner and executor (default `openai:o4-mini`).
+- Create a workspace dir; symlink in `./ursa` and `./OpenFUSIONToolkit` so the agent can read them.
 
 ### Layer 2 — Generated example workspaces
 These are **artifacts produced by Layer 1 agents** — concrete, hand-runnable TokaMaker examples. They have been committed to the repo so you can run them directly without invoking the agent.
@@ -76,24 +103,26 @@ Workspace (e.g. examples/config_driven_equilibrium/) populated with:
 
 After the agent finishes, the workspace is self-contained: you can re-run the example without involving any LLM at all.
 
-## Setup (from README, condensed)
+## Setup
 
 ```bash
 python3.11 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-echo 'OPENAI_API_KEY=...' > .env
 
-# Side-clones (not in this repo; gitignored)
+# Editable install of autotokamak with all dev tools
+pip install -e ".[ml,dev]"
+
+# OpenFUSIONToolkit binary + Python bindings (PyPI as of v26.6 — no /Applications install needed)
+# Already included as a dependency in pyproject.toml; pip install above pulls it in.
+
+# Optional: side-clones of OFT and URSA source for reference (not needed at runtime)
 git clone https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit.git
 git clone https://github.com/lanl/ursa.git
 
-# OFT binary on PATH + PYTHONPATH (zshrc)
-export OFT_ROOTPATH="/Applications/OpenFUSIONToolkit"
-export PATH="$OFT_ROOTPATH/bin:$PATH"
-export PYTHONPATH="$OFT_ROOTPATH/python:$PYTHONPATH"
+# Agent runners need OpenAI access:
+echo 'OPENAI_API_KEY=sk-...' > .env
 ```
 
-Python **must be < 3.13** (some `ursa-ai==0.15.1` deps don't support 3.13+).
+Python **must be 3.11 or 3.12** (some `ursa-ai==0.15.1` deps don't support 3.13+).
 
 ## What's gitignored
 
@@ -113,7 +142,11 @@ on a 2D triangular mesh of a D-shaped plasma cross-section. Inputs: LCFS shape (
 
 ## Things to keep in mind when editing
 
-- **Never write into `./ursa/` or `./OpenFUSIONToolkit/`** — they're treated as read-only by agent prompts and are gitignored.
-- The agent prompts contain hard `CONSTRAINTS:` blocks (no `git`, no `pip install`, no `input()`). Preserve these when editing prompts.
-- `examples/config_driven_equilibrium/` has the more reusable architecture; `examples/fixed_boundary/` is a first-pass demo and the two are not meant to share code.
-- Outputs are timestamped under each example's `outputs/` dir — safe to delete.
+- **Use `autotokamak.core`** for any geometry / solver / IO / logging logic. Don't duplicate it — extend the library.
+- `examples/config_driven_equilibrium/run_equilibrium_from_config.py` is the **reference template** — config-driven, uses `core/`, extensible. Build new sweeps on this pattern.
+- `examples/fixed_boundary/run_fixed_boundary_equilibrium.py` is a legacy first-pass demo. It still works but does not yet route through `core/`; treat it as a reference for the EQDSK-loading workflow.
+- **OFT singleton**: only one `OpenFUSIONToolkit.OFT_env` can ever be created per Python kernel. `core.solver.make_solver` accepts an optional `env=` to reuse the existing one — required for any retry path or for batched solves in one process.
+- Never write into side-cloned `./ursa/` or `./OpenFUSIONToolkit/` if you have them locally — they're read-only and gitignored.
+- Agent prompts in `src/autotokamak/agent/prompts/*.yaml` contain hard `CONSTRAINTS:` blocks (no `git`, no `pip install`, no `input()`). Preserve these when editing.
+- `outputs/`, `data/raw/`, `data/processed/`, `models/checkpoints/`, `experiments/` are all gitignored. Don't commit generated artifacts.
+- Run `pytest tests/ -v` after structural changes; `pytest tests/ -v -m slow` to include the full OFT solve smoke test.

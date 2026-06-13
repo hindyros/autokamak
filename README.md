@@ -1,6 +1,10 @@
-# URSA + OpenFUSIONToolkit Examples
+# autotokamak
 
-This repository is an example of using the **[Universal Research and Scientific Agent (URSA)](https://github.com/lanl/ursa)** to run simulations with the **[Open FUSION Toolkit (OFT)](https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit)**. URSA provides agentic workflows for planning, code execution, and research; OFT provides modeling tools for plasma and fusion in 2D/3D (including TokaMaker for MHD equilibria).
+ML surrogate models and agentic LLM workflows for the **Grad–Shafranov equation** — built on top of:
+- **[OpenFUSIONToolkit (OFT)](https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit)** — TokaMaker for ground-truth GS solves.
+- **[URSA](https://github.com/lanl/ursa)** — LangChain/LangGraph agent framework for plan/execute workflows.
+
+Built as a summer RA project at **MIT Energy Initiative**.
 
 ---
 
@@ -14,41 +18,31 @@ This repository is an example of using the **[Universal Research and Scientific 
 
 ---
 
-## Setup (macOS)
+## Setup (macOS / Linux)
 
-1. **Create a virtual environment and install Python dependencies**
+```bash
+python3.11 -m venv venv && source venv/bin/activate
 
-   ```bash
-   python3.11 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+# Editable install: pulls in OpenFUSIONToolkit, URSA, pydantic, h5py, etc.
+pip install -e ".[ml,dev]"
 
-2. **Create a `.env` file** in the repo root and add your OpenAI API key (required for URSA workflows that use an LLM):
+# Agent runners need OpenAI access:
+echo 'OPENAI_API_KEY=sk-...' > .env
 
-   ```bash
-   echo 'OPENAI_API_KEY=your-key-here' > .env
-   ```
+# Optional: side-clone OFT and URSA source if you want to browse their examples
+git clone https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit.git
+git clone https://github.com/lanl/ursa.git
+```
 
-   Replace `your-key-here` with your key from [OpenAI API keys](https://platform.openai.com/account/api-keys). The `.env` file is gitignored.
+Python **must be 3.11 or 3.12**. OpenFUSIONToolkit (v26.6+) is on PyPI, so no
+`/Applications/` install or `PYTHONPATH` exports are needed.
 
-3. **Clone OpenFUSIONToolkit and URSA** (if not already present)
+### Verify the install
 
-   ```bash
-   git clone https://github.com/OpenFUSIONToolkit/OpenFUSIONToolkit.git
-   git clone https://github.com/lanl/ursa.git
-   ```
-
-4. **Install the OpenFUSIONToolkit binary** and set up your environment so the OFT tools and Python bindings are on your `PATH` and `PYTHONPATH`. For a typical macOS install under `/Applications/OpenFUSIONToolkit`:
-
-   ```bash
-   echo 'export OFT_ROOTPATH="/Applications/OpenFUSIONToolkit"' >> ~/.zshrc
-   echo 'export PATH="$OFT_ROOTPATH/bin:$PATH"' >> ~/.zshrc
-   echo 'export PYTHONPATH="$OFT_ROOTPATH/python:$PYTHONPATH"' >> ~/.zshrc
-   source ~/.zshrc
-   ```
-
-   Adjust `OFT_ROOTPATH` if you installed OFT elsewhere. After this, the `OpenFUSIONToolkit` Python module and OFT binaries (e.g. TokaMaker) should be available in your shell.
+```bash
+python -c "from autotokamak.core import solver, geometry, schema; print('OK')"
+pytest tests/ -v
+```
 
 ---
 
@@ -73,19 +67,18 @@ python run_fixed_boundary_equilibrium.py --case analytic
 
 ## Agent workflows
 
-All agent-related code lives under `agent/`:
+Agent code lives under `src/autotokamak/agent/`:
 
-- **`agent/runners/plan_execute.py`** — plan → execute loop using URSA’s Planning and Execution agents.
+- **`agent/runners/plan_execute.py`** — plan → execute loop using URSA's PlanningAgent + ExecutionAgent.
 - **`agent/runners/plan_execute_feedback.py`** — same, with a re-planning feedback loop after failures.
-- **`agent/prompts/`** — YAML task configs (problem statement, workspace, model, symlinks).
+- **`agent/prompts/*.yaml`** — task YAMLs (problem statement, workspace, model, symlinks).
 
 Run from the repo root (with venv active):
 
 ```bash
-python -m agent.runners.plan_execute --config agent/prompts/oft_example_generation.yaml
+python -m autotokamak.agent.runners.plan_execute \
+  --config src/autotokamak/agent/prompts/oft_example_generation.yaml
 ```
-
-See `agent/prompts/oft_discretization_example.yaml` for the more advanced config-driven equilibrium task.
 
 ---
 

@@ -98,117 +98,29 @@ def load_config(path: str) -> Dict[str, Any]:
 
 
 def build_mesh_and_boundary(cfg: Dict[str, Any]):
-    import numpy as np
-    from OpenFUSIONToolkit.TokaMaker.meshing import gs_Domain
-    from OpenFUSIONToolkit.TokaMaker.util import create_isoflux
+    """Build LCFS + 2D mesh from a config. Thin wrapper around ``autotokamak.core.geometry``."""
+    from autotokamak.core.geometry import build_mesh_from_config
 
-    b = cfg["boundary"]
-    lcfs = create_isoflux(
-        int(b["npts"]),
-        float(b["r0"]),
-        float(b["z0"]),
-        float(b["a"]),
-        float(b["kappa"]),
-        float(b["delta"]),
-    )
-    lcfs = np.asarray(lcfs, float)
-
-    dx = float(cfg["mesh"]["regions"][0]["dx"])
-    gs_mesh = gs_Domain()
-    gs_mesh.define_region("plasma", dx, "plasma")
-    gs_mesh.add_polygon(lcfs, "plasma")
-    mesh_pts, mesh_lc, mesh_reg = gs_mesh.build_mesh()
+    lcfs, gs_mesh, mesh_pts, mesh_lc, mesh_reg = build_mesh_from_config(cfg)
+    # Preserve the legacy return ordering: (gs_mesh, lcfs, pts, lc, reg).
     return gs_mesh, lcfs, mesh_pts, mesh_lc, mesh_reg
 
 
 def setup_and_solve(cfg: Dict[str, Any], mesh_pts, mesh_lc, mesh_reg, lcfs):
-    import OpenFUSIONToolkit as oft
-    from OpenFUSIONToolkit.TokaMaker import TokaMaker
+    """Set up TokaMaker, seed psi, apply isoflux constraint, solve.
 
-    env = oft.OFT_env(nthreads=int(os.getenv("OFT_NTHREADS", "2")))
-    gs = TokaMaker(env)
+    Thin wrapper around ``autotokamak.core.solver.solve_equilibrium`` — preserves the
+    retry-on-isoflux-fail fallback behaviour that this runner had pre-refactor.
+    """
+    from autotokamak.core.solver import solve_equilibrium
 
-    # Mesh: pass points and connectivity; region tags optional (not needed for this simple case)
-    gs.setup_mesh(mesh_pts, mesh_lc, reg=mesh_reg)
-
-    # Solver setup
-    sol = cfg["solver"]
-    gs.settings.free_boundary = bool(sol.get("free_boundary", False))
-    if "maxits" in sol:
-        gs.settings.maxits = int(sol["maxits"])
-    gs.setup(order=int(sol["order"]), F0=float(sol["F0"]), full_domain=bool(sol.get("full_domain", False)))
-
-    # Targets
-    t = cfg["targets"]
-    gs.set_targets(
-        Ip=float(t.get("Ip")) if "Ip" in t else None,
-        Ip_ratio=float(t.get("Ip_ratio")) if "Ip_ratio" in t else None,
-        pax=float(t.get("pax")) if "pax" in t else None,
-        estore=float(t.get("estore")) if "estore" in t else None,
-        R0=float(t.get("R0")) if "R0" in t else None,
-        V0=float(t.get("V0")) if "V0" in t else None,
+    return solve_equilibrium(
+        mesh_pts=mesh_pts,
+        mesh_lc=mesh_lc,
+        mesh_reg=mesh_reg,
+        lcfs=lcfs,
+        cfg=cfg,
     )
-
-    # Required initialization sequence
-    # If init_psi.method == 'tokamaker_default': use uniform current over plasma region
-    # If method == 'isoflux': seed current inside an analytic LCFS matching the config boundary.
-    # Boundary constraint (fixed boundary equilibrium)
-    # Must be set AFTER init_psi(). Setting it before init_psi can trigger
-    # an internal fitting step that fails for some discretizations.
-
-    # Required initialization sequence
-    init = cfg.get("init_psi", {}) or {}
-    method = init.get("method", "tokamaker_default")
-    try:
-        if method == "isoflux":
-            b = cfg["boundary"]
-            gs.init_psi(float(b["r0"]), float(b["z0"]), float(b["a"]), float(b["kappa"]), float(b["delta"]))
-        elif method == "tokamaker_default":
-            gs.init_psi()
-        else:
-            raise ConfigError(
-                f"init_psi.method must be 'tokamaker_default' or 'isoflux', got {method!r}"
-            )
-    except Exception:
-        # Some configurations can fail the internal isoflux fit used during initialization.
-        # Retry with an extremely simple seed (uniform current over plasma region).
-        gs.init_psi(-1.0)
-
-    # Apply fixed-boundary isoflux constraint now that psi is initialized.
-    # NOTE: Some OFT builds can fail this fit for certain meshes/shaping.
-    # If that happens, we fall back to solving without the constraint.
-    try:
-        gs.set_isoflux(lcfs)
-        gs.solve()
-    except Exception as e:
-        print(f"WARNING: set_isoflux/solve failed ({e}). Falling back to unconstrained solve.")
-        # Retry without applying isoflux (cannot reliably "unset" in this API)
-        env2 = env
-        gs2 = TokaMaker(env2)
-        gs2.setup_mesh(mesh_pts, mesh_lc, reg=mesh_reg)
-        gs2.settings.free_boundary = bool(sol.get("free_boundary", False))
-        if "maxits" in sol:
-            gs2.settings.maxits = int(sol["maxits"])
-        gs2.setup(order=int(sol["order"]), F0=float(sol["F0"]), full_domain=bool(sol.get("full_domain", False)))
-        gs2.set_targets(
-            Ip=float(t.get("Ip")) if "Ip" in t else None,
-            Ip_ratio=float(t.get("Ip_ratio")) if "Ip_ratio" in t else None,
-            pax=float(t.get("pax")) if "pax" in t else None,
-            estore=float(t.get("estore")) if "estore" in t else None,
-            R0=float(t.get("R0")) if "R0" in t else None,
-            V0=float(t.get("V0")) if "V0" in t else None,
-        )
-        # init and solve
-        init = cfg.get("init_psi", {}) or {}
-        method = init.get("method", "tokamaker_default")
-        if method == "isoflux":
-            b = cfg["boundary"]
-            gs2.init_psi(float(b["r0"]), float(b["z0"]), float(b["a"]), float(b["kappa"]), float(b["delta"]))
-        else:
-            gs2.init_psi()
-        gs2.solve()
-        return gs2
-    return gs
 
 
 def _stable_case_slug(cfg: Dict[str, Any]) -> str:
