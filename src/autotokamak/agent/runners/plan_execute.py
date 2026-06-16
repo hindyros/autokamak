@@ -3,7 +3,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from agent.runners.config import REPO_ROOT, load_config, resolve_workspace
+from agent.runners.config import (
+    REPO_ROOT,
+    load_config,
+    materialize_symlinks,
+    resolve_workspace,
+)
 
 load_dotenv(REPO_ROOT / ".env")
 
@@ -23,7 +28,7 @@ def main(config_path: str, cli_model: str | None, workspace_override: str | None
     model_name = (
         cli_model
         or getattr(cfg, "model", None)
-        or "openai:o4-mini"
+        or "openai:gpt-5-mini"
     )
 
     print(f"\nUsing model: {model_name}")
@@ -36,7 +41,12 @@ def main(config_path: str, cli_model: str | None, workspace_override: str | None
     workspace_path.mkdir(parents=True, exist_ok=True)
     workspace = str(workspace_path)
 
-    symlinkdict = getattr(cfg, "symlink", None)
+    # URSA only supports a single symlinkdir dict; we materialize the YAML's
+    # `symlinks:` list ourselves and pass None to URSA to skip its broken path.
+    symlink_entries = getattr(cfg, "symlinks", None) or getattr(cfg, "symlink", None)
+    if isinstance(symlink_entries, dict):
+        symlink_entries = [symlink_entries]
+    materialize_symlinks(workspace_path, symlink_entries)
 
     planner_llm = init_chat_model(model=model_name)
     executor_llm = init_chat_model(model=model_name)
@@ -84,7 +94,7 @@ def main(config_path: str, cli_model: str | None, workspace_override: str | None
             {
                 "messages": [HumanMessage(content=prompt)],
                 "workspace": workspace,
-                "symlinkdir": symlinkdict,
+                "symlinkdir": None,
             }
         )
 
@@ -102,7 +112,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         default=None,
-        help="Model string for init_chat_model (e.g. openai:o4-mini)",
+        help="Model string for init_chat_model (e.g. openai:gpt-5-mini)",
     )
     parser.add_argument(
         "--workspace",

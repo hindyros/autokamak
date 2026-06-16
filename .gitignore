@@ -37,6 +37,13 @@ notes/
 # Run outputs (generated, never commit)
 outputs/
 
+# URSA runtime scratch (created inside agent workspaces)
+graph_store.sqlite
+ursa_metrics/
+
+# Agent-run logs
+logs/
+
 # ML data and model artifacts (generated; track structure via .gitkeep only)
 data/raw/*
 !data/raw/.gitkeep

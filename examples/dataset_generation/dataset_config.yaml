@@ -1,0 +1,26 @@
+sampling:
+  method: lhs
+  n_samples: 16
+  seed: 0
+
+parameters:
+  r0:    {low: 0.35, high: 0.55}
+  a:     {low: 0.10, high: 0.20}
+  kappa: {low: 1.0,  high: 1.6}
+  delta: {low: 0.0,  high: 0.4}
+  Ip:    {low: 80000.0, high: 200000.0}
+
+fixed:
+  z0: 0.0
+  F0: 0.10752
+  npts: 80
+  mesh_dx: 0.015
+  solver_order: 1
+  Ip_ratio: 1.0
+
+output_grid:
+  R: {min: 0.15, max: 0.80, n: 64}
+  Z: {min: -0.40, max: 0.40, n: 96}
+
+output:
+  dataset_path: outputs/dataset.h5

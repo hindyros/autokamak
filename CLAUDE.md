@@ -74,8 +74,7 @@ These are **artifacts produced by Layer 1 agents** — concrete, hand-runnable T
 |---|---|---|
 | `oft_example_generation.yaml` | `examples/fixed_boundary/` | "Build a fixed-boundary equilibrium example by reading the OFT notebook." |
 | `oft_discretization_example.yaml` | `examples/config_driven_equilibrium/` | "Build a config-driven equilibrium example with a specified API surface." |
-| `oft_example_configurable.yaml`, `_2.yaml` | (variant configs) | Tuning iterations of the above. |
-| `example1.yaml` | `example1/` (not committed) | Earlier toy example. |
+| `dataset_generation.yaml` | `examples/dataset_generation/` | "Build a fixed-boundary GS parameter sweep that writes a surrogate-training dataset." |
 
 ## How a typical run flows
 

@@ -14,6 +14,21 @@ from typing import Any, Dict, Tuple
 import numpy as np
 
 
+# OFT only permits one OFT_env per Python kernel. Cache the first one we make
+# and reuse it across calls so make_solver / solve_equilibrium can be invoked
+# inside a sweep loop without hitting "Only one instance of `OFT_env`...".
+_OFT_ENV_CACHE: Any = None
+
+
+def get_oft_env() -> Any:
+    """Return a process-wide OFT_env, creating it on first call."""
+    global _OFT_ENV_CACHE
+    if _OFT_ENV_CACHE is None:
+        import OpenFUSIONToolkit as oft  # imported lazily to avoid hard dep at import time
+        _OFT_ENV_CACHE = oft.OFT_env(nthreads=int(os.getenv("OFT_NTHREADS", "2")))
+    return _OFT_ENV_CACHE
+
+
 def _targets_kwargs_from_cfg(cfg: Dict[str, Any]) -> Dict[str, float]:
     """Extract the kwargs to forward to ``TokaMaker.set_targets``."""
     t = cfg.get("targets", {}) or {}
@@ -86,11 +101,10 @@ def make_solver(
         The OFT environment handle (reuse this for any retries) and the
         configured-but-unsolved TokaMaker instance.
     """
-    import OpenFUSIONToolkit as oft
     from OpenFUSIONToolkit.TokaMaker import TokaMaker
 
     if env is None:
-        env = oft.OFT_env(nthreads=int(os.getenv("OFT_NTHREADS", "2")))
+        env = get_oft_env()
     gs = TokaMaker(env)
     gs.setup_mesh(mesh_pts, mesh_lc, reg=mesh_reg)
     _apply_solver_settings(gs, cfg)
@@ -136,4 +150,4 @@ def solve_equilibrium(
     return gs2
 
 
-__all__ = ["make_solver", "solve_equilibrium"]
+__all__ = ["get_oft_env", "make_solver", "solve_equilibrium"]

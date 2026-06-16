@@ -80,6 +80,25 @@ python -m autotokamak.agent.runners.plan_execute \
   --config src/autotokamak/agent/prompts/oft_example_generation.yaml
 ```
 
+### End-to-end flow (inputs -> transforms -> outputs)
+
+```mermaid
+flowchart TD
+    A[User input<br/>Prompt YAML in src/autotokamak/agent/prompts/*.yaml<br/>problem, workspace, model, symlinks]
+    B[Runner startup<br/>autotokamak.agent.runners.plan_execute*<br/>load .env + parse config + prepare workspace]
+    C[Planning transform<br/>URSA PlanningAgent<br/>natural-language problem -> ordered plan steps]
+    D[Execution transform (loop over steps)<br/>URSA ExecutionAgent<br/>step text + prior summary -> code/files/commands]
+    E[Workspace artifacts<br/>examples/* workspace populated<br/>scripts, YAML configs, README, output dirs]
+    F[Physics solve transform<br/>autotokamak.core + OFT TokaMaker<br/>geometry/profiles/targets -> GS equilibrium solve]
+    G[Numerical outputs<br/>flux + derived quantities<br/>NPZ/JSON (+ optional PNG plots)]
+    H[User rerun path<br/>Run generated scripts directly (no LLM)<br/>reproduce or sweep configurations]
+
+    A --> B --> C --> D --> E --> F --> G --> H
+
+    I[Alternate input path<br/>Direct run of committed examples/<br/>CLI flags or simulation YAML]
+    I --> F
+```
+
 ---
 
 ## Links

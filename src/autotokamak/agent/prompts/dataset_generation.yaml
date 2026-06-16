@@ -1,0 +1,145 @@
+# Phase-1 prompt: agent-driven parameter sweep that builds a small training
+# dataset for downstream surrogate-model AutoML.
+#
+# Run with the venv activated and .env loaded:
+#   set -a && source .env && set +a
+#   source venv/bin/activate
+#   PYTHONPATH=src/autotokamak python -m agent.runners.plan_execute_feedback \
+#       --config src/autotokamak/agent/prompts/dataset_generation.yaml
+#
+# Scope: fixed-boundary Grad-Shafranov, TokaMaker default profiles,
+# 5 physics inputs (R0, a, kappa, delta, Ip), N = 16 PoC samples.
+# See docs/project_agenda.md for the full project context.
+
+problem: |
+  TITLE
+    Build a small physics-parameter dataset of fixed-boundary Grad-Shafranov
+    equilibria for downstream surrogate-model training.
+
+  CONTEXT
+    The `autotokamak` package is already installed (importable as
+    `autotokamak`). Reuse `autotokamak.core` — do not re-implement TokaMaker
+    glue or invent function names. A working single-equilibrium reference
+    lives at `examples/config_driven_equilibrium/run_equilibrium_from_config.py`.
+
+    OpenFUSIONToolkit is pip-installed; do not look for it under ./
+
+  API REFERENCE (the only calls you should make into the core library)
+
+    # autotokamak.core.geometry
+    build_lcfs(*, r0: float, z0: float, a: float, kappa: float, delta: float,
+               npts: int = 80) -> np.ndarray         # shape (npts, 2): (R, Z) contour
+    build_mesh(lcfs: np.ndarray, *, mesh_dx: float,
+               region_name: str = "plasma", region_tag: str = "plasma"
+              ) -> tuple[gs_mesh, mesh_pts, mesh_lc, mesh_reg]
+              # mesh_pts: (N_nodes, 2); mesh_lc: (N_tri, 3) int; mesh_reg: (N_tri,)
+
+    # autotokamak.core.solver
+    solve_equilibrium(*, mesh_pts, mesh_lc, mesh_reg, lcfs, cfg) -> gs
+              # gs is a solved TokaMaker. Safe to call repeatedly in a loop —
+              # the OFT_env singleton is now cached internally.
+              # gs.get_psi() returns a 1-D float array of length len(mesh_pts)
+              # when solver.order == 1 (the node values, ready for interpolation).
+
+  CONFIG-DICT SCHEMA (what `solve_equilibrium`'s `cfg` arg must look like)
+    {
+      "equation": {"name": "gs"},
+      "boundary": {"type": "isoflux",
+                   "r0": <float>, "z0": <float>, "a": <float>,
+                   "kappa": <float>, "delta": <float>, "npts": <int>},
+      "mesh":     {"method": "gs_domain",
+                   "regions": [{"name": "plasma", "type": "plasma", "dx": <float>}]},
+      "solver":   {"order": 1, "F0": 0.10752, "free_boundary": False},
+      "targets":  {"Ip": <float>, "Ip_ratio": 1.0},
+      "init_psi": {"method": "tokamaker_default"},
+    }
+
+  PSI -> (R, Z) GRID INTERPOLATION
+    psi_nodes = np.asarray(gs.get_psi(), dtype=float).ravel()
+    # When solver.order == 1, len(psi_nodes) == len(mesh_pts) exactly.
+    tri = matplotlib.tri.Triangulation(mesh_pts[:, 0], mesh_pts[:, 1],
+                                        triangles=mesh_lc)
+    interp = matplotlib.tri.LinearTriInterpolator(tri, psi_nodes)
+    RR, ZZ = np.meshgrid(R, Z, indexing="xy")    # shape (nz, nr)
+    psi_grid = np.asarray(interp(RR, ZZ).filled(np.nan), dtype=np.float64)
+
+  GOAL
+    Produce one working example workspace under `examples/dataset_generation/`
+    that reads a YAML config and writes a small dataset of fixed-boundary
+    Grad-Shafranov solutions. Three files only (see DELIVERABLES). The
+    pipeline must be config-driven (no hardcoded ranges in the .py file).
+
+  WORKING DIRECTORY
+    Your current working directory IS the workspace. Write all files
+    DIRECTLY in the current directory (e.g. `./dataset_config.yaml`,
+    `./run_dataset_sweep.py`). Do NOT create a subdirectory named
+    `examples/` or `dataset_generation/` - those names refer to where
+    your CWD already is.
+
+  DELIVERABLES (exactly three files, written in the current directory)
+    1. `dataset_config.yaml` - one concrete config with:
+         sampling: { method: "lhs", n_samples: 16, seed: 0 }
+         parameters (low, high):
+           r0:    0.35  - 0.55     (m, major radius)
+           a:     0.10  - 0.20     (m, minor radius)
+           kappa: 1.0   - 1.6      (elongation)
+           delta: 0.0   - 0.4      (triangularity)
+           Ip:    80000 - 200000   (A, plasma current)
+         fixed:  z0=0.0, F0=0.10752, npts=80, mesh_dx=0.015,
+                 solver_order=1, Ip_ratio=1.0
+                 # solver_order=1 keeps len(get_psi()) == len(mesh_pts) so
+                 # the LinearTriInterpolator works directly with no DOF surgery.
+         output_grid: r in [0.15, 0.80] with 64 pts, z in [-0.40, 0.40] with 96 pts
+         output: dataset_path "outputs/dataset.h5"
+
+    2. `run_dataset_sweep.py` - the runner. Takes a config path as its sole
+       CLI arg. For each sample:
+         - sample parameters (use scipy.stats.qmc.LatinHypercube for "lhs",
+           seeded; numpy.random.default_rng for "uniform")
+         - build LCFS + mesh via autotokamak.core.geometry
+         - solve via autotokamak.core.solver.solve_equilibrium
+         - interpolate psi onto the common (R, Z) grid using
+           matplotlib.tri.LinearTriInterpolator (fall back to
+           scipy.interpolate.griddata if needed)
+         - on failure, log the exception and continue; fill NaN/False rows
+       After the loop, write one HDF5 file with this minimum layout:
+         /grid/R, /grid/Z                          : 1-D coordinate arrays
+         /inputs/r0, /a, /kappa, /delta, /Ip       : (N,) float64
+         /outputs/psi                              : (N, nz, nr) float64
+         /outputs/success                          : (N,) bool
+       Print a one-line summary at the end: "Wrote dataset.h5: M/N succeeded".
+
+    3. `README.md` - 20-40 lines: what the example produces, how to run it,
+       and the dataset layout.
+
+  CONSTRAINTS
+    * Do NOT add a verifier script, test suite, CI config, .gitignore,
+      atomic-finalize logic, checkpoint/resume support, progress bar, or any
+      other extras beyond the three files above. PoC, not production.
+    * Do not run `pip install` or modify the environment.
+    * Do not call `git`.
+    * Do not prompt for user input; the task is autonomous.
+    * Reuse `autotokamak.core` modules; do not re-implement TokaMaker glue.
+    * Only one OFT_env per Python process - rely on
+      autotokamak.core.solver's machinery for this.
+    * After writing the files, RUN `python run_dataset_sweep.py
+      dataset_config.yaml` from your current directory and verify that
+      `./outputs/dataset.h5` is created. The shell's `python` already
+      resolves to the project venv (Python 3.11) with all required
+      packages: numpy, scipy, h5py, matplotlib, pyyaml, autotokamak,
+      OpenFUSIONToolkit. If you ever see ModuleNotFoundError for any of
+      these, the venv is misconfigured upstream - do NOT try to pip
+      install; report the error and stop.
+    * If errors arise during the sweep, fix the code and re-run.
+      Do not redesign the deliverables.
+
+workspace: examples/dataset_generation
+model: openai:gpt-5.2
+
+feedback_rounds: 2
+
+symlinks:
+  - source: ./ursa
+    dest: ursa
+  - source: ./OpenFUSIONToolkit
+    dest: OpenFUSIONToolkit
