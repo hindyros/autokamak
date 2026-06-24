@@ -31,6 +31,7 @@ from agent.runners.config import (
     materialize_symlinks,
     resolve_workspace,
 )
+from agent.runners.scoring import try_score
 from agent.runners.trace import RunTrace
 
 load_dotenv(REPO_ROOT / ".env")
@@ -42,34 +43,6 @@ from ursa.agents import ExecutionAgent, PlanningAgent
 
 
 DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
-
-
-def _try_score(workspace_path) -> object | None:
-    """Best-effort metric scoring. Returns a ScoreReport or None.
-
-    Imported lazily so the runner does not depend on h5py/numpy at module
-    import time. Failures are swallowed — scoring is opportunistic.
-    """
-    try:
-        from autotokamak.agent.dspy.metric import score_run
-    except Exception:  # noqa: BLE001
-        return None
-    try:
-        # n_samples is best-known from the workspace's dataset_config.yaml;
-        # fall back to whatever the dataset reports.
-        import yaml
-        cfg_path = workspace_path / "dataset_config.yaml"
-        requested_n = 16
-        if cfg_path.is_file():
-            try:
-                with cfg_path.open() as f:
-                    cfg = yaml.safe_load(f) or {}
-                requested_n = int(cfg.get("sampling", {}).get("n_samples", requested_n))
-            except Exception:  # noqa: BLE001
-                pass
-        return score_run(workspace_path, requested_n_samples=requested_n)
-    except Exception:  # noqa: BLE001
-        return None
 
 
 def main(
@@ -85,6 +58,10 @@ def main(
     problem = getattr(cfg, "problem", None)
     if not problem:
         raise ValueError("config.yaml must contain a top-level 'problem:' string")
+
+    scorer_dotted = getattr(cfg, "scorer", None)
+    scorer_kwargs = getattr(cfg, "scorer_kwargs", None) or {}
+    expected_artifacts = getattr(cfg, "expected_artifacts", None)
 
     model_name = (
         cli_model
@@ -245,8 +222,8 @@ def main(
             print(result["messages"][-1].text)
 
         if trace:
-            trace.record_artifacts(workspace_path)
-            score = _try_score(workspace_path)
+            trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
+            score = try_score(workspace_path, scorer_dotted, scorer_kwargs)
             if score is not None:
                 trace.record_score(score)
                 print(f"\nScore: {score.total:.3f}")
@@ -259,7 +236,7 @@ def main(
     except KeyboardInterrupt:
         if trace:
             try:
-                trace.record_artifacts(workspace_path)
+                trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
             except Exception:  # noqa: BLE001
                 pass
             trace.mark_interrupted()
@@ -267,7 +244,7 @@ def main(
     except Exception as exc:
         if trace:
             try:
-                trace.record_artifacts(workspace_path)
+                trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
             except Exception:  # noqa: BLE001
                 pass
             trace.mark_errored(exc)

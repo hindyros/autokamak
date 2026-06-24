@@ -146,6 +146,9 @@ class RunTrace:
     artifacts: dict[str, Any] = field(default_factory=dict)
     score: dict[str, Any] | None = None
     error: str | None = None
+    # Optional cross-phase linkage for nested runs invoked by the meta-agent.
+    parent_run_id: str | None = None
+    meta_iteration: int | None = None
 
     # Set by `open()`; not serialized.
     _path: Path | None = field(default=None, repr=False)
@@ -229,23 +232,47 @@ class RunTrace:
                 step_rec.error = _truncate(error)
         self.save()
 
-    def record_artifacts(self, workspace_path: Path) -> None:
+    def record_artifacts(
+        self,
+        workspace_path: Path,
+        *,
+        expected_artifacts: list[str] | None = None,
+    ) -> None:
+        """Record the workspace's top-level files and any expected artifacts.
+
+        ``expected_artifacts`` is a list of workspace-relative paths the prompt
+        commits the agent to produce (e.g. ``["outputs/dataset.h5"]`` for
+        Phase 1, ``["outputs/winner.pkl", "outputs/report.json", "outputs/study.db"]``
+        for Phase 2). For each, the trace stores whether it exists and its
+        absolute path. The legacy ``dataset_h5`` key is kept for back-compat
+        with downstream consumers reading older traces.
+        """
+        if expected_artifacts is None:
+            expected_artifacts = ["outputs/dataset.h5"]
         files: list[str] = []
-        dataset_h5: str | None = None
+        artifact_status: dict[str, dict[str, Any]] = {}
+        dataset_h5_legacy: str | None = None
         try:
             if workspace_path.is_dir():
                 for child in sorted(workspace_path.iterdir()):
                     if child.is_file():
                         files.append(child.name)
-                candidate = workspace_path / "outputs" / "dataset.h5"
-                if candidate.is_file():
-                    dataset_h5 = str(candidate)
+                for rel in expected_artifacts:
+                    candidate = workspace_path / rel
+                    exists = candidate.is_file()
+                    artifact_status[rel] = {
+                        "exists": exists,
+                        "path": str(candidate) if exists else None,
+                    }
+                    if rel == "outputs/dataset.h5" and exists:
+                        dataset_h5_legacy = str(candidate)
         except OSError:
             pass
         self.artifacts = {
             "workspace_path": str(workspace_path),
             "files_written": files,
-            "dataset_h5": dataset_h5,
+            "expected": artifact_status,
+            "dataset_h5": dataset_h5_legacy,
         }
         self.save()
 

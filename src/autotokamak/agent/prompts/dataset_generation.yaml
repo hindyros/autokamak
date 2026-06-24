@@ -40,6 +40,16 @@ problem: |
               # the OFT_env singleton is now cached internally.
               # gs.get_psi() returns a 1-D float array of length len(mesh_pts)
               # when solver.order == 1 (the node values, ready for interpolation).
+    get_last_solve_info() -> dict
+              # Status of the most recent solve_equilibrium call. Keys:
+              #   isoflux_used    : bool  -- True if the isoflux-constrained
+              #                              solve succeeded; False if it fell
+              #                              back to an unconstrained solve.
+              #   fallback_reason : str | None
+              # CALL THIS AFTER EVERY solve_equilibrium AND RECORD isoflux_used
+              # PER SAMPLE in the HDF5 output (see DELIVERABLES). A run where
+              # isoflux_used is False for every sample is a BROKEN run, not a
+              # successful one — see CONSTRAINTS below.
 
   CONFIG-DICT SCHEMA (what `solve_equilibrium`'s `cfg` arg must look like)
     {
@@ -51,8 +61,34 @@ problem: |
                    "regions": [{"name": "plasma", "type": "plasma", "dx": <float>}]},
       "solver":   {"order": 1, "F0": 0.10752, "free_boundary": False},
       "targets":  {"Ip": <float>, "Ip_ratio": 1.0},
-      "init_psi": {"method": "tokamaker_default"},
+      "init_psi": {"method": "isoflux"},
+      # "isoflux" seeds the nonlinear GS solve with a shape-aware ψ derived
+      # from (r0, z0, a, kappa, delta). This is strictly better than
+      # "tokamaker_default" for a shape-constrained solve, though it is
+      # not on its own sufficient to make the constrained solve converge
+      # on every (r0,a,kappa,delta) combination -- see ISOFLUX NOTE below.
     }
+
+  ISOFLUX NOTE (read before declaring done)
+    core/solver.py wraps the solve in a try/except that, on failure of the
+    isoflux-constrained solve, retries WITHOUT the constraint and prints
+    "Falling back to unconstrained solve". On a recent 16-sample run this
+    fallback fired on EVERY sample -- the dataset showed success_rate=1.0
+    while the LCFS shape constraint was silently dropped on all 16. That
+    is a silent corruption: the per-sample (r0,a,kappa,delta) inputs no
+    longer faithfully describe the saved psi.
+
+    Your job is NOT to accept that fallback. After each solve, call
+    get_last_solve_info()["isoflux_used"] and write it to HDF5 (see
+    DELIVERABLES). If isoflux_used is False for any sample, you must
+    diagnose why and fix the cfg/seed/constraint setup before declaring
+    the dataset valid. Possible directions:
+      - Confirm init_psi.method == "isoflux" is reaching solve_equilibrium
+      - Reduce npts on the LCFS contour (fewer/denser isoflux points)
+      - Inspect the printed "Falling back" message -- the underlying OFT
+        error often contains a concrete hint
+    Do not edit core/solver.py to silence the warning. Fix the upstream
+    cfg or report the failure honestly via /outputs/isoflux_used.
 
   PSI -> (R, Z) GRID INTERPOLATION
     psi_nodes = np.asarray(gs.get_psi(), dtype=float).ravel()
@@ -67,7 +103,8 @@ problem: |
     Produce one working example workspace under `examples/dataset_generation/`
     that reads a YAML config and writes a small dataset of fixed-boundary
     Grad-Shafranov solutions. Three files only (see DELIVERABLES). The
-    pipeline must be config-driven (no hardcoded ranges in the .py file).
+    pipeline must be config-driven (no hardcoded ranges in the .py file) and
+    MUST generate diagnostic plots automatically while data is being created.
 
   WORKING DIRECTORY
     Your current working directory IS the workspace. Write all files
@@ -91,6 +128,10 @@ problem: |
                  # the LinearTriInterpolator works directly with no DOF surgery.
          output_grid: r in [0.15, 0.80] with 64 pts, z in [-0.40, 0.40] with 96 pts
          output: dataset_path "outputs/dataset.h5"
+         plotting:
+           enabled: true
+           every_n_samples: 1
+           output_dir: "outputs/plots"
 
     2. `run_dataset_sweep.py` - the runner. Takes a config path as its sole
        CLI arg. For each sample:
@@ -102,15 +143,26 @@ problem: |
            matplotlib.tri.LinearTriInterpolator (fall back to
            scipy.interpolate.griddata if needed)
          - on failure, log the exception and continue; fill NaN/False rows
+         - if plotting.enabled is true, write/update plots in plotting.output_dir:
+             * running-success plot (success fraction vs completed sample)
+             * sampled-parameter scatter/diagnostic view
+             * latest successful psi(R,Z) image
        After the loop, write one HDF5 file with this minimum layout:
          /grid/R, /grid/Z                          : 1-D coordinate arrays
          /inputs/r0, /a, /kappa, /delta, /Ip       : (N,) float64
          /outputs/psi                              : (N, nz, nr) float64
          /outputs/success                          : (N,) bool
+         /outputs/isoflux_used                     : (N,) bool
+             # Per-sample value of get_last_solve_info()["isoflux_used"],
+             # captured immediately after each solve_equilibrium call.
+             # For a failed sample, write False.
+       Also write final summary plots to plotting.output_dir (at minimum:
+       input-distribution histogram(s) and success/failure counts).
        Print a one-line summary at the end: "Wrote dataset.h5: M/N succeeded".
 
     3. `README.md` - 20-40 lines: what the example produces, how to run it,
-       and the dataset layout.
+       and the dataset layout. Include a short "Plots" section listing which
+       plot files are generated and where they are written.
 
   CONSTRAINTS
     * Do NOT add a verifier script, test suite, CI config, .gitignore,
@@ -132,6 +184,21 @@ problem: |
       install; report the error and stop.
     * If errors arise during the sweep, fix the code and re-run.
       Do not redesign the deliverables.
+    * EXACTLY THREE FILES in the workspace when you finish — no extras.
+      The current working directory must contain ONLY:
+        dataset_config.yaml, run_dataset_sweep.py, README.md
+      plus the runner-produced outputs/ directory. If you wrote any helper
+      script, verifier, REPRODUCIBILITY.md, smoke test, integrity checker, or
+      other scratch file during iteration, DELETE it before finishing. Run
+      `ls` from the workspace to confirm before declaring done.
+    * VERIFY the isoflux constraint actually held. After the sweep finishes,
+      check that the runner did NOT print "Falling back to unconstrained
+      solve" to stderr/stdout, AND that /outputs/isoflux_used in the HDF5 is
+      True for every successful sample. If either check fails, your config
+      or seed is wrong — most often this means init_psi.method is not set to
+      "isoflux", or the runner is constructing cfg without that key. Fix the
+      cfg and re-run. A 100% success rate with isoflux_used == False
+      everywhere is a BROKEN run, not a successful one.
 
 workspace: examples/dataset_generation
 model: openai:gpt-5.2

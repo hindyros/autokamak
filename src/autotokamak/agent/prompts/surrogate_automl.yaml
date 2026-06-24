@@ -1,0 +1,234 @@
+# Phase-2 prompt: agent-orchestrated AutoML over the classical surrogate zoo.
+#
+# Run with the venv activated and .env loaded:
+#   set -a && source .env && set +a
+#   source venv/bin/activate
+#   PYTHONPATH=src/autotokamak python -m agent.runners.plan_execute_feedback \
+#       --config src/autotokamak/agent/prompts/surrogate_automl.yaml
+#
+# Scope: pick the best classical surrogate for psi(R,Z) from a four-model
+# zoo (GP, kernel ridge, polynomial ridge, sklearn MLP). PINN / DeepONet /
+# FNO are EXPLICITLY out of scope for the PoC. See docs/project_agenda.md.
+
+problem: |
+  TITLE
+    Pick the best classical surrogate model for psi(R,Z) prediction on the
+    Phase-1 Grad-Shafranov dataset, by orchestrating an Optuna-driven inner
+    hyperparameter search across at least two of the four allowed model
+    kinds.
+
+  CONTEXT
+    The `autotokamak` package is already installed (importable as
+    `autotokamak`). The Phase-1 dataset lives at
+    `../dataset_generation/outputs/dataset.h5` and is symlinked into your
+    workspace as `./dataset.h5`. It has 16 successful fixed-boundary
+    equilibria with this schema:
+
+      grid/R                      : (64,)        float64
+      grid/Z                      : (96,)        float64
+      inputs/{r0,a,kappa,delta,Ip}: (N,)         float64
+      outputs/psi                 : (N, 96, 64)  float64    # NaN outside LCFS
+      outputs/success             : (N,)         bool
+      outputs/isoflux_used        : (N,)         bool
+
+    REUSE the library — do not re-implement dataset loading, PCA reduction,
+    Optuna study orchestration, or the model factories. The library has
+    everything you need.
+
+  API REFERENCE (the only calls you should make into the library)
+
+    # autotokamak.eval.data
+    load_dataset(h5_path) -> DatasetBundle
+            # Fields: inputs (N,5), psi (N,nz,nr), R, Z, source_path.
+            # Already filtered to success=True rows.
+    kfold(bundle, *, k=4, test_frac=2/16, seed=0) -> Splits
+            # Splits.test_idx + Splits.folds (list of (train_idx, val_idx)).
+            # USE THE SAME seed as in surrogate_config.yaml so the scorer
+            # reproduces the same partitioning.
+
+    # autotokamak.eval.reduce
+    fit_pca(psi_train, n_components) -> PCAModel
+    transform(pca, psi)            -> coeffs (N, n_components)
+    inverse_transform(pca, coeffs) -> psi (N, nz, nr)
+
+    # autotokamak.eval.metrics
+    psi_rmse(true, pred, mask=None)            -> float
+    relative_l2(true, pred, mask=None)         -> float
+    baseline_mean_predictor_rmse(psi_tr, psi_va) -> float
+
+    # autotokamak.surrogate.zoo
+    DEFAULT_SEARCH_SPACES: dict[str, dict[str, ParamRange]]
+            # Keys: "gp", "kernel_ridge", "poly_ridge", "mlp".
+            # Use these as the starting point for your search; widen/tighten
+            # per round based on Optuna's best-trial diagnostics.
+    make_model(name, **hp) -> sklearn estimator
+            # Dispatch by name. ENFORCES MLP caps: len(hidden_layer_sizes)<=2,
+            # each layer<=256. Hallucinating bigger nets raises ValueError.
+
+    # autotokamak.surrogate.automl
+    run_study(spec, *, bundle, splits, workdir) -> StudyResult
+            # spec is a SearchSpec (see SCHEMA below). One Optuna study per
+            # model written to <workdir>/study.db; resumable with load_if_exists.
+    summarize_study(study_result) -> dict
+            # Per-model best_value, best_params, edge_hit flags, and the
+            # best-value-at-25%-trials (read this BETWEEN ROUNDS to decide).
+    refit_winner(study_result, *, bundle, splits, save_to) -> dict
+            # Retrains the overall best model on ALL non-test samples; saves
+            # joblib payload at save_to. Returns winner metadata for the report.
+    predict_with_winner(payload, X) -> psi (N, nz, nr)
+            # Verifies the saved model loads + predicts. Use this in VERIFY.
+
+    # autotokamak.surrogate.schema
+    SearchSpec, ModelSpec, ParamRange, SurrogateReport, SurrogateConfig
+
+  CONFIG-FILE SCHEMAS (what you must write into the workspace)
+
+    # surrogate_config.yaml  (validated against SurrogateConfig)
+    dataset_h5: "dataset.h5"            # relative to workspace
+    time_budget_seconds: 300
+    n_pca_components_default: 12
+    seed: 0
+    k_folds: 4
+    test_frac: 0.125                    # = 2/16
+    output_dir: "outputs"
+
+    # outputs/search_history.jsonl  (one SearchSpec per line, per round)
+    {round: 1, n_pca_components: 12, val_metric: "psi_rmse",
+     action: "initial", rationale: "starting from DEFAULT_SEARCH_SPACES",
+     models: [
+       {name: "poly_ridge", n_trials: 8, search_space: {...}},
+       {name: "kernel_ridge", n_trials: 8, search_space: {...}}
+     ]}
+
+    # outputs/report.json  (validated against SurrogateReport — schema gate)
+    winner_model_name: "kernel_ridge"
+    winner_hyperparams: {...}
+    val_psi_rmse: <float>
+    test_psi_rmse: <float>
+    baseline_mean_psi_rmse: <float>     # computed by metrics.baseline_mean_predictor_rmse
+    pca_n_components: <int>
+    pca_explained_var: <float in [0,1]>
+    n_total_trials: <int>
+    n_outer_rounds: <int>
+    terminated_by: "agent"              # NOT "rounds_cap" if you can help it
+    models_tried: ["poly_ridge", "kernel_ridge", ...]
+
+  GOAL
+    Produce one working example workspace under `examples/surrogate_automl/`
+    that loads the Phase-1 dataset, runs an outer-loop AutoML search across
+    AT LEAST TWO models from the zoo, picks a winner, saves it, and writes
+    a parseable report. The pipeline must be config-driven (no hardcoded
+    seeds or budgets in the .py file).
+
+  WORKING DIRECTORY
+    Your current working directory IS the workspace. Write all files
+    DIRECTLY in the current directory.
+
+  DELIVERABLES (exactly five files, written in the current directory)
+    1. `surrogate_config.yaml` — see CONFIG-FILE SCHEMAS above.
+    2. `run_surrogate_automl.py` — the runner. Takes the config path as its
+       sole CLI arg. Imports from `autotokamak.eval` and
+       `autotokamak.surrogate`. Do NOT import torch; do NOT import
+       sklearn.neural_network directly (use `surrogate.zoo.make_model`).
+       Steps:
+         - load config (use `SurrogateConfig.from_yaml`)
+         - load dataset + build splits with the config's seed
+         - OUTER LOOP (your decisions):
+             * round 1: pick at least two models from the zoo; copy their
+               `DEFAULT_SEARCH_SPACES` (you may narrow ranges) and a sensible
+               n_trials per model (5-15 is right for N=16); emit
+               search_spec.json to outputs/, append a line to
+               search_history.jsonl, then call run_study
+             * after run_study, call summarize_study; if any best_params hit
+               the edge of their range (edge_hit=True) AND that param is
+               numeric, WIDEN the range for next round; if a model plateaus,
+               ADD another model from the zoo; otherwise TIGHTEN AROUND BEST
+             * STOP early by emitting action="terminate" when no edge_hits
+               and you have tried >=2 models; do not just hit the
+               feedback_rounds cap
+         - call refit_winner(...) -> outputs/winner.pkl
+         - compute test_psi_rmse via predict_with_winner on splits.test_idx
+         - compute baseline_mean_psi_rmse via
+           baseline_mean_predictor_rmse(psi_train, psi_val) averaged across folds
+         - write outputs/report.json against SurrogateReport schema
+         - write outputs/plots/{rmse_per_model,predicted_vs_true,pca_variance,
+           optuna_history}.png
+         - print one-line summary: "Winner: <name>; val_rmse=<x>;
+           test_rmse=<y>; baseline=<b>"
+    3. `README.md` — 20-40 lines: what the example produces, how to run it,
+       which models were tried, where the artifacts live.
+    4. (under outputs/) `winner.pkl`, `report.json`, `study.db`,
+       `search_history.jsonl`, plots/*.png — produced by the runner, not
+       by you directly. They count as deliverables only insofar as the
+       runner's successful execution creates them.
+    5. The runner must EXIT 0 on success. Non-zero exit means an unrecoverable
+       error; the scorer will mark the run failed.
+
+  REDUCTION CONTRACT
+    psi is 96 x 64 ~ 6144 outputs per sample — too many for direct
+    regression. The AutoML pipeline MUST:
+      - fit PCA on TRAIN ONLY per fold
+      - regress in coefficient space
+      - inverse-transform back to full grid BEFORE computing psi_rmse
+    Target >= 0.95 explained variance with the smallest n_components
+    that achieves it. The library helpers do all of this; you just need
+    to call them in the right order.
+
+  CONSTRAINTS
+    * Do NOT add tests, a verifier script, a CI config, a .gitignore, or
+      any other extras beyond the deliverables above. PoC, not production.
+    * Do not run `pip install` or modify the environment. `optuna`,
+      `joblib`, `scikit-learn`, `pyyaml`, `h5py`, `numpy`, `matplotlib`,
+      and `autotokamak` are already installed.
+    * Do not call `git`.
+    * Do not prompt for user input; the task is autonomous.
+    * Do not import torch, tensorflow, or any deep-learning library.
+      The zoo is sklearn-only by design.
+    * REUSE `autotokamak.eval` and `autotokamak.surrogate` — do NOT
+      reimplement PCA, k-fold splits, Optuna objectives, or the model
+      factories. Calling `make_model` is mandatory; instantiating
+      `MLPRegressor` directly is graded down.
+    * MUST USE the same seed/k_folds/test_frac the config declares so
+      the scorer can reproduce the same splits.
+    * EXACTLY THREE files in the workspace ROOT when you finish:
+      surrogate_config.yaml, run_surrogate_automl.py, README.md.
+      Everything else goes under outputs/. Delete any helper, sketch,
+      or scratch file before declaring done. Run `ls` to confirm.
+    * After writing the files, RUN
+      `python run_surrogate_automl.py surrogate_config.yaml`
+      from your current directory and verify the FIVE outputs/ files
+      exist and report.json validates against SurrogateReport.
+
+  VERIFY (read before declaring done)
+    After the runner exits 0, you MUST also confirm:
+      1. `joblib.load("outputs/winner.pkl")` succeeds and the payload has
+         keys: estimator, pca, model_name, hyperparams.
+      2. `predict_with_winner(payload, X_test)` returns shape
+         (n_test, 96, 64) WITHOUT raising.
+      3. `outputs/report.json` parses cleanly via
+         `SurrogateReport.model_validate_json(open("outputs/report.json").read())`.
+      4. `terminated_by == "agent"` (you actively chose to stop), not
+         `"rounds_cap"`.
+      5. At least TWO entries in `models_tried`.
+    A run that hits the feedback_rounds cap with edge_hits unresolved
+    is a BROKEN run, not a successful one — the scorer's
+    agent_decisiveness and search_efficiency terms will both report zero.
+
+workspace: examples/surrogate_automl
+model: openai:gpt-5.2
+
+feedback_rounds: 3
+
+scorer: autotokamak.agent.dspy.metric_surrogate:score_surrogate_run
+expected_artifacts:
+  - outputs/winner.pkl
+  - outputs/report.json
+  - outputs/study.db
+
+symlinks:
+  - source: ./ursa
+    dest: ursa
+  - source: ./OpenFUSIONToolkit
+    dest: OpenFUSIONToolkit
+  - source: examples/dataset_generation/outputs/dataset.h5
+    dest: dataset.h5

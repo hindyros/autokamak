@@ -22,15 +22,25 @@ Hard gates (boolean, ALL must pass for a nonzero total):
     at_least_one_success : at least one /outputs/success entry is True
 
 Quality terms (each in [0, 1]; weighted sum becomes the total):
-    success_rate            (weight 0.40)  n_succeeded / n_requested
-    inside_lcfs_quality     (weight 0.30)  fraction of in-LCFS pixels with REAL
+    success_rate            (weight 0.25)  n_succeeded / n_requested
+    isoflux_constraint_held (weight 0.20)  fraction of successful samples for
+                                           which the LCFS-shape constraint
+                                           actually held (i.e. the constrained
+                                           solve converged and the runner did
+                                           not silently fall back to the
+                                           unconstrained path). Reads
+                                           /outputs/isoflux_used. Catches the
+                                           "100% success, 0% shape-constrained"
+                                           failure mode we saw on 2026-06-17.
+    inside_lcfs_quality     (weight 0.20)  fraction of in-LCFS pixels with REAL
                                            (non-extrapolated) psi values. This
                                            catches the griddata(nearest) silent-
                                            fill bug we saw in the first run.
-    shape_fidelity          (weight 0.20)  correlation between requested
-                                           (r0, a, kappa) and observed plasma
-                                           centroid + extent measured from psi.
-    runner_cleanliness      (weight 0.10)  did the runner import from
+    outside_lcfs_honesty    (weight 0.15)  outside-LCFS pixels are NaN or have
+                                           real variation (not flat-filled).
+    shape_fidelity          (weight 0.15)  correlation between requested r0 and
+                                           observed magnetic-axis R.
+    runner_cleanliness      (weight 0.05)  did the runner import from
                                            autotokamak.core (heuristic, parses
                                            run_dataset_sweep.py).
 
@@ -52,11 +62,12 @@ EXPECTED_DELIVERABLES = ("dataset_config.yaml", "run_dataset_sweep.py", "README.
 DATASET_RELPATH = "outputs/dataset.h5"
 
 WEIGHTS = {
-    "success_rate": 0.35,
+    "success_rate": 0.25,
+    "isoflux_constraint_held": 0.20,
     "inside_lcfs_quality": 0.20,
-    "outside_lcfs_honesty": 0.20,
+    "outside_lcfs_honesty": 0.15,
     "shape_fidelity": 0.15,
-    "runner_cleanliness": 0.10,
+    "runner_cleanliness": 0.05,
 }
 
 
@@ -142,6 +153,29 @@ def score_run(workspace: str | Path, *, requested_n_samples: int) -> ScoreReport
 
         report.hard_gates["at_least_one_success"] = bool(success.any())
         report.quality["success_rate"] = float(success.sum() / max(requested_n_samples, 1))
+
+        # -- isoflux_constraint_held -------------------------------------
+        # Did the LCFS-shape constraint actually hold for successful samples,
+        # or did the runner silently fall back to the unconstrained solve?
+        # A run with success_rate=1.0 but isoflux_used all-False produces
+        # equilibria that look healthy but don't honor the requested
+        # (kappa, delta) shape -- corrupts surrogate training.
+        if "outputs/isoflux_used" in h5_handle:
+            isoflux_used = np.asarray(h5_handle["outputs/isoflux_used"][:], dtype=bool)
+            n_success = int(success.sum())
+            if n_success > 0:
+                report.quality["isoflux_constraint_held"] = float(
+                    isoflux_used[success].sum() / n_success
+                )
+            else:
+                report.quality["isoflux_constraint_held"] = 0.0
+            report.details["isoflux_used_count"] = int(isoflux_used[success].sum())
+        else:
+            # Runner did not record the per-sample flag at all. Treat as a
+            # signal that the runner is out of date with the current prompt
+            # contract; score zero on this term rather than ignoring it.
+            report.quality["isoflux_constraint_held"] = 0.0
+            report.details["isoflux_used_missing"] = True
 
         # -- inside_lcfs_quality -----------------------------------------
         # For each successful sample, look only inside the requested LCFS
