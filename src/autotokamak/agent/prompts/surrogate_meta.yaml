@@ -1,0 +1,21 @@
+# Phase-3 meta-agent prompt.
+#
+# Run with:
+#   set -a && source .env && set +a
+#   source venv/bin/activate
+#   PYTHONPATH=src/autotokamak python -m agent.runners.meta_loop \
+#       --config src/autotokamak/agent/prompts/surrogate_meta.yaml
+#
+# This prompt is NOT consumed by plan_execute*; it is consumed by the new
+# meta_loop runner, which forces structured ActionDecision JSON output from
+# the LLM each iteration. There is no free-form planning loop here.
+
+max_iterations: 3
+seed: 0
+
+initial_dataset_h5: examples/dataset_generation/outputs/dataset.h5
+base_sweep_config: examples/dataset_generation/dataset_config.yaml
+phase2_prompt: src/autotokamak/agent/prompts/surrogate_automl.yaml
+
+workspace: examples/surrogate_meta
+model: openai:gpt-5.2
