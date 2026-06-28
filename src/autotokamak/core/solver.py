@@ -19,6 +19,26 @@ import numpy as np
 # inside a sweep loop without hitting "Only one instance of `OFT_env`...".
 _OFT_ENV_CACHE: Any = None
 
+# Status of the most recent solve_equilibrium call. Module-level (not a return
+# value) so callers can opt in without forcing every existing caller to unpack
+# a tuple. Currently records whether the isoflux constraint was honored or
+# whether we fell back to the unconstrained solve.
+_LAST_SOLVE_INFO: Dict[str, Any] = {"isoflux_used": None, "fallback_reason": None}
+
+
+def get_last_solve_info() -> Dict[str, Any]:
+    """Return status of the most recent solve_equilibrium call.
+
+    Keys:
+      isoflux_used    : bool | None  -- True if the isoflux-constrained solve
+                                        succeeded; False if we fell back to
+                                        the unconstrained solve; None if no
+                                        solve has run yet in this process.
+      fallback_reason : str | None   -- the exception message that triggered
+                                        the fallback, if any.
+    """
+    return dict(_LAST_SOLVE_INFO)
+
 
 def get_oft_env() -> Any:
     """Return a process-wide OFT_env, creating it on first call."""
@@ -56,12 +76,19 @@ def _apply_solver_settings(gs: Any, cfg: Dict[str, Any]) -> None:
 
 
 def _seed_psi(gs: Any, cfg: Dict[str, Any]) -> None:
-    """Run ``init_psi`` per the config's ``init_psi.method``, with safe fallback."""
+    """Run ``init_psi`` per the config's ``init_psi.method``, with shape-aware fallback.
+
+    For the ``isoflux`` method, OFT's internal isoflux fit during ``init_psi`` can
+    fail on extreme shapes -- we catch that specific case and downgrade to the
+    uniform-current seed. Any other error (e.g. ``ValueError`` from an unknown
+    method) is re-raised so real config bugs surface instead of being silently
+    masked by ``init_psi(-1.0)``.
+    """
     init = cfg.get("init_psi", {}) or {}
     method = init.get("method", "tokamaker_default")
-    try:
-        if method == "isoflux":
-            b = cfg["boundary"]
+    if method == "isoflux":
+        b = cfg["boundary"]
+        try:
             gs.init_psi(
                 float(b["r0"]),
                 float(b["z0"]),
@@ -69,16 +96,17 @@ def _seed_psi(gs: Any, cfg: Dict[str, Any]) -> None:
                 float(b["kappa"]),
                 float(b["delta"]),
             )
-        elif method == "tokamaker_default":
-            gs.init_psi()
-        else:
-            raise ValueError(
-                f"init_psi.method must be 'tokamaker_default' or 'isoflux', got {method!r}"
-            )
-    except Exception:  # noqa: BLE001
-        # The internal isoflux fit used during init_psi can fail; fall back to a
-        # uniform-current seed (which is what init_psi(-1.0) does in OFT).
-        gs.init_psi(-1.0)
+        except Exception as e:  # noqa: BLE001
+            # OFT's isoflux fit inside init_psi can fail for extreme shapes;
+            # the uniform-current seed is the documented fallback.
+            print(f"WARNING: shape-aware init_psi failed ({e}); using init_psi(-1.0).")
+            gs.init_psi(-1.0)
+    elif method == "tokamaker_default":
+        gs.init_psi()
+    else:
+        raise ValueError(
+            f"init_psi.method must be 'tokamaker_default' or 'isoflux', got {method!r}"
+        )
 
 
 def make_solver(
@@ -130,16 +158,21 @@ def solve_equilibrium(
 
     Returns the solved TokaMaker instance.
     """
+    global _LAST_SOLVE_INFO
+    _LAST_SOLVE_INFO = {"isoflux_used": None, "fallback_reason": None}
+
     env, gs = make_solver(mesh_pts=mesh_pts, mesh_lc=mesh_lc, mesh_reg=mesh_reg, cfg=cfg)
     _seed_psi(gs, cfg)
 
     try:
         gs.set_isoflux(np.asarray(lcfs, dtype=float))
         gs.solve()
+        _LAST_SOLVE_INFO = {"isoflux_used": True, "fallback_reason": None}
         return gs
     except Exception as e:  # noqa: BLE001
+        reason = str(e)
         print(
-            f"WARNING: set_isoflux/solve failed ({e}). Falling back to unconstrained solve."
+            f"WARNING: set_isoflux/solve failed ({reason}). Falling back to unconstrained solve."
         )
 
     # Retry path: reuse the existing OFT env (cannot create a new one in the
@@ -147,7 +180,8 @@ def solve_equilibrium(
     _, gs2 = make_solver(mesh_pts=mesh_pts, mesh_lc=mesh_lc, mesh_reg=mesh_reg, cfg=cfg, env=env)
     _seed_psi(gs2, cfg)
     gs2.solve()
+    _LAST_SOLVE_INFO = {"isoflux_used": False, "fallback_reason": reason}
     return gs2
 
 
-__all__ = ["get_oft_env", "make_solver", "solve_equilibrium"]
+__all__ = ["get_oft_env", "get_last_solve_info", "make_solver", "solve_equilibrium"]

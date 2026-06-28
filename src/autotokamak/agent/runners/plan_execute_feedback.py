@@ -13,9 +13,15 @@ Config (YAML) may include:
   symlink: {...} or symlinks: [...]
   feedback_rounds: 2   # max plan+execute cycles (default 2)
   validate_after: true # run a post-execution review step (default false)
+
+Each invocation also writes a structured trace to ``experiments/<run_id>/trace.json``
+(unless ``--no-trace`` is given). The trace shape is defined in
+``agent.runners.trace`` and is the substrate for the DSPy integration plan
+(see ``docs/dspy_integration_plan.md``).
 """
 
 import argparse
+import sys
 
 from dotenv import load_dotenv
 
@@ -25,6 +31,8 @@ from agent.runners.config import (
     materialize_symlinks,
     resolve_workspace,
 )
+from agent.runners.scoring import try_score
+from agent.runners.trace import RunTrace
 
 load_dotenv(REPO_ROOT / ".env")
 
@@ -34,12 +42,26 @@ from langchain_core.messages import HumanMessage
 from ursa.agents import ExecutionAgent, PlanningAgent
 
 
-def main(config_path: str, cli_model: str | None, workspace_override: str | None):
+DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
+
+
+def main(
+    config_path: str,
+    cli_model: str | None,
+    workspace_override: str | None,
+    *,
+    trace_enabled: bool = True,
+    experiments_dir=None,
+):
     cfg = load_config(config_path)
 
     problem = getattr(cfg, "problem", None)
     if not problem:
         raise ValueError("config.yaml must contain a top-level 'problem:' string")
+
+    scorer_dotted = getattr(cfg, "scorer", None)
+    scorer_kwargs = getattr(cfg, "scorer_kwargs", None) or {}
+    expected_artifacts = getattr(cfg, "expected_artifacts", None)
 
     model_name = (
         cli_model
@@ -66,6 +88,24 @@ def main(config_path: str, cli_model: str | None, workspace_override: str | None
     feedback_rounds = max(1, int(getattr(cfg, "feedback_rounds", 2)))
     validate_after = getattr(cfg, "validate_after", False)
 
+    # Structured trace for DSPy integration. All trace I/O is best-effort
+    # inside RunTrace.save() — failures will not abort the run.
+    trace: RunTrace | None = None
+    if trace_enabled:
+        try:
+            target_dir = experiments_dir if experiments_dir is not None else DEFAULT_EXPERIMENTS_DIR
+            trace = RunTrace.open(
+                experiments_dir=target_dir,
+                prompt_path=REPO_ROOT / config_path if not str(config_path).startswith("/") else config_path,
+                model=model_name,
+                feedback_rounds=feedback_rounds,
+                workspace=workspace,
+            )
+            print(f"Trace: {trace._path}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"WARNING: failed to open trace ({type(exc).__name__}: {exc}); continuing without it", file=sys.stderr)
+            trace = None
+
     planner_llm = init_chat_model(model=model_name)
     executor_llm = init_chat_model(model=model_name)
 
@@ -83,87 +123,132 @@ def main(config_path: str, cli_model: str | None, workspace_override: str | None
     execution_history: list[str] = []
     last_summary = "No previous step."
 
-    for round_no in range(1, feedback_rounds + 1):
-        if round_no == 1:
-            planning_output = planner.invoke(problem)
-        else:
-            print("\n=== GLOBAL FEEDBACK: RE-PLAN (round {}) ===".format(round_no))
-            replan_prompt = (
-                f"Original problem:\n{problem}\n\n"
-                f"Execution history so far:\n"
-                + "\n---\n".join(execution_history)
-                + "\n\n"
-                f"Based on the above, suggest follow-up steps to fix failures or complete the task. "
-                f"If nothing more is needed, return a plan with a single step: 'Confirm completion'."
+    try:
+        for round_no in range(1, feedback_rounds + 1):
+            round_rec = trace.start_round(round_no) if trace else None
+
+            if round_no == 1:
+                planning_output = planner.invoke(problem)
+            else:
+                print("\n=== GLOBAL FEEDBACK: RE-PLAN (round {}) ===".format(round_no))
+                replan_prompt = (
+                    f"Original problem:\n{problem}\n\n"
+                    f"Execution history so far:\n"
+                    + "\n---\n".join(execution_history)
+                    + "\n\n"
+                    f"Based on the above, suggest follow-up steps to fix failures or complete the task. "
+                    f"If nothing more is needed, return a plan with a single step: 'Confirm completion'."
+                )
+                planning_output = planner.invoke(replan_prompt)
+
+            steps = planning_output["plan"].steps
+            if trace and round_rec is not None:
+                trace.record_plan_steps(round_rec, steps)
+
+            if not steps:
+                print("No steps in plan; stopping.")
+                break
+
+            print("\n=== PLAN (round {}) ===".format(round_no))
+            for i, s in enumerate(steps, 1):
+                name = getattr(s, "name", f"Step {i}")
+                desc = getattr(s, "description", str(s))
+                print(f"  {i}. {name}\n     {desc}\n")
+
+            print("\n=== EXECUTION (round {}) ===".format(round_no))
+            last_summary = "No previous step."
+
+            for i, step in enumerate(steps, 1):
+                step_name = getattr(step, "name", f"Step {i}")
+                step_desc = getattr(step, "description", str(step))
+                step_text = f"{step_name}\n{step_desc}"
+                prompt = (
+                    f"You are executing a multi-step plan.\n\n"
+                    f"Overall problem:\n{problem}\n\n"
+                    f"Previous-step summary:\n{last_summary}\n\n"
+                    f"Current step:\n{step_text}\n\n"
+                    f"Execute this step fully. Use tools if helpful. "
+                    f"If you write code, save it in the workspace.\n"
+                )
+                step_rec = trace.start_step(round_rec, i, step_name) if (trace and round_rec) else None
+                try:
+                    result = executor.invoke(
+                        {
+                            "messages": [HumanMessage(content=prompt)],
+                            "workspace": workspace,
+                            "symlinkdir": None,
+                        }
+                    )
+                    last_summary = result["messages"][-1].text
+                    if trace and step_rec is not None:
+                        trace.finish_step(step_rec, ok=True, result_text=last_summary)
+                    print(f"\n--- Step {i} result ---\n{last_summary}")
+                except Exception as exc:  # noqa: BLE001
+                    last_summary = f"[execution error] {type(exc).__name__}: {exc}"
+                    if trace and step_rec is not None:
+                        trace.finish_step(step_rec, ok=False, error=exc, result_text=last_summary)
+                    print(f"\n--- Step {i} ERROR ---\n{last_summary}", file=sys.stderr)
+                    # Re-raise: a hard failure mid-step should bubble up; the
+                    # planner's feedback loop only handles soft-failure summaries.
+                    raise
+
+            execution_history.append(last_summary)
+
+            if (
+                len(steps) == 1
+                and "confirm completion" in last_summary.lower()
+            ):
+                print("\nPlanner confirmed completion; stopping feedback loop.")
+                break
+
+        if validate_after:
+            print("\n=== VALIDATE (post-execution review) ===")
+            validate_prompt = (
+                f"Review the workspace and execution results for this task.\n\n"
+                f"Problem:\n{problem}\n\n"
+                f"Execution summary:\n{last_summary}\n\n"
+                f"Did the task succeed? If not, what failed or is missing? Be brief."
             )
-            planning_output = planner.invoke(replan_prompt)
-
-        steps = planning_output["plan"].steps
-        if not steps:
-            print("No steps in plan; stopping.")
-            break
-
-        print("\n=== PLAN (round {}) ===".format(round_no))
-        for i, s in enumerate(steps, 1):
-            name = getattr(s, "name", f"Step {i}")
-            desc = getattr(s, "description", str(s))
-            print(f"  {i}. {name}\n     {desc}\n")
-
-        print("\n=== EXECUTION (round {}) ===".format(round_no))
-        last_summary = "No previous step."
-
-        for i, step in enumerate(steps, 1):
-            step_text = (
-                f"{getattr(step, 'name', f'Step {i}')}\n"
-                f"{getattr(step, 'description', str(step))}"
-            )
-            prompt = (
-                f"You are executing a multi-step plan.\n\n"
-                f"Overall problem:\n{problem}\n\n"
-                f"Previous-step summary:\n{last_summary}\n\n"
-                f"Current step:\n{step_text}\n\n"
-                f"Execute this step fully. Use tools if helpful. "
-                f"If you write code, save it in the workspace.\n"
-            )
+            # NOTE: bugfix — used to reference `symlinkdict` which was removed
+            # in the materialize_symlinks refactor (code review C1). Now None,
+            # consistent with the main loop.
             result = executor.invoke(
                 {
-                    "messages": [HumanMessage(content=prompt)],
+                    "messages": [HumanMessage(content=validate_prompt)],
                     "workspace": workspace,
                     "symlinkdir": None,
                 }
             )
-            last_summary = result["messages"][-1].text
-            print(f"\n--- Step {i} result ---\n{last_summary}")
+            print(result["messages"][-1].text)
 
-        execution_history.append(last_summary)
+        if trace:
+            trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
+            score = try_score(workspace_path, scorer_dotted, scorer_kwargs)
+            if score is not None:
+                trace.record_score(score)
+                print(f"\nScore: {score.total:.3f}")
+            trace.mark_completed()
 
-        if (
-            len(steps) == 1
-            and "confirm completion" in last_summary.lower()
-        ):
-            print("\nPlanner confirmed completion; stopping feedback loop.")
-            break
+        print("\n=== FINAL ===")
+        print(last_summary)
+        print(f"\nWorkspace: {workspace_path.resolve()}")
 
-    if validate_after:
-        print("\n=== VALIDATE (post-execution review) ===")
-        validate_prompt = (
-            f"Review the workspace and execution results for this task.\n\n"
-            f"Problem:\n{problem}\n\n"
-            f"Execution summary:\n{last_summary}\n\n"
-            f"Did the task succeed? If not, what failed or is missing? Be brief."
-        )
-        result = executor.invoke(
-            {
-                "messages": [HumanMessage(content=validate_prompt)],
-                "workspace": workspace,
-                "symlinkdir": symlinkdict,
-            }
-        )
-        print(result["messages"][-1].text)
-
-    print("\n=== FINAL ===")
-    print(last_summary)
-    print(f"\nWorkspace: {workspace_path.resolve()}")
+    except KeyboardInterrupt:
+        if trace:
+            try:
+                trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
+            except Exception:  # noqa: BLE001
+                pass
+            trace.mark_interrupted()
+        raise
+    except Exception as exc:
+        if trace:
+            try:
+                trace.record_artifacts(workspace_path, expected_artifacts=expected_artifacts)
+            except Exception:  # noqa: BLE001
+                pass
+            trace.mark_errored(exc)
+        raise
 
 
 if __name__ == "__main__":
@@ -185,5 +270,22 @@ if __name__ == "__main__":
         default=None,
         help="Override workspace directory.",
     )
+    parser.add_argument(
+        "--no-trace",
+        action="store_true",
+        help="Disable writing experiments/<run_id>/trace.json for this run.",
+    )
+    parser.add_argument(
+        "--experiments-dir",
+        default=None,
+        help="Override the experiments root (default: <repo>/experiments).",
+    )
     args = parser.parse_args()
-    main(args.config, args.model, args.workspace)
+    from pathlib import Path as _P
+    main(
+        args.config,
+        args.model,
+        args.workspace,
+        trace_enabled=not args.no_trace,
+        experiments_dir=_P(args.experiments_dir) if args.experiments_dir else None,
+    )

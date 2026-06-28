@@ -39,6 +39,8 @@ dependencies = [
 ml = [
   "torch>=2.2",
   "scikit-learn",
+  "optuna>=3.5",
+  "joblib",
 ]
 dev = [
   "pytest>=7",
