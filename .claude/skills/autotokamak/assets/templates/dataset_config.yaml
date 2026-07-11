@@ -1,0 +1,41 @@
+# Phase-1 dataset generation template — LHS sweep over 5 physics knobs.
+#
+# Consumed by:
+#   python examples/dataset_generation/run_dataset_sweep.py <this file>
+#   (or) python scripts/run_dataset_sweep.py --config <this file>
+#
+# Produces an HDF5 dataset at `output_path` with:
+#   inputs (N, 5) — [r0, a, kappa, delta, Ip]
+#   psi    (N, n_Z, n_R) — NaN outside LCFS
+#   R, Z, success, provenance metadata
+
+sampling:
+  method: lhs                 # only "lhs" (Latin Hypercube) supported
+  n_samples: 500              # cheap up to ~256; slow above
+  seed: 0                     # rng seed
+
+parameters:                   # LHS bounds — sampled independently
+  r0:    {low: 0.35, high: 0.55}     # major radius (m)
+  a:     {low: 0.10, high: 0.20}     # minor radius (m)
+  kappa: {low: 1.0,  high: 1.6}      # elongation
+  delta: {low: 0.0,  high: 0.4}      # triangularity
+  Ip:    {low: 80000, high: 200000}  # plasma current (A)
+
+fixed:                        # applied to every sample
+  z0: 0.0
+  F0: 0.10752                 # toroidal-field constant (T·m)
+  npts: 80                    # LCFS contour points
+  mesh_dx: 0.015              # triangle edge (m)
+  solver_order: 1             # FE polynomial order
+  Ip_ratio: 1.0
+
+output_grid:                  # (R, Z) grid ψ is interpolated onto
+  R: {min: 0.15, max: 0.80, n: 64}
+  Z: {min: -0.40, max: 0.40, n: 96}
+
+output_path: "outputs/dataset.h5"
+
+plotting:                     # per-sample diagnostic PNGs
+  enabled: true
+  every_n_samples: 1          # 1 = every sample; higher = downsample
+  output_dir: "outputs/plots"
