@@ -51,7 +51,11 @@ class MetaActionPicker(dspy.Signature):
 
       - terminate: stop the loop. Choose this when the surrogate is clearly
         good enough OR when further actions would not help (e.g. you have
-        already tried regen + extend and RMSE is not improving).
+        already tried regen + extend and RMSE is not improving). When
+        ``target_rmse`` in state_summary is non-null, that is the run's
+        quality bar: the loop stops automatically once best_rmse_so_far
+        reaches it, so near the bar prefer the cheapest action likely to
+        close the remaining gap.
 
     Always provide a one-sentence diagnosis explaining which bottleneck you
     identified, and a one-sentence rationale explaining why the chosen

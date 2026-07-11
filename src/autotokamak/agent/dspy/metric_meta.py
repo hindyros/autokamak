@@ -234,9 +234,11 @@ def score_meta_run(workspace: str | Path) -> ScoreReport:
         report.quality["no_waste"] = productive / (len(measured) - 1)
         report.details["wasted_iterations"] = (len(measured) - 1) - productive
 
-    # -- terminated_by_agent --
+    # -- terminated_by_agent: full credit for both decisive outcomes — the
+    # agent choosing to stop, or the run hitting its quality bar early
+    # (target_reached IS the desired cost-saving behavior).
     report.quality["terminated_by_agent"] = (
-        1.0 if parsed_report.terminated_by == "agent" else 0.0
+        1.0 if parsed_report.terminated_by in ("agent", "target_reached") else 0.0
     )
 
     # -- runner_cleanliness: only expected action types used --

@@ -34,8 +34,14 @@ def build_picker_inputs(
     iterations_remaining: int,
     current_dataset: str,
     best_rmse_so_far: Optional[float],
+    target_rmse: Optional[float] = None,
 ) -> Dict[str, str]:
-    """Render the three LM input strings from plain data."""
+    """Render the three LM input strings from plain data.
+
+    ``target_rmse`` is the resolved absolute early-stop bar (None = no bar).
+    The runner stops mechanically when it is met; surfacing it lets the
+    picker prefer cheap actions when close to the bar.
+    """
     return {
         "diagnostics_json": json.dumps(diagnostics, indent=2, default=str)[
             :DIAGNOSTICS_MAX_CHARS
@@ -51,6 +57,7 @@ def build_picker_inputs(
                 "iterations_remaining": iterations_remaining,
                 "current_dataset": current_dataset,
                 "best_rmse_so_far": best_rmse_so_far,
+                "target_rmse": target_rmse,
             },
             indent=2,
             default=str,
@@ -89,6 +96,7 @@ def picker_inputs_from_runtime(
         iterations_remaining=meta_config.max_iterations - len(history),
         current_dataset=str(state.current_dataset_h5),
         best_rmse_so_far=None if best == float("inf") else best,
+        target_rmse=getattr(state, "target_rmse_abs", None),
     )
 
 

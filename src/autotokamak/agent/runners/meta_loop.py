@@ -156,6 +156,8 @@ def run(
     phase2_time_budget_override: Optional[int] = None,
     use_baseline_picker: bool = False,
     workspace_override: Optional[str] = None,
+    target_rmse_override: Optional[float] = None,
+    target_rmse_ratio_override: Optional[float] = None,
 ) -> MetaReport:
     """Run the meta-loop. Returns the final ``MetaReport``.
 
@@ -171,6 +173,12 @@ def run(
         meta_config = meta_config.model_copy(update={"model": model_override})
     if max_iterations_override is not None:
         meta_config = meta_config.model_copy(update={"max_iterations": int(max_iterations_override)})
+    if target_rmse_override is not None:
+        meta_config = meta_config.model_copy(update={"target_rmse": float(target_rmse_override)})
+    if target_rmse_ratio_override is not None:
+        meta_config = meta_config.model_copy(
+            update={"target_rmse_ratio": float(target_rmse_ratio_override)}
+        )
 
     workspace_path = resolve_workspace(workspace_override or meta_config.workspace)
     workspace_path.mkdir(parents=True, exist_ok=True)
@@ -265,6 +273,22 @@ def run(
         baseline_mean_predictor_rmse(train_bundle.psi, shard_bundle.psi)
     )
 
+    # Resolve the early-stopping quality bar (absolute wins the min if both
+    # forms are set). The loop stops as soon as the frozen-shard RMSE meets
+    # it — no point spending further iterations once the model is good enough.
+    target_candidates = []
+    if meta_config.target_rmse is not None:
+        target_candidates.append(float(meta_config.target_rmse))
+    if meta_config.target_rmse_ratio is not None:
+        target_candidates.append(float(meta_config.target_rmse_ratio) * baseline_rmse)
+    target_rmse_abs = min(target_candidates) if target_candidates else None
+    state.target_rmse_abs = target_rmse_abs
+    if target_rmse_abs is not None:
+        print(
+            f"Early-stop target: shard RMSE <= {target_rmse_abs:.6g} "
+            f"(baseline {baseline_rmse:.6g})"
+        )
+
     history: list[MetaIterationRecord] = []
     terminated_by: str = "iterations_cap"
 
@@ -326,6 +350,18 @@ def run(
             record.finished_utc = _now()
             history.append(record)
 
+            if (
+                target_rmse_abs is not None
+                and rmse_after is not None
+                and rmse_after <= target_rmse_abs
+            ):
+                terminated_by = "target_reached"
+                print(
+                    f"  target reached: shard RMSE {rmse_after:.6g} <= "
+                    f"{target_rmse_abs:.6g}; stopping."
+                )
+                break
+
         # Final refit on the latest dataset state, if we have any winner.
         winner_path = workspace_path / "winner.pkl"
         if state.best_winner_payload is not None and state.best_winner_path is not None:
@@ -344,6 +380,7 @@ def run(
         report = MetaReport(
             n_iterations=len(history),
             terminated_by=terminated_by,
+            target_rmse=target_rmse_abs,
             final_rmse=final_rmse,
             baseline_rmse=float(baseline_rmse),
             test_shard_path=str(test_shard),
@@ -461,6 +498,20 @@ def main():
              "collection: each run needs its OWN workspace or successive runs "
              "clobber each other's meta_trace.json.",
     )
+    parser.add_argument(
+        "--target-rmse",
+        type=float,
+        default=None,
+        help="Early-stop when the frozen-shard RMSE reaches this ABSOLUTE "
+             "value (dataset psi units).",
+    )
+    parser.add_argument(
+        "--target-rmse-ratio",
+        type=float,
+        default=None,
+        help="Early-stop when shard RMSE <= ratio * baseline RMSE "
+             "(scale-free; e.g. 0.3).",
+    )
     args = parser.parse_args()
 
     run(
@@ -473,6 +524,8 @@ def main():
         phase2_time_budget_override=args.time_budget_seconds,
         use_baseline_picker=args.use_baseline,
         workspace_override=args.workspace,
+        target_rmse_override=args.target_rmse,
+        target_rmse_ratio_override=args.target_rmse_ratio,
     )
 
 

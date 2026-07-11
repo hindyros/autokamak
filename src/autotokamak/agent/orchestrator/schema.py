@@ -119,6 +119,21 @@ class MetaConfig(BaseModel):
         "into the held-out test shard at meta-loop start.",
     )
     holdout_min_test: int = Field(default=2, ge=1)
+    # Early-stopping quality bar (both optional; loop stops when EITHER is
+    # met by the frozen-shard RMSE; max_iterations remains the safety net
+    # for unreachable targets):
+    target_rmse: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Absolute shard-RMSE target in the dataset's psi units.",
+    )
+    target_rmse_ratio: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description="Relative target: stop when shard RMSE <= ratio * baseline "
+        "(mean-predictor) RMSE. Scale-free, so it survives dataset changes.",
+    )
     seed: int = 0
     workspace: str = "examples/surrogate_meta"
     model: str = "openai:gpt-5.2"
@@ -151,7 +166,9 @@ class MetaReport(BaseModel):
 
     model_config = ConfigDict(extra="allow")
     n_iterations: int
-    terminated_by: Literal["agent", "iterations_cap"]
+    terminated_by: Literal["agent", "iterations_cap", "target_reached"]
+    # The resolved absolute target the run stopped against (None = no target).
+    target_rmse: Optional[float] = None
     initial_rmse: Optional[float] = None
     # None = no winner was ever produced. All RMSEs (final, baseline, and the
     # per-iteration rmse_history) are measured on the SAME frozen test shard.

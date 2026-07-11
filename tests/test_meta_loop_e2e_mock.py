@@ -486,6 +486,66 @@ def test_extend_search_structured_dispatch(meta_config_yaml: Path, monkeypatch):
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
 )
+def test_target_rmse_stops_loop_early(tmp_path: Path, monkeypatch):
+    """With a target set, the loop stops after the iteration that meets it —
+    remaining iteration budget is saved, terminated_by='target_reached'."""
+    sys.path.insert(0, str(REPO_ROOT / "src" / "autotokamak"))
+    try:
+        from autotokamak.agent.runners.meta_loop import run
+    finally:
+        sys.path.pop(0)
+
+    cfg_path = tmp_path / "meta_config.yaml"
+    cfg_path.write_text(
+        "max_iterations: 3\n"
+        "seed: 0\n"
+        "target_rmse_ratio: 0.9\n"   # stub winner easily beats 90% of baseline
+        f"initial_dataset_h5: {REAL_DATASET}\n"
+        f"phase2_prompt: {PHASE2_PROMPT}\n"
+        f"workspace: {tmp_path / 'meta_ws'}\n"
+        "model: openai:gpt-5.2\n"
+    )
+
+    def fake_run_automl_loop(**kwargs):
+        sub_ws = Path(kwargs["workdir"])
+        _stub_winner_workspace(sub_ws, Path(kwargs["test_shard_h5"]))
+        return {"winner": {"winner_model_name": "poly_ridge"}, "terminated_by": "agent",
+                "n_rounds": 1, "val_psi_rmse": 0.5}
+
+    import autotokamak.surrogate.automl_loop as loop_mod
+    import autotokamak.agent.dspy.module as dspy_mod
+
+    monkeypatch.setattr(loop_mod, "run_automl_loop", fake_run_automl_loop)
+    monkeypatch.setattr(dspy_mod, "make_search_decision_fn", lambda model: (lambda ctx: None))
+
+    # Picker would happily run 3 extend_search iterations; the target must
+    # cut it short after the first.
+    picker = _make_picker(
+        [
+            {
+                "action": "extend_search",
+                "extend": {"rationale": f"round {i}"},
+                "diagnosis": "keep searching",
+            }
+            for i in range(3)
+        ]
+    )
+    report = run(config_path=str(cfg_path), pick_action=picker, trace_enabled=False)
+
+    assert report.terminated_by == "target_reached"
+    assert report.n_iterations == 1  # two iterations of budget saved
+    assert report.target_rmse is not None
+    assert report.final_rmse is not None and report.final_rmse <= report.target_rmse
+
+    # The picker saw the target in its recorded inputs.
+    meta_trace = json.loads((tmp_path / "meta_ws" / "meta_trace.json").read_text())
+    assert '"target_rmse"' in meta_trace["iterations"][0]["picker_inputs"]["state_summary"]
+
+
+@pytest.mark.skipif(
+    not REAL_DATASET.is_file(),
+    reason=f"Phase-1 dataset not present at {REAL_DATASET}",
+)
 def test_extend_search_codegen_dispatch(tmp_path: Path, monkeypatch):
     """phase2_mode=codegen still routes through plan_execute_feedback."""
     sys.path.insert(0, str(REPO_ROOT / "src" / "autotokamak"))

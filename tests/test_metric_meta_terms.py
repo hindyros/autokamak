@@ -16,13 +16,14 @@ def _write_meta_workspace(
     baseline_rmse: float,
     final_rmse: float | None,
     rmse_afters: list[float | None],
+    terminated_by: str = "agent",
 ) -> Path:
     """Minimal meta workspace that passes all hard gates."""
     ws.mkdir(parents=True, exist_ok=True)
 
     report = {
         "n_iterations": len(rmse_afters),
-        "terminated_by": "agent",
+        "terminated_by": terminated_by,
         "final_rmse": final_rmse,
         "baseline_rmse": baseline_rmse,
         "winner_model_name": "poly_ridge",
@@ -165,6 +166,31 @@ def test_no_waste_mixed_run(tmp_path: Path):
     rep = score_meta_run(ws)
     assert rep.quality["no_waste"] == pytest.approx(0.5)
     assert rep.details["wasted_iterations"] == 1
+
+
+def test_target_reached_earns_decisiveness_credit(tmp_path: Path):
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.3,
+        rmse_afters=[0.3],
+        terminated_by="target_reached",
+    )
+    rep = score_meta_run(ws)
+    assert rep.hard_gates["report_parseable"]
+    assert rep.quality["terminated_by_agent"] == pytest.approx(1.0)
+
+
+def test_iterations_cap_earns_no_decisiveness_credit(tmp_path: Path):
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.3,
+        rmse_afters=[0.3],
+        terminated_by="iterations_cap",
+    )
+    rep = score_meta_run(ws)
+    assert rep.quality["terminated_by_agent"] == pytest.approx(0.0)
 
 
 def test_diagnosis_consistency_is_advisory_only(tmp_path: Path):

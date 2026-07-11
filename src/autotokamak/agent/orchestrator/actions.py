@@ -67,6 +67,10 @@ class MetaState:
     # Test hook: when set, the structured path uses this instead of the DSPy
     # search picker (no LLM required).
     phase2_decision_fn: Optional[Callable[[dict], Any]] = None
+    # Resolved ABSOLUTE shard-RMSE target (meta_loop derives it from
+    # MetaConfig.target_rmse / target_rmse_ratio x baseline). None = no bar;
+    # surfaced to the picker and checked mechanically after each iteration.
+    target_rmse_abs: Optional[float] = None
     # Hard budget the Phase-2 agent MUST write into surrogate_config.yaml.
     # Threaded into every extend_search overlay's FOCUS DIRECTIVE. None → the
     # Phase-2 agent picks the budget from its own prompt defaults.

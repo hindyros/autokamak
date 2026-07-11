@@ -15,9 +15,14 @@ import pytest
 from autotokamak.eval.data import DatasetBundle, kfold
 from autotokamak.eval.metrics import (
     baseline_mean_predictor_rmse,
+    pearson_r,
     pixelwise_max_err,
+    psi_mae,
     psi_rmse,
+    r2_score,
     relative_l2,
+    summarize_psi_errors,
+    within_rel_tolerance,
 )
 from autotokamak.eval.reduce import fit_pca, inverse_transform, transform
 
@@ -95,8 +100,16 @@ def test_metrics_handle_nan_alignment():
     truth = bundle.psi
     # "Prediction" identical to truth -> RMSE 0, relative_l2 0, max 0.
     assert psi_rmse(truth, truth) == pytest.approx(0.0)
+    assert psi_mae(truth, truth) == pytest.approx(0.0)
     assert relative_l2(truth, truth) == pytest.approx(0.0)
     assert pixelwise_max_err(truth, truth) == pytest.approx(0.0)
+    assert r2_score(truth, truth) == pytest.approx(1.0)
+    assert pearson_r(truth, truth) == pytest.approx(1.0)
+    assert within_rel_tolerance(truth, truth, rel_tol=0.05) == pytest.approx(1.0)
+    summary = summarize_psi_errors(truth, truth, baseline_rmse=1.0)
+    assert summary["pct_within_5pct"] == pytest.approx(100.0)
+    assert summary["r2"] == pytest.approx(1.0)
+    assert summary["rmse_vs_baseline"] == pytest.approx(0.0)
 
 
 def test_baseline_beats_random_prediction():
