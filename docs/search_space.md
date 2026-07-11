@@ -10,6 +10,8 @@ sits *outside* the model itself.
 
 For project intent see [`project_agenda.md`](project_agenda.md). For the
 current Phase-2 architecture see the Phase-2 plan and `surrogate_automl.yaml`.
+For a priority-ordered list of models to try beyond the PoC zoo, see
+[`surrogate_model_candidates.md`](surrogate_model_candidates.md).
 
 ---
 
