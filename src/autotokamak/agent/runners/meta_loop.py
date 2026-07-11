@@ -155,6 +155,7 @@ def run(
     n_samples_override: Optional[int] = None,
     phase2_time_budget_override: Optional[int] = None,
     use_baseline_picker: bool = False,
+    workspace_override: Optional[str] = None,
 ) -> MetaReport:
     """Run the meta-loop. Returns the final ``MetaReport``.
 
@@ -171,7 +172,7 @@ def run(
     if max_iterations_override is not None:
         meta_config = meta_config.model_copy(update={"max_iterations": int(max_iterations_override)})
 
-    workspace_path = resolve_workspace(meta_config.workspace)
+    workspace_path = resolve_workspace(workspace_override or meta_config.workspace)
     workspace_path.mkdir(parents=True, exist_ok=True)
     (workspace_path / "iterations").mkdir(exist_ok=True)
     (workspace_path / "datasets").mkdir(exist_ok=True)
@@ -453,6 +454,13 @@ def main():
         help="Force the in-code baseline action-picker prompt (ignore any optimized JSON). "
              "Used for A/B comparison after GEPA optimization.",
     )
+    parser.add_argument(
+        "--workspace",
+        default=None,
+        help="Override the workspace from the config. Required for trace "
+             "collection: each run needs its OWN workspace or successive runs "
+             "clobber each other's meta_trace.json.",
+    )
     args = parser.parse_args()
 
     run(
@@ -464,6 +472,7 @@ def main():
         n_samples_override=args.n_samples,
         phase2_time_budget_override=args.time_budget_seconds,
         use_baseline_picker=args.use_baseline,
+        workspace_override=args.workspace,
     )
 
 

@@ -26,6 +26,8 @@ MAX_ITERS_MIN=1
 MAX_ITERS_MAX=3
 USE_BASELINE=""
 TAG=""
+TIME_BUDGET=90   # per extend_search Phase-2 search, seconds
+N_SAMPLES=40     # per regen_dataset sweep (keeps trace runs fast)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -37,6 +39,10 @@ while [[ $# -gt 0 ]]; do
             MAX_ITERS_MIN="$2"; shift 2 ;;
         --max-iters-max)
             MAX_ITERS_MAX="$2"; shift 2 ;;
+        --time-budget-seconds)
+            TIME_BUDGET="$2"; shift 2 ;;
+        --n-samples)
+            N_SAMPLES="$2"; shift 2 ;;
         --use-baseline)
             USE_BASELINE="--use-baseline"; shift ;;
         --tag)
@@ -82,12 +88,19 @@ for ((i=0; i<N; i++)); do
     else
         ITERS=$(( MAX_ITERS_MIN + (i % (MAX_ITERS_MAX - MAX_ITERS_MIN + 1)) ))
     fi
-    echo "--- run $((i+1))/$N  max-iterations=$ITERS ---"
+    # Per-run workspace: successive runs sharing one workspace clobber each
+    # other's meta_trace.json, leaving trace.json files paired with the WRONG
+    # iteration log in the trainset.
+    WS="$EXPERIMENTS_DIR/ws/run_$(printf '%03d' "$i")"
+    echo "--- run $((i+1))/$N  max-iterations=$ITERS  workspace=$WS ---"
     PYTHONPATH=src/autotokamak python -m agent.runners.meta_loop \
         --config src/autotokamak/agent/prompts/surrogate_meta.yaml \
         --model "$MODEL" \
         --max-iterations "$ITERS" \
         --experiments-dir "$EXPERIMENTS_DIR" \
+        --workspace "$WS" \
+        --time-budget-seconds "$TIME_BUDGET" \
+        --n-samples "$N_SAMPLES" \
         $USE_BASELINE \
         || { echo "Run $((i+1)) FAILED; continuing"; continue; }
 done
