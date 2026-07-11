@@ -53,5 +53,3 @@ models/checkpoints/*
 !models/checkpoints/.gitkeep
 experiments/*
 !experiments/.gitkeep
-# Tagged trace-collection runs (tools/collect_traces.sh --tag X -> experiments_X/)
-experiments_*/
