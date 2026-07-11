@@ -48,8 +48,24 @@ MLP_MAX_LAYERS = 2
 MLP_MAX_WIDTH = 256
 
 
+def _with_input_scaling(estimator):
+    """Wrap an estimator so it sees standardized inputs.
+
+    The raw inputs span wildly different scales (Ip ~ 1e5 A vs r0 ~ 0.4 m).
+    Without standardization every kernel distance / MLP activation is
+    dominated by Ip alone, and the model collapses to predicting the mean —
+    diagnosed as the winner≈baseline plateau (RMSE 0.204 vs 0.203). The
+    DEFAULT_SEARCH_SPACES ranges for length_scale/gamma (1e-2..1e2) assume
+    O(1) features, so scaling also makes those ranges meaningful.
+    """
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    return Pipeline([("scale", StandardScaler()), ("model", estimator)])
+
+
 def make_gp(**hp: Any):
-    """Gaussian-Process regressor (RBF + WhiteKernel).
+    """Gaussian-Process regressor (RBF + WhiteKernel) on standardized inputs.
 
     Hyperparameters: ``length_scale``, ``noise_level``, ``alpha``.
     Multi-output is native in sklearn's GP — no MultiOutputRegressor needed.
@@ -64,17 +80,21 @@ def make_gp(**hp: Any):
     kernel = ConstantKernel(1.0) * RBF(length_scale=length_scale) + WhiteKernel(
         noise_level=noise_level
     )
-    return GaussianProcessRegressor(kernel=kernel, alpha=alpha, normalize_y=True)
+    return _with_input_scaling(
+        GaussianProcessRegressor(kernel=kernel, alpha=alpha, normalize_y=True)
+    )
 
 
 def make_kernel_ridge(**hp: Any):
-    """Kernel ridge regression. Native multi-output."""
+    """Kernel ridge regression on standardized inputs. Native multi-output."""
     from sklearn.kernel_ridge import KernelRidge
 
-    return KernelRidge(
-        alpha=float(hp.get("alpha", 1.0)),
-        gamma=float(hp.get("gamma", 1.0)),
-        kernel=str(hp.get("kernel", "rbf")),
+    return _with_input_scaling(
+        KernelRidge(
+            alpha=float(hp.get("alpha", 1.0)),
+            gamma=float(hp.get("gamma", 1.0)),
+            kernel=str(hp.get("kernel", "rbf")),
+        )
     )
 
 
@@ -116,12 +136,14 @@ def make_mlp(**hp: Any):
         raise ValueError(f"mlp.layer_width must be in [1, {MLP_MAX_WIDTH}]; got {layer_width}")
 
     hidden = tuple([layer_width] * n_layers)
-    return MLPRegressor(
-        hidden_layer_sizes=hidden,
-        alpha=alpha,
-        learning_rate_init=lr_init,
-        max_iter=2000,
-        random_state=0,
+    return _with_input_scaling(
+        MLPRegressor(
+            hidden_layer_sizes=hidden,
+            alpha=alpha,
+            learning_rate_init=lr_init,
+            max_iter=2000,
+            random_state=0,
+        )
     )
 
 
