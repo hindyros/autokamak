@@ -103,12 +103,72 @@ def _merge_datasets(old_path: Path, new_path: Path, merged_path: Path) -> Dict[s
     return merge_h5(old_path, new_path, merged_path)
 
 
+def _refit_winner_on_pool(state: MetaState) -> Optional[Dict[str, Any]]:
+    """Refit the current winner's architecture on the (grown) train pool.
+
+    Without this, a ``regen_dataset`` action can NEVER show immediate credit:
+    ``rmse_after`` re-measures the OLD winner, which by construction is
+    unchanged by new data. Refitting the same model + hyperparams + PCA size
+    on the enriched pool turns the regen into a competing candidate on the
+    frozen shard — data enrichment gets honest, immediate credit (or none,
+    if the extra samples genuinely didn't help). One fit, no search, no LLM.
+
+    Returns a result dict (refit shard RMSE + whether it became the new
+    best), or None when no winner exists yet / the refit fails.
+    """
+    payload = state.best_winner_payload
+    if payload is None:
+        return None
+    try:
+        from autotokamak.eval.data import load_dataset
+        from autotokamak.eval.reduce import fit_pca, transform
+        from autotokamak.surrogate.zoo import make_model
+
+        bundle = load_dataset(state.current_dataset_h5)
+        n_comp = int(payload.get("n_pca_components") or payload["pca"].n_components)
+        pca = fit_pca(bundle.psi, n_components=n_comp)
+        est = make_model(payload["model_name"], **payload["hyperparams"])
+        est.fit(bundle.inputs, transform(pca, bundle.psi))
+
+        candidate = {
+            "estimator": est,
+            "pca": pca,
+            "model_name": payload["model_name"],
+            "hyperparams": dict(payload["hyperparams"]),
+            "n_pca_components": n_comp,
+        }
+        iter_idx = len(state.actions_taken)
+        refit_path = state.workspace / "refits" / f"iter{iter_idx}.pkl"
+        refit_path.parent.mkdir(parents=True, exist_ok=True)
+        import joblib
+
+        joblib.dump(candidate, refit_path)
+
+        prior_best = state.best_rmse
+        shard_rmse = _maybe_update_best(
+            candidate, refit_path, state.best_surrogate_report, state
+        )
+        return {
+            "refit_shard_rmse": shard_rmse,
+            "refit_became_best": (
+                shard_rmse is not None and shard_rmse == state.best_rmse
+                and state.best_rmse < prior_best
+            ),
+            "refit_path": str(refit_path),
+            "refit_n_samples": bundle.n_samples,
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {"refit_error": f"{type(exc).__name__}: {exc}"}
+
+
 def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str, Any]:
     """Apply overrides and run a fresh sweep, then ENRICH the current dataset.
 
     The new sweep uses a per-iteration seed offset so its samples are not
     duplicates of prior iterations'. The resulting HDF5 is then concatenated
     with ``state.current_dataset_h5`` — the meta-loop's dataset only grows.
+    Afterward the current winner (if any) is REFIT on the grown pool so the
+    regen's value is measured immediately (see ``_refit_winner_on_pool``).
     No LLM involved.
     """
     if state.base_sweep_config is None:
@@ -148,8 +208,11 @@ def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str,
     state.current_dataset_h5 = merged_path
     state.base_sweep_config = new_cfg
 
+    refit_info = _refit_winner_on_pool(state) or {}
+
     return {
         "kind": "regen_dataset",
+        **refit_info,
         "dataset_path": str(merged_path),
         "prior_dataset_path": str(prior_path),
         "new_shard_path": str(new_path),

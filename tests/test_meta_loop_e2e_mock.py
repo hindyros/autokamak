@@ -282,6 +282,73 @@ def test_meta_loop_shard_untouched_by_regen(meta_config_yaml: Path):
     assert result["n_total"] == split_info["n_train_rows"] + result["n_new_requested"]
 
 
+def test_refit_winner_on_pool_gives_regen_immediate_credit(tmp_path: Path):
+    """After a regen grows the pool, the winner refit must compete on the
+    shard — without it, rmse_after can never reflect a regen's value."""
+    from tests.conftest import make_synthetic_h5
+
+    from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
+    from autotokamak.eval.data import load_dataset
+    from autotokamak.eval.metrics import psi_rmse
+    from autotokamak.eval.reduce import fit_pca, transform
+    from autotokamak.surrogate.automl import predict_with_winner
+    from autotokamak.surrogate.zoo import make_model
+
+    pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
+    shard = make_synthetic_h5(tmp_path / "shard.h5", n=4, seed=9)
+
+    # Winner fit on a SMALL slice of the pool (simulates pre-regen training).
+    bundle = load_dataset(pool)
+    small = slice(0, 6)
+    pca = fit_pca(bundle.psi[small], n_components=2)
+    est = make_model("poly_ridge", alpha=0.1, degree=1)
+    est.fit(bundle.inputs[small], transform(pca, bundle.psi[small]))
+    payload = {
+        "estimator": est,
+        "pca": pca,
+        "model_name": "poly_ridge",
+        "hyperparams": {"alpha": 0.1, "degree": 1},
+        "n_pca_components": 2,
+    }
+    shard_bundle = load_dataset(shard)
+    prior_rmse = float(
+        psi_rmse(shard_bundle.psi, predict_with_winner(payload, shard_bundle.inputs))
+    )
+
+    state = MetaState(
+        workspace=tmp_path / "ws",
+        current_dataset_h5=pool,
+        test_shard_h5=shard,
+        best_winner_payload=payload,
+        best_winner_path=tmp_path / "winner.pkl",
+        best_surrogate_report={"winner_model_name": "poly_ridge"},
+        best_rmse=prior_rmse,
+        actions_taken=["regen_dataset"],
+    )
+
+    result = _refit_winner_on_pool(state)
+    assert result is not None and "refit_error" not in result, result
+    assert result["refit_shard_rmse"] is not None
+    assert result["refit_n_samples"] == 16
+    assert Path(result["refit_path"]).is_file()
+    # Best-so-far can only improve or stay (comparison is on the same shard).
+    assert state.best_rmse <= prior_rmse
+    if result["refit_became_best"]:
+        assert state.best_rmse == pytest.approx(result["refit_shard_rmse"])
+
+
+def test_refit_winner_on_pool_none_without_winner(tmp_path: Path):
+    from tests.conftest import make_synthetic_h5
+
+    from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
+
+    state = MetaState(
+        workspace=tmp_path / "ws",
+        current_dataset_h5=make_synthetic_h5(tmp_path / "pool.h5", n=16),
+    )
+    assert _refit_winner_on_pool(state) is None
+
+
 # ---------------- extend_search dispatch (structured vs codegen) ----------------
 
 
