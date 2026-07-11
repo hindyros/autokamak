@@ -45,20 +45,24 @@ from ursa.agents import ExecutionAgent, PlanningAgent
 DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
 
 
-def _hygiene_warning(workspace_path, cfg) -> str:
-    """Scan workspace root and warn the planner about extras beyond the whitelist.
+def _hygiene_enforce(workspace_path, cfg) -> str:
+    """Auto-delete extra root files and return a note for the planner.
 
     Reads ``allowed_root_files`` and ``infra_root_files`` from the prompt YAML.
-    If neither is present, returns an empty string (no enforcement, backward
-    compatible with prompts that predate this feature).
+    If ``allowed_root_files`` is absent, returns "" (backward-compatible with
+    old prompts).  When extras are found they are deleted immediately so the
+    agent cannot re-read them; the planner sees a clean workspace and a record
+    of what was removed.
     """
+    import shutil
     from pathlib import Path as _P
 
     allowed = set(getattr(cfg, "allowed_root_files", None) or [])
     infra = set(getattr(cfg, "infra_root_files", None) or [])
     if not allowed:
         return ""
-    present = {p.name for p in _P(workspace_path).iterdir()}
+    ws = _P(workspace_path)
+    present = {p.name for p in ws.iterdir()}
     extras = sorted(present - allowed - infra)
     if not extras:
         return (
@@ -66,18 +70,34 @@ def _hygiene_warning(workspace_path, cfg) -> str:
             "deliverables and URSA infra files are present. Do not add any new "
             "files at the root in the next round.\n\n"
         )
-    listed = "\n".join(f"  - {e}" for e in extras)
-    return (
-        "WORKSPACE HYGIENE WARNING — Prior round created files at the workspace "
-        "root that are NOT in the allowed deliverables list "
-        f"(allowed: {sorted(allowed)}; URSA infra: {sorted(infra)}):\n"
-        f"{listed}\n"
-        "The prompt EXPLICITLY FORBIDS these (verifier scripts, tests, "
-        "requirements files, archive scripts, etc.). Include an explicit step "
-        "in your next plan to `rm` each of them, or justify keeping any that "
-        "you believe are essential. Do NOT create more like them; use that "
-        "budget to run additional Optuna trials instead.\n\n"
+    deleted, failed = [], []
+    for name in extras:
+        p = ws / name
+        try:
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+            deleted.append(name)
+        except OSError as exc:
+            failed.append(f"{name} ({exc})")
+    lines = ["WORKSPACE HYGIENE: The following files were AUTOMATICALLY DELETED "
+             "because they are not in the allowed deliverables list "
+             f"(allowed: {sorted(allowed)}; URSA infra: {sorted(infra)}):"]
+    for name in deleted:
+        lines.append(f"  - {name}  [deleted]")
+    for name in failed:
+        lines.append(f"  - {name}  [deletion failed — delete manually]")
+    lines.append(
+        "Do NOT recreate these. Use any freed budget for additional Optuna trials. "
+        "The deliverable list is complete and normative.\n"
     )
+    return "\n".join(lines) + "\n"
+
+
+def _hygiene_warning(workspace_path, cfg) -> str:
+    """Alias kept for callers; now delegates to _hygiene_enforce."""
+    return _hygiene_enforce(workspace_path, cfg)
 
 
 def main(
