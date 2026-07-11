@@ -81,7 +81,12 @@ class MetaActionPicker(dspy.Signature):
     )
     payload_json: str = dspy.OutputField(
         desc='JSON object with action-specific fields. '
-             'For regen_dataset: {"overrides": {"sampling.n_samples": int, ...}}. '
+             'For regen_dataset: {"overrides": {<dotted SweepConfig key>: value}} — '
+             'valid keys are existing SweepConfig paths only, e.g. '
+             '"sampling.n_samples", "sampling.seed", "parameters.r0.low", '
+             '"parameters.kappa.high", "fixed.mesh_dx". Do NOT invent knobs '
+             '(no "sampling.strategy", no "sampling.focus_vars"); unknown keys '
+             'are dropped. '
              'For extend_search: {"models_to_emphasize": [...], "widen_params": [...], "n_trials_hint": int}. '
              'For terminate: {"reason": "...", "confidence": "low"|"medium"|"high"}.'
     )

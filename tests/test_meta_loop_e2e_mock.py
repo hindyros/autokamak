@@ -109,7 +109,13 @@ def test_meta_loop_regen_then_terminate(meta_config_yaml: Path, tmp_path: Path):
             {
                 "action": "regen_dataset",
                 "regen": {
-                    "overrides": {"sampling.n_samples": 3, "sampling.seed": 7},
+                    # "sampling.strategy" is a hallucinated knob (observed live)
+                    # — it must be DROPPED, not kill the action.
+                    "overrides": {
+                        "sampling.n_samples": 3,
+                        "sampling.seed": 7,
+                        "sampling.strategy": "stratified",
+                    },
                     "rationale": "smoke test of regen path",
                 },
                 "diagnosis": "sample-bottlenecked, regenerate with smaller N for speed",
@@ -143,9 +149,14 @@ def test_meta_loop_regen_then_terminate(meta_config_yaml: Path, tmp_path: Path):
     assert (ws / "iterations" / "000" / "action.json").is_file()
     assert (ws / "iterations" / "001" / "action.json").is_file()
 
-    # The regen action should have produced a new dataset.
+    # The regen action should have produced a new dataset, applying the valid
+    # overrides and dropping the hallucinated one.
     datasets_dir = ws / "datasets"
     assert any(datasets_dir.iterdir())
+    result = json.loads((ws / "iterations" / "000" / "result.json").read_text())
+    assert result["kind"] == "regen_dataset"
+    assert result["overrides_applied"] == {"sampling.n_samples": 3, "sampling.seed": 7}
+    assert result["overrides_dropped"] == {"sampling.strategy": "stratified"}
 
 
 def test_meta_loop_scorer_requires_winner(tmp_path: Path):

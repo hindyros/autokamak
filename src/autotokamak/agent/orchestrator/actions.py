@@ -175,9 +175,25 @@ def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str,
         raise RuntimeError(
             "regen_dataset requires meta_config.base_sweep_config to be set"
         )
+    # Apply overrides one key at a time, validating each against SweepConfig.
+    # The LLM sometimes hallucinates knobs that don't exist (observed live:
+    # "sampling.strategy", "sampling.focus_vars") — a single bad key must not
+    # kill the whole action; drop it and record it in the result instead.
+    import copy
+
     raw = state.base_sweep_config.model_dump(mode="json")
+    overrides_applied: Dict[str, Any] = {}
+    overrides_dropped: Dict[str, Any] = {}
     for k, v in payload.overrides.items():
-        _deep_set(raw, k, v)
+        candidate = copy.deepcopy(raw)
+        _deep_set(candidate, k, v)
+        try:
+            SweepConfig.model_validate(candidate)
+        except Exception:  # noqa: BLE001
+            overrides_dropped[k] = v
+            continue
+        raw = candidate
+        overrides_applied[k] = v
     new_cfg = SweepConfig.model_validate(raw)
 
     datasets_dir = state.workspace / "datasets"
@@ -225,7 +241,8 @@ def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str,
         "n_total_isoflux_used": merge_counts["n_isoflux_used"],
         "config_hash": result.config_hash,
         "seed_used": int(bumped_sampling.seed),
-        "overrides_applied": dict(payload.overrides),
+        "overrides_applied": overrides_applied,
+        "overrides_dropped": overrides_dropped,
         "rationale": payload.rationale,
     }
 
