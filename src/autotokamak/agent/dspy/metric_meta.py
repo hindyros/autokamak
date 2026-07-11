@@ -11,17 +11,25 @@ Hard gates (all must pass for nonzero total):
     winner_predicts      : winner.pkl loads and predicts test split
 
 Quality terms:
-    final_rmse_vs_baseline (0.40) : 1 - final_rmse/baseline_rmse, clipped
-    improvement_over_iterations (0.25) : first-rmse minus last-rmse, normalized
-    budget_efficiency (0.15) : fraction of the total improvement (from the
+    final_rmse_vs_baseline (0.35) : 1 - final_rmse/baseline_rmse, clipped
+    improvement_over_iterations (0.20) : first-rmse minus last-rmse, normalized
+    budget_efficiency (0.10) : fraction of the total improvement (from the
                                baseline) achieved by the halfway iteration
+    no_waste (0.15) : fraction of post-first-winner iterations that improved
+                      the best shard RMSE by >= 1% relative. An agent that
+                      keeps burning budget on flat iterations instead of
+                      terminating scores 0 here — this is what makes a
+                      decisive short run score differently from a cap-riding
+                      one (the two used to tie, starving GEPA of variance).
     terminated_by_agent (0.15) : 1.0 if agent terminated, 0.0 if cap hit
     runner_cleanliness (0.05) : iteration log uses the expected action types
 
 The old ``diagnosis_consistency`` term (keyword-regex match between diagnosis
 text and action) was removed from the weighted score: it was trivially
 gameable by keyword-stuffing the diagnosis. It is still computed and stored
-in ``details["diagnosis_consistency_advisory"]`` for inspection.
+in ``details["diagnosis_consistency_advisory"]`` for inspection. ``no_waste``
+is not gameable the same way — it is computed from measured shard RMSE, not
+from agent-reported text.
 """
 
 from __future__ import annotations
@@ -38,12 +46,16 @@ EXPECTED_DELIVERABLES = ("winner.pkl", "report.json", "meta_trace.json")
 EXPECTED_ACTIONS = {"regen_dataset", "extend_search", "terminate"}
 
 WEIGHTS = {
-    "final_rmse_vs_baseline": 0.40,
-    "improvement_over_iterations": 0.25,
-    "budget_efficiency": 0.15,
+    "final_rmse_vs_baseline": 0.35,
+    "improvement_over_iterations": 0.20,
+    "budget_efficiency": 0.10,
+    "no_waste": 0.15,
     "terminated_by_agent": 0.15,
     "runner_cleanliness": 0.05,
 }
+
+# Relative shard-RMSE improvement below which an iteration counts as wasted.
+NO_WASTE_MIN_RELATIVE_IMPROVEMENT = 0.01
 
 
 @dataclass
@@ -204,6 +216,24 @@ def score_meta_run(workspace: str | Path) -> ScoreReport:
                 (start - min(early)) / total_impr
             )
 
+    # -- no_waste: after the first winner exists, every further measured
+    # iteration must improve the best shard RMSE by >= 1% relative or it
+    # counts as wasted budget. terminate iterations carry no rmse_after and
+    # are never counted. No measured iterations beyond the first -> 1.0
+    # (nothing was wasted).
+    measured = [it.get("rmse_after") for it in trace["iterations"] if it.get("rmse_after") is not None]
+    if len(measured) <= 1:
+        report.quality["no_waste"] = 1.0
+    else:
+        best = float(measured[0])
+        productive = 0
+        for v in measured[1:]:
+            if (best - float(v)) / max(best, 1e-12) >= NO_WASTE_MIN_RELATIVE_IMPROVEMENT:
+                productive += 1
+                best = float(v)
+        report.quality["no_waste"] = productive / (len(measured) - 1)
+        report.details["wasted_iterations"] = (len(measured) - 1) - productive
+
     # -- terminated_by_agent --
     report.quality["terminated_by_agent"] = (
         1.0 if parsed_report.terminated_by == "agent" else 0.0
@@ -221,4 +251,10 @@ def score_meta_run(workspace: str | Path) -> ScoreReport:
     return report
 
 
-__all__ = ["EXPECTED_DELIVERABLES", "ScoreReport", "WEIGHTS", "score_meta_run"]
+__all__ = [
+    "EXPECTED_DELIVERABLES",
+    "NO_WASTE_MIN_RELATIVE_IMPROVEMENT",
+    "ScoreReport",
+    "WEIGHTS",
+    "score_meta_run",
+]

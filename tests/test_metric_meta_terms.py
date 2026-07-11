@@ -119,6 +119,54 @@ def test_final_rmse_none_parses_and_scores_zero_quality(tmp_path: Path):
     assert rep.details.get("final_rmse") == "no winner produced"
 
 
+def test_no_waste_flat_run_scores_zero(tmp_path: Path):
+    # A winner exists after iteration 1; iterations 2-3 don't move the RMSE.
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.5,
+        rmse_afters=[0.5, 0.5, 0.5],
+    )
+    rep = score_meta_run(ws)
+    assert rep.quality["no_waste"] == pytest.approx(0.0)
+    assert rep.details["wasted_iterations"] == 2
+
+
+def test_no_waste_improving_run_scores_one(tmp_path: Path):
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.4,
+        rmse_afters=[0.8, 0.6, 0.4],  # each step >1% better than best-so-far
+    )
+    rep = score_meta_run(ws)
+    assert rep.quality["no_waste"] == pytest.approx(1.0)
+
+
+def test_no_waste_single_measured_iteration_is_not_waste(tmp_path: Path):
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.5,
+        rmse_afters=[0.5],
+    )
+    rep = score_meta_run(ws)
+    assert rep.quality["no_waste"] == pytest.approx(1.0)
+
+
+def test_no_waste_mixed_run(tmp_path: Path):
+    # iteration 2 improves, iteration 3 is flat -> 1 of 2 productive.
+    ws = _write_meta_workspace(
+        tmp_path / "ws",
+        baseline_rmse=1.0,
+        final_rmse=0.4,
+        rmse_afters=[0.8, 0.4, 0.4],
+    )
+    rep = score_meta_run(ws)
+    assert rep.quality["no_waste"] == pytest.approx(0.5)
+    assert rep.details["wasted_iterations"] == 1
+
+
 def test_diagnosis_consistency_is_advisory_only(tmp_path: Path):
     ws = _write_meta_workspace(
         tmp_path / "ws",
