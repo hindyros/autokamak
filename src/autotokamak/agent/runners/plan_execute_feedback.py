@@ -45,6 +45,41 @@ from ursa.agents import ExecutionAgent, PlanningAgent
 DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
 
 
+def _hygiene_warning(workspace_path, cfg) -> str:
+    """Scan workspace root and warn the planner about extras beyond the whitelist.
+
+    Reads ``allowed_root_files`` and ``infra_root_files`` from the prompt YAML.
+    If neither is present, returns an empty string (no enforcement, backward
+    compatible with prompts that predate this feature).
+    """
+    from pathlib import Path as _P
+
+    allowed = set(getattr(cfg, "allowed_root_files", None) or [])
+    infra = set(getattr(cfg, "infra_root_files", None) or [])
+    if not allowed:
+        return ""
+    present = {p.name for p in _P(workspace_path).iterdir()}
+    extras = sorted(present - allowed - infra)
+    if not extras:
+        return (
+            "WORKSPACE HYGIENE: Root layout is clean — only the allowed "
+            "deliverables and URSA infra files are present. Do not add any new "
+            "files at the root in the next round.\n\n"
+        )
+    listed = "\n".join(f"  - {e}" for e in extras)
+    return (
+        "WORKSPACE HYGIENE WARNING — Prior round created files at the workspace "
+        "root that are NOT in the allowed deliverables list "
+        f"(allowed: {sorted(allowed)}; URSA infra: {sorted(infra)}):\n"
+        f"{listed}\n"
+        "The prompt EXPLICITLY FORBIDS these (verifier scripts, tests, "
+        "requirements files, archive scripts, etc.). Include an explicit step "
+        "in your next plan to `rm` each of them, or justify keeping any that "
+        "you believe are essential. Do NOT create more like them; use that "
+        "budget to run additional Optuna trials instead.\n\n"
+    )
+
+
 def main(
     config_path: str,
     cli_model: str | None,
@@ -131,14 +166,18 @@ def main(
                 planning_output = planner.invoke(problem)
             else:
                 print("\n=== GLOBAL FEEDBACK: RE-PLAN (round {}) ===".format(round_no))
+                hygiene_note = _hygiene_warning(workspace_path, cfg)
                 replan_prompt = (
                     f"Original problem:\n{problem}\n\n"
                     f"Execution history so far:\n"
                     + "\n---\n".join(execution_history)
                     + "\n\n"
+                    f"{hygiene_note}"
                     f"Based on the above, suggest follow-up steps to fix failures or complete the task. "
                     f"If nothing more is needed, return a plan with a single step: 'Confirm completion'."
                 )
+                if hygiene_note:
+                    print(hygiene_note.rstrip())
                 planning_output = planner.invoke(replan_prompt)
 
             steps = planning_output["plan"].steps

@@ -52,87 +52,66 @@ def pick_action_via_llm(
     diagnostics: dict,
     history: list[MetaIterationRecord],
 ) -> ActionDecision:
-    """Default action-picker. Calls the LLM with structured output.
+    """Default action-picker. Delegates to the DSPy MetaActionPickerModule.
 
-    The LLM is shown the current diagnostics and prior history; it returns a
-    validated ``ActionDecision``. Errors propagate so the runner can record
-    them in the trace.
+    Behavior:
+      - Loads optimized prompt state from
+        ``agent/dspy/optimized/meta_picker.json`` if present (post-GEPA).
+      - Falls back to the in-code baseline (signature docstring at
+        ``agent/dspy/signatures.py``) when no optimized state exists.
+      - Honors ``state.use_baseline_picker`` (set via the runner's
+        ``--use-baseline`` flag) to force the in-code baseline for A/B
+        comparison even when an optimized JSON exists.
+
+    The LM is configured via ``dspy.configure(lm=...)`` lazily on first call.
     """
-    from langchain.chat_models import init_chat_model
+    import json as _json
 
-    llm = init_chat_model(model=meta_config.model)
-    # Use function_calling instead of OpenAI's strict json_schema mode because
-    # ActionDecision contains a Dict[str, Any] overrides field (free-form dotted
-    # keys) that strict mode rejects for missing additionalProperties=false.
-    structured = llm.with_structured_output(ActionDecision, method="function_calling")
+    import dspy
 
-    iterations_remaining = meta_config.max_iterations - len(history)
-    prompt = _build_action_prompt(state, diagnostics, history, iterations_remaining)
-    return structured.invoke(prompt)
-
-
-def _build_action_prompt(
-    state: MetaState,
-    diagnostics: dict,
-    history: list[MetaIterationRecord],
-    iterations_remaining: int,
-) -> str:
-    """Compose the per-iteration prompt for the action picker."""
-    summary = {
-        "iteration": len(history),
-        "iterations_remaining": iterations_remaining,
-        "current_dataset": str(state.current_dataset_h5),
-        "best_rmse_so_far": (
-            None if state.best_rmse == float("inf") else state.best_rmse
-        ),
-        "rmse_history": list(state.rmse_history),
-        "actions_taken": list(state.actions_taken),
-        "diagnostics": diagnostics,
-        "prior_decisions": [
-            {
-                "iteration": r.iteration,
-                "action": r.decision.action,
-                "diagnosis": r.decision.diagnosis,
-                "rmse_after": r.rmse_after,
-            }
-            for r in history
-        ],
-    }
-    return (
-        "You are the META-AGENT orchestrating a Grad-Shafranov surrogate-model "
-        "improvement loop. Each iteration you must choose ONE action:\n"
-        "  - regen_dataset(overrides): regenerate the Phase-1 dataset with "
-        "    overrides applied to the base sweep config. Use this when "
-        "    diagnostics say the surrogate is sample-bottlenecked or has high "
-        "    cross-seed variance (more data needed).\n"
-        "  - extend_search(focus): run another Phase-2 search emphasizing "
-        "    specific models or widening certain hyperparameter ranges. Use "
-        "    this when edge_hit_summary shows persistent edge hits OR when "
-        "    learning_curve has plateaued but RMSE is still above baseline.\n"
-        "  - terminate(reason): stop the loop. Use this when the surrogate is "
-        "    clearly good enough or further actions would not help.\n\n"
-        f"State and diagnostics:\n{json.dumps(summary, indent=2, default=str)}\n\n"
-        "Return an ActionDecision JSON. Always include a one-sentence diagnosis "
-        "explaining what you think the bottleneck is."
+    from autotokamak.agent.dspy.module import (
+        DEFAULT_OPTIMIZED_PATH,
+        MetaActionPickerModule,
+        load_module,
     )
+
+    # Configure DSPy's LM once per process. dspy.LM uses litellm-style strings
+    # ("openai/gpt-5-mini"); convert from our "openai:gpt-5-mini" convention.
+    settings_lm = getattr(dspy.settings, "lm", None)
+    desired_lm_string = meta_config.model.replace(":", "/", 1)
+    if settings_lm is None or getattr(settings_lm, "model", None) != desired_lm_string:
+        dspy.configure(lm=dspy.LM(desired_lm_string))
+
+    use_baseline = bool(getattr(state, "use_baseline_picker", False))
+    if use_baseline or not DEFAULT_OPTIMIZED_PATH.is_file():
+        module = MetaActionPickerModule()
+    else:
+        module = load_module(DEFAULT_OPTIMIZED_PATH)
+
+    # Single source of truth for the LM inputs — the runner records the same
+    # strings into the trace, so GEPA trains on byte-identical inputs.
+    from autotokamak.agent.dspy.picker_inputs import picker_inputs_from_runtime
+
+    inputs = picker_inputs_from_runtime(meta_config, state, diagnostics, history)
+    return module.predict_action_decision(**inputs)
 
 
 def measure_test_rmse(state: MetaState) -> Optional[float]:
-    """Re-evaluate the current best winner on the CURRENT dataset's test split.
+    """Evaluate the current best winner on the FROZEN test shard.
 
-    Returns None if no winner is available yet. The RMSE is computed against
-    the dataset state.current_dataset_h5, which may have changed since the
-    winner was trained — so this measures generalization to the live data.
+    Returns None if no winner or no shard is available. The shard is carved
+    once from the initial dataset and never grows or reshuffles, so RMSEs
+    are comparable across iterations regardless of how the train pool has
+    changed — and no winner-training sample can leak into it.
     """
-    if state.best_winner_payload is None:
+    if state.best_winner_payload is None or state.test_shard_h5 is None:
         return None
     try:
-        bundle = load_dataset(state.current_dataset_h5)
-        splits = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=state.seed)
+        shard = load_dataset(state.test_shard_h5)
         from autotokamak.surrogate.automl import predict_with_winner
 
-        pred = predict_with_winner(state.best_winner_payload, bundle.inputs[splits.test_idx])
-        return float(psi_rmse(bundle.psi[splits.test_idx], pred))
+        pred = predict_with_winner(state.best_winner_payload, shard.inputs)
+        return float(psi_rmse(shard.psi, pred))
     except Exception:  # noqa: BLE001
         return None
 
@@ -173,11 +152,18 @@ def run(
     experiments_dir: Optional[Path] = None,
     model_override: Optional[str] = None,
     max_iterations_override: Optional[int] = None,
+    n_samples_override: Optional[int] = None,
+    phase2_time_budget_override: Optional[int] = None,
+    use_baseline_picker: bool = False,
 ) -> MetaReport:
     """Run the meta-loop. Returns the final ``MetaReport``.
 
     ``model_override`` and ``max_iterations_override``, if set, win over the
     values in the meta YAML — convenient for cheap test runs.
+
+    ``use_baseline_picker=True`` forces the in-code baseline DSPy module
+    (ignoring any saved optimized prompt). Used for A/B comparison after
+    GEPA optimization.
     """
     meta_config = MetaConfig.from_yaml(config_path)
     if model_override:
@@ -196,19 +182,60 @@ def run(
     if not initial_dataset.is_absolute():
         initial_dataset = (REPO_ROOT / initial_dataset).resolve()
 
+    # Freeze the held-out test shard BEFORE anything else touches the data.
+    # Every RMSE the loop reports (baseline, per-iteration, final) is measured
+    # on this fixed shard; the remainder becomes the growing train pool. A
+    # dataset too small to split fails fast — a meta run without a
+    # trustworthy shard produces incomparable metrics.
+    from autotokamak.data.h5io import split_h5
+
+    datasets_dir = workspace_path / "datasets"
+    train_pool = datasets_dir / "train_pool.h5"
+    test_shard = datasets_dir / "test_shard.h5"
+    split_info = split_h5(
+        initial_dataset,
+        train_path=train_pool,
+        test_path=test_shard,
+        test_frac=meta_config.holdout_test_frac,
+        min_test=meta_config.holdout_min_test,
+        seed=meta_config.seed,
+    )
+    (datasets_dir / "split_info.json").write_text(
+        json.dumps(split_info, indent=2, default=str)
+    )
+    print(
+        f"Frozen test shard: {test_shard} ({split_info['n_test']} samples); "
+        f"train pool: {split_info['n_train_success']} successful samples"
+    )
+
     base_sweep = None
     if meta_config.base_sweep_config:
         base_path = Path(meta_config.base_sweep_config)
         if not base_path.is_absolute():
             base_path = (REPO_ROOT / base_path).resolve()
         base_sweep = SweepConfig.from_yaml(base_path)
+        if n_samples_override is not None:
+            bumped = base_sweep.sampling.model_copy(
+                update={"n_samples": int(n_samples_override)}
+            )
+            base_sweep = base_sweep.model_copy(update={"sampling": bumped})
 
     state = MetaState(
         workspace=workspace_path,
-        current_dataset_h5=initial_dataset,
+        current_dataset_h5=train_pool,
         base_sweep_config=base_sweep,
         phase2_prompt=(REPO_ROOT / meta_config.phase2_prompt),
         seed=meta_config.seed,
+        test_shard_h5=test_shard,
+        phase2_mode=meta_config.phase2_mode,
+        phase2_model=meta_config.model,
+        phase2_max_rounds=meta_config.phase2_max_rounds,
+        phase2_time_budget_seconds=(
+            int(phase2_time_budget_override)
+            if phase2_time_budget_override is not None
+            else None
+        ),
+        use_baseline_picker=bool(use_baseline_picker),
     )
 
     trace = None
@@ -228,14 +255,13 @@ def run(
             print(f"WARNING: failed to open meta-trace ({exc})", file=sys.stderr)
             trace = None
 
-    # Initial baseline RMSE so we have something to report even at iteration 0.
-    bundle = load_dataset(state.current_dataset_h5)
-    splits0 = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=state.seed)
+    # Baseline: mean-predictor of the train pool evaluated on the frozen
+    # shard — the same shard every winner is measured on, so
+    # final_rmse / baseline_rmse is apples-to-apples.
+    train_bundle = load_dataset(state.current_dataset_h5)
+    shard_bundle = load_dataset(state.test_shard_h5)
     baseline_rmse = float(
-        sum(
-            baseline_mean_predictor_rmse(bundle.psi[tr], bundle.psi[va])
-            for _, tr, va in splits0.iter_folds()
-        ) / len(splits0.folds)
+        baseline_mean_predictor_rmse(train_bundle.psi, shard_bundle.psi)
     )
 
     history: list[MetaIterationRecord] = []
@@ -256,6 +282,12 @@ def run(
             )
 
             print(f"\n=== META iteration {i} (of {meta_config.max_iterations}) ===")
+            # Record the EXACT LM inputs for this decision (regardless of which
+            # picker is plugged in) so GEPA later trains on byte-identical
+            # inputs — see agent/dspy/picker_inputs.py (train/serve skew fix).
+            from autotokamak.agent.dspy.picker_inputs import picker_inputs_from_runtime
+
+            picker_inputs = picker_inputs_from_runtime(meta_config, state, diag, history)
             decision = pick_action(meta_config, state, diag, history)
             (iter_dir / "action.json").write_text(decision.model_dump_json(indent=2))
             print(f"  action: {decision.action}; diagnosis: {decision.diagnosis}")
@@ -265,6 +297,7 @@ def run(
                 started_utc=_now(),
                 diagnostics=diag,
                 decision=decision,
+                picker_inputs=picker_inputs,
             )
 
             if decision.action == "terminate":
@@ -299,7 +332,10 @@ def run(
 
             shutil.copy(state.best_winner_path, winner_path)
 
-        final_rmse = state.best_rmse if state.best_rmse != float("inf") else baseline_rmse
+        # None (not baseline) when no winner was ever produced — falling back
+        # to baseline_rmse here made a winnerless run read as "matched
+        # baseline" in the report.
+        final_rmse = state.best_rmse if state.best_rmse != float("inf") else None
         actions_taken_typed = []
         for a in state.actions_taken:
             if a in {"regen_dataset", "extend_search", "terminate"}:
@@ -307,8 +343,11 @@ def run(
         report = MetaReport(
             n_iterations=len(history),
             terminated_by=terminated_by,
-            final_rmse=float(final_rmse),
+            final_rmse=final_rmse,
             baseline_rmse=float(baseline_rmse),
+            test_shard_path=str(test_shard),
+            n_test_samples=int(split_info["n_test"]),
+            n_train_pool_samples=int(split_info["n_train_success"]),
             initial_rmse=state.rmse_history[0] if state.rmse_history else None,
             winner_model_name=(
                 state.best_surrogate_report.get("winner_model_name", "none")
@@ -354,7 +393,9 @@ def run(
 
         print(f"\n=== META FINAL ===")
         print(f"  iterations: {len(history)}; terminated_by: {terminated_by}")
-        print(f"  final RMSE: {final_rmse:.4f}; baseline: {baseline_rmse:.4f}")
+        final_str = f"{final_rmse:.4f}" if final_rmse is not None else "n/a (no winner)"
+        print(f"  final RMSE: {final_str}; baseline: {baseline_rmse:.4f} "
+              f"(both on frozen shard, n={split_info['n_test']})")
         return report
 
     except KeyboardInterrupt:
@@ -391,6 +432,27 @@ def main():
         default=None,
         help="Override the LLM model (e.g. 'openai:gpt-5-mini' for cheap testing).",
     )
+    parser.add_argument(
+        "--n-samples",
+        type=int,
+        default=None,
+        help="Override sampling.n_samples in the loaded base_sweep_config "
+             "(effective on the next regen_dataset action).",
+    )
+    parser.add_argument(
+        "--time-budget-seconds",
+        type=int,
+        default=None,
+        help="Injected as a HARD BUDGET directive into every extend_search "
+             "overlay prompt so the Phase-2 agent writes it into "
+             "surrogate_config.yaml.",
+    )
+    parser.add_argument(
+        "--use-baseline",
+        action="store_true",
+        help="Force the in-code baseline action-picker prompt (ignore any optimized JSON). "
+             "Used for A/B comparison after GEPA optimization.",
+    )
     args = parser.parse_args()
 
     run(
@@ -399,6 +461,9 @@ def main():
         experiments_dir=Path(args.experiments_dir) if args.experiments_dir else None,
         model_override=args.model,
         max_iterations_override=args.max_iterations,
+        n_samples_override=args.n_samples,
+        phase2_time_budget_override=args.time_budget_seconds,
+        use_baseline_picker=args.use_baseline,
     )
 
 

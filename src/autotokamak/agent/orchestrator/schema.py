@@ -102,8 +102,23 @@ class MetaConfig(BaseModel):
     )
     phase2_prompt: str = Field(
         default="src/autotokamak/agent/prompts/surrogate_automl.yaml",
-        description="The prompt the extend_search action invokes.",
+        description="The prompt the extend_search action invokes (codegen mode only).",
     )
+    phase2_mode: Literal["structured", "codegen"] = Field(
+        default="structured",
+        description="How extend_search runs Phase-2: 'structured' = deterministic "
+        "automl_loop with one typed LLM decision per round; 'codegen' = the "
+        "legacy nested plan_execute_feedback agent.",
+    )
+    phase2_max_rounds: int = Field(default=3, ge=1, le=10)
+    holdout_test_frac: float = Field(
+        default=0.15,
+        gt=0.0,
+        lt=0.5,
+        description="Fraction of the initial dataset's successful samples frozen "
+        "into the held-out test shard at meta-loop start.",
+    )
+    holdout_min_test: int = Field(default=2, ge=1)
     seed: int = 0
     workspace: str = "examples/surrogate_meta"
     model: str = "openai:gpt-5.2"
@@ -138,8 +153,13 @@ class MetaReport(BaseModel):
     n_iterations: int
     terminated_by: Literal["agent", "iterations_cap"]
     initial_rmse: Optional[float] = None
-    final_rmse: float = Field(ge=0.0)
+    # None = no winner was ever produced. All RMSEs (final, baseline, and the
+    # per-iteration rmse_history) are measured on the SAME frozen test shard.
+    final_rmse: Optional[float] = Field(default=None, ge=0.0)
     baseline_rmse: float = Field(ge=0.0)
+    test_shard_path: Optional[str] = None
+    n_test_samples: Optional[int] = None
+    n_train_pool_samples: Optional[int] = None
     winner_model_name: str
     winner_hyperparams: Dict[str, Any]
     rmse_history: List[float] = Field(default_factory=list)

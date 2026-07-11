@@ -41,6 +41,7 @@ ml = [
   "scikit-learn",
   "optuna>=3.5",
   "joblib",
+  "dspy-ai>=2.5",
 ]
 dev = [
   "pytest>=7",
