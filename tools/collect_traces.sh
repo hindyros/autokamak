@@ -66,10 +66,11 @@ source venv/bin/activate
 EXPERIMENTS_DIR="experiments"
 mkdir -p "$EXPERIMENTS_DIR"
 
-# Per-run experiments_dir subdirectory if tagged, so baseline/optimized
-# A/B runs don't intermix with the optimization trainset.
+# Tagged runs live UNDER experiments/ (never as new repo-root directories),
+# so baseline/optimized A/B arms don't intermix with the optimization
+# trainset and the repo root stays clean.
 if [[ -n "$TAG" ]]; then
-    EXPERIMENTS_DIR="experiments_${TAG}"
+    EXPERIMENTS_DIR="experiments/${TAG}"
     mkdir -p "$EXPERIMENTS_DIR"
 fi
 
