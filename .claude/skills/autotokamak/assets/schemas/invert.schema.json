@@ -1,0 +1,403 @@
+{
+  "$defs": {
+    "BoundaryConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "isoflux",
+          "default": "isoflux",
+          "description": "Boundary construction method. Only 'isoflux' (analytic D-shape) for now.",
+          "title": "Type",
+          "type": "string"
+        },
+        "npts": {
+          "description": "Number of points on the LCFS contour.",
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Npts",
+          "type": "integer"
+        },
+        "r0": {
+          "description": "Major radius of LCFS center (m).",
+          "exclusiveMinimum": 0,
+          "title": "R0",
+          "type": "number"
+        },
+        "z0": {
+          "description": "Vertical center of LCFS (m).",
+          "title": "Z0",
+          "type": "number"
+        },
+        "a": {
+          "description": "Minor radius (m).",
+          "exclusiveMinimum": 0,
+          "title": "A",
+          "type": "number"
+        },
+        "kappa": {
+          "description": "Elongation (1.0 = circle).",
+          "maximum": 3.0,
+          "minimum": 0.5,
+          "title": "Kappa",
+          "type": "number"
+        },
+        "delta": {
+          "description": "Triangularity.",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Delta",
+          "type": "number"
+        }
+      },
+      "required": [
+        "npts",
+        "r0",
+        "z0",
+        "a",
+        "kappa",
+        "delta"
+      ],
+      "title": "BoundaryConfig",
+      "type": "object"
+    },
+    "EquationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "gs",
+          "description": "Equation name. Currently only 'gs' is supported.",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "EquationConfig",
+      "type": "object"
+    },
+    "EquilibriumConfig": {
+      "additionalProperties": true,
+      "description": "One equilibrium run: boundary + mesh + solver + targets.",
+      "properties": {
+        "equation": {
+          "$ref": "#/$defs/EquationConfig"
+        },
+        "boundary": {
+          "$ref": "#/$defs/BoundaryConfig"
+        },
+        "mesh": {
+          "$ref": "#/$defs/MeshConfig"
+        },
+        "solver": {
+          "$ref": "#/$defs/SolverConfig"
+        },
+        "targets": {
+          "$ref": "#/$defs/TargetsConfig"
+        },
+        "init_psi": {
+          "$ref": "#/$defs/InitPsiConfig"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputsConfig"
+        }
+      },
+      "required": [
+        "equation",
+        "boundary",
+        "mesh",
+        "solver",
+        "targets"
+      ],
+      "title": "EquilibriumConfig",
+      "type": "object"
+    },
+    "InitPsiConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "default": "tokamaker_default",
+          "enum": [
+            "tokamaker_default",
+            "isoflux"
+          ],
+          "title": "Method",
+          "type": "string"
+        }
+      },
+      "title": "InitPsiConfig",
+      "type": "object"
+    },
+    "InvertOptimize": {
+      "additionalProperties": true,
+      "properties": {
+        "psi_loss": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Psi Loss"
+        },
+        "regularization_lambda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regularization Lambda"
+        }
+      },
+      "title": "InvertOptimize",
+      "type": "object"
+    },
+    "MeshConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "anyOf": [
+            {
+              "const": "gs_domain",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gs_domain",
+          "title": "Method"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/MeshRegion"
+          },
+          "minItems": 1,
+          "title": "Regions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "regions"
+      ],
+      "title": "MeshConfig",
+      "type": "object"
+    },
+    "MeshRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "plasma",
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "const": "plasma",
+          "default": "plasma",
+          "title": "Type",
+          "type": "string"
+        },
+        "dx": {
+          "description": "Target triangle edge length (m).",
+          "exclusiveMinimum": 0,
+          "title": "Dx",
+          "type": "number"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        }
+      },
+      "required": [
+        "dx"
+      ],
+      "title": "MeshRegion",
+      "type": "object"
+    },
+    "OutputsConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "out_dir": {
+          "default": "outputs",
+          "title": "Out Dir",
+          "type": "string"
+        },
+        "mesh_png": {
+          "default": "mesh.png",
+          "title": "Mesh Png",
+          "type": "string"
+        },
+        "psi_png": {
+          "default": "psi.png",
+          "title": "Psi Png",
+          "type": "string"
+        }
+      },
+      "title": "OutputsConfig",
+      "type": "object"
+    },
+    "SolverConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "order": {
+          "description": "FE polynomial order (1=linear, 2=quadratic).",
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "F0": {
+          "description": "Toroidal field constant F0 (Tm).",
+          "title": "F0",
+          "type": "number"
+        },
+        "full_domain": {
+          "default": false,
+          "title": "Full Domain",
+          "type": "boolean"
+        },
+        "maxits": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nonlinear iteration cap.",
+          "title": "Maxits"
+        },
+        "free_boundary": {
+          "default": false,
+          "title": "Free Boundary",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "order",
+        "F0"
+      ],
+      "title": "SolverConfig",
+      "type": "object"
+    },
+    "TargetsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "Ip": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Total plasma current (A).",
+          "title": "Ip"
+        },
+        "Ip_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ip Ratio"
+        },
+        "pax": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pax"
+        },
+        "estore": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estore"
+        },
+        "R0": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "R0"
+        },
+        "V0": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "V0"
+        }
+      },
+      "title": "TargetsConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "\u03c8 inversion: base equilibrium + target \u03c8 + optimization knobs.",
+  "properties": {
+    "base_config": {
+      "$ref": "#/$defs/EquilibriumConfig"
+    },
+    "target": {
+      "additionalProperties": true,
+      "title": "Target",
+      "type": "object"
+    },
+    "optimize": {
+      "$ref": "#/$defs/InvertOptimize"
+    }
+  },
+  "required": [
+    "base_config",
+    "target"
+  ],
+  "title": "InvertConfig",
+  "type": "object"
+}

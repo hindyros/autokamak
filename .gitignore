@@ -53,3 +53,5 @@ models/checkpoints/*
 !models/checkpoints/.gitkeep
 experiments/*
 !experiments/.gitkeep
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
