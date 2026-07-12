@@ -65,8 +65,6 @@ def pick_action_via_llm(
 
     The LM is configured via ``dspy.configure(lm=...)`` lazily on first call.
     """
-    import json as _json
-
     import dspy
 
     from autotokamak.agent.dspy.module import (
@@ -103,17 +101,15 @@ def measure_test_rmse(state: MetaState) -> Optional[float]:
     once from the initial dataset and never grows or reshuffles, so RMSEs
     are comparable across iterations regardless of how the train pool has
     changed — and no winner-training sample can leak into it.
-    """
-    if state.best_winner_payload is None or state.test_shard_h5 is None:
-        return None
-    try:
-        shard = load_dataset(state.test_shard_h5)
-        from autotokamak.surrogate.automl import predict_with_winner
 
-        pred = predict_with_winner(state.best_winner_payload, shard.inputs)
-        return float(psi_rmse(shard.psi, pred))
-    except Exception:  # noqa: BLE001
+    Delegates to ``actions._frozen_shard_rmse`` — the loop's single most
+    important measurement must have exactly one implementation.
+    """
+    from autotokamak.agent.orchestrator.actions import _frozen_shard_rmse
+
+    if state.best_winner_payload is None:
         return None
+    return _frozen_shard_rmse(state.best_winner_payload, state)
 
 
 def _initial_diagnostics(state: MetaState) -> dict:

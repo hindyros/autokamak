@@ -23,7 +23,11 @@ _OFT_ENV_CACHE: Any = None
 # value) so callers can opt in without forcing every existing caller to unpack
 # a tuple. Currently records whether the isoflux constraint was honored or
 # whether we fell back to the unconstrained solve.
-_LAST_SOLVE_INFO: Dict[str, Any] = {"isoflux_used": None, "fallback_reason": None}
+_LAST_SOLVE_INFO: Dict[str, Any] = {
+    "isoflux_used": None,
+    "fallback_reason": None,
+    "boundary_enforced_by": "none",
+}
 
 
 def get_last_solve_info() -> Dict[str, Any]:

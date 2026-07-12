@@ -148,16 +148,12 @@ def _refit_winner_on_pool(state: MetaState) -> Optional[Dict[str, Any]]:
 
         joblib.dump(candidate, refit_path)
 
-        prior_best = state.best_rmse
-        shard_rmse = _maybe_update_best(
+        shard_rmse, became_best = _maybe_update_best(
             candidate, refit_path, state.best_surrogate_report, state
         )
         return {
             "refit_shard_rmse": shard_rmse,
-            "refit_became_best": (
-                shard_rmse is not None and shard_rmse == state.best_rmse
-                and state.best_rmse < prior_best
-            ),
+            "refit_became_best": became_best,
             "refit_path": str(refit_path),
             "refit_n_samples": bundle.n_samples,
         }
@@ -354,17 +350,22 @@ def _maybe_update_best(
     winner_path: Path,
     nested_report: Optional[dict],
     state: MetaState,
-) -> Optional[float]:
-    """Compare a candidate winner on the frozen shard; update state if better."""
+) -> tuple[Optional[float], bool]:
+    """Compare a candidate winner on the frozen shard; update state if better.
+
+    Returns ``(shard_rmse, became_best)`` — the explicit flag exists so
+    callers never have to reconstruct "did it win?" via float comparisons.
+    """
     if winner_payload is None:
-        return None
+        return None, False
     shard_rmse = _frozen_shard_rmse(winner_payload, state)
     if shard_rmse is not None and shard_rmse < state.best_rmse:
         state.best_rmse = shard_rmse
         state.best_winner_payload = winner_payload
         state.best_winner_path = winner_path
         state.best_surrogate_report = nested_report
-    return shard_rmse
+        return shard_rmse, True
+    return shard_rmse, False
 
 
 def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> Dict[str, Any]:
@@ -406,7 +407,7 @@ def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> Dict
         nested_winner = joblib.load(winner_path)
         nested_report = json.loads(report_path.read_text())
         nested_rmse = float(nested_report.get("val_psi_rmse", float("inf")))
-        shard_rmse = _maybe_update_best(nested_winner, winner_path, nested_report, state)
+        shard_rmse, _became_best = _maybe_update_best(nested_winner, winner_path, nested_report, state)
 
     return {
         "kind": "extend_search",
@@ -460,7 +461,7 @@ def _extend_search_structured(payload: ExtendSearchFocus, state: MetaState) -> D
         report_path = sub_ws / "outputs" / "report.json"
         if report_path.is_file():
             nested_report = json.loads(report_path.read_text())
-        shard_rmse = _maybe_update_best(nested_winner, winner_path, nested_report, state)
+        shard_rmse, _became_best = _maybe_update_best(nested_winner, winner_path, nested_report, state)
 
     return {
         "kind": "extend_search",
