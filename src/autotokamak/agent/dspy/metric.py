@@ -22,24 +22,20 @@ Hard gates (boolean, ALL must pass for a nonzero total):
     at_least_one_success : at least one /outputs/success entry is True
 
 Quality terms (each in [0, 1]; weighted sum becomes the total):
-    success_rate            (weight 0.25)  n_succeeded / n_requested
-    isoflux_constraint_held (weight 0.20)  fraction of successful samples for
-                                           which the LCFS-shape constraint
-                                           actually held (i.e. the constrained
-                                           solve converged and the runner did
-                                           not silently fall back to the
-                                           unconstrained path). Reads
-                                           /outputs/isoflux_used. Catches the
-                                           "100% success, 0% shape-constrained"
-                                           failure mode we saw on 2026-06-17.
-    inside_lcfs_quality     (weight 0.20)  fraction of in-LCFS pixels with REAL
+    success_rate            (weight 0.30)  n_succeeded / n_requested
+    inside_lcfs_quality     (weight 0.25)  fraction of in-LCFS pixels with REAL
                                            (non-extrapolated) psi values. This
                                            catches the griddata(nearest) silent-
                                            fill bug we saw in the first run.
-    outside_lcfs_honesty    (weight 0.15)  outside-LCFS pixels are NaN or have
+    outside_lcfs_honesty    (weight 0.20)  outside-LCFS pixels are NaN or have
                                            real variation (not flat-filled).
-    shape_fidelity          (weight 0.15)  correlation between requested r0 and
+    shape_fidelity          (weight 0.20)  correlation between requested r0 and
                                            observed magnetic-axis R.
+
+(The old ``isoflux_constraint_held`` term was removed 2026-07-11 — see the
+NOTE above WEIGHTS. Fixed-boundary solves never apply the isoflux constraint,
+so the term punished every correct run; the fraction is kept in details as
+``isoflux_used_fraction_advisory``.)
     runner_cleanliness      (weight 0.05)  did the runner import from
                                            autotokamak.core (heuristic, parses
                                            run_dataset_sweep.py).
@@ -61,12 +57,19 @@ import numpy as np
 EXPECTED_DELIVERABLES = ("dataset_config.yaml", "run_dataset_sweep.py", "README.md")
 DATASET_RELPATH = "outputs/dataset.h5"
 
+# NOTE (2026-07-11): the old ``isoflux_constraint_held`` term (weight 0.20)
+# was removed from the weighted score. Root cause analysis showed OFT's
+# isoflux constraint fitting is a FREE-BOUNDARY mechanism (it adjusts coil
+# currents); on the fixed-boundary plasma-only meshes this scorer grades,
+# isoflux_used=False is the CORRECT outcome — the LCFS is enforced exactly
+# by the mesh boundary. Keeping the term would dock every valid run 20%.
+# Shape honoring is still scored independently via ``shape_fidelity``; the
+# isoflux fraction is retained in details as advisory provenance.
 WEIGHTS = {
-    "success_rate": 0.25,
-    "isoflux_constraint_held": 0.20,
-    "inside_lcfs_quality": 0.20,
-    "outside_lcfs_honesty": 0.15,
-    "shape_fidelity": 0.15,
+    "success_rate": 0.30,
+    "inside_lcfs_quality": 0.25,
+    "outside_lcfs_honesty": 0.20,
+    "shape_fidelity": 0.20,
     "runner_cleanliness": 0.05,
 }
 
@@ -154,27 +157,21 @@ def score_run(workspace: str | Path, *, requested_n_samples: int) -> ScoreReport
         report.hard_gates["at_least_one_success"] = bool(success.any())
         report.quality["success_rate"] = float(success.sum() / max(requested_n_samples, 1))
 
-        # -- isoflux_constraint_held -------------------------------------
-        # Did the LCFS-shape constraint actually hold for successful samples,
-        # or did the runner silently fall back to the unconstrained solve?
-        # A run with success_rate=1.0 but isoflux_used all-False produces
-        # equilibria that look healthy but don't honor the requested
-        # (kappa, delta) shape -- corrupts surrogate training.
+        # -- isoflux fraction (ADVISORY ONLY, not weighted) ----------------
+        # Historically a 0.20-weight term, removed 2026-07-11: fixed-boundary
+        # solves NEVER apply the isoflux constraint (it fits free-boundary
+        # coil currents; a plasma-only mesh has none), so isoflux_used=False
+        # is the correct outcome and the requested shape is enforced exactly
+        # by the mesh boundary. Recorded here as provenance; shape honoring
+        # is scored by shape_fidelity below.
         if "outputs/isoflux_used" in h5_handle:
             isoflux_used = np.asarray(h5_handle["outputs/isoflux_used"][:], dtype=bool)
             n_success = int(success.sum())
-            if n_success > 0:
-                report.quality["isoflux_constraint_held"] = float(
-                    isoflux_used[success].sum() / n_success
-                )
-            else:
-                report.quality["isoflux_constraint_held"] = 0.0
             report.details["isoflux_used_count"] = int(isoflux_used[success].sum())
+            report.details["isoflux_used_fraction_advisory"] = (
+                float(isoflux_used[success].sum() / n_success) if n_success else 0.0
+            )
         else:
-            # Runner did not record the per-sample flag at all. Treat as a
-            # signal that the runner is out of date with the current prompt
-            # contract; score zero on this term rather than ignoring it.
-            report.quality["isoflux_constraint_held"] = 0.0
             report.details["isoflux_used_missing"] = True
 
         # -- inside_lcfs_quality -----------------------------------------

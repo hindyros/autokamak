@@ -164,7 +164,11 @@ def run_sweep(cfg: SweepConfig, output_dir: Path | str) -> SweepResult:
                 lcfs=lcfs, cfg=solver_cfg,
             )
             info = get_last_solve_info()
-            psi_nodes = np.asarray(gs.get_psi(), dtype=float).ravel()
+            # get_psi(False) = PHYSICAL psi (Webers). The default get_psi()
+            # returns per-sample NORMALIZED flux psi_N in [0,1], which erases
+            # the Ip dependence entirely — a surrogate trained on psi_N can
+            # never learn the current amplitude (diagnosed 2026-07-10).
+            psi_nodes = np.asarray(gs.get_psi(False), dtype=float).ravel()
             if len(psi_nodes) != len(mesh_pts):
                 raise RuntimeError(
                     f"Expected len(psi_nodes)==len(mesh_pts) for order=1; "

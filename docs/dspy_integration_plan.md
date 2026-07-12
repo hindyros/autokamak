@@ -132,9 +132,42 @@ Once Option C exists and we have ≥10 traces *with execution failures*, the nex
 - Metric: did the revised plan's next round succeed? (binary on next round + score from §4)
 - Optimizer: `dspy.BootstrapFewShot` first; `MIPROv2` once we have ≥30 failure traces
 
-## 7. Option A — full-pipeline optimization (destination)
+## 7. Option A — meta-action-picker optimization (SHIPPED, Phase 4)
 
-Only attempt once Options C and B exist and the trace corpus is ≥50 runs. Budget: $500–1500 per optimization pass on `gpt-5.2`, or open the door to a smaller model (gpt-5-mini, Claude Haiku) as the executor with periodic A/B against `gpt-5.2`.
+**Status: implemented**. See `src/autotokamak/agent/dspy/{signatures,module,trace_loader,metric_adapter,optimize_meta}.py`. We chose GEPA (Genetic-Pareto) over MIPROv2 because (a) our scorer is multi-criterion — 6 quality terms in `metric_meta.WEIGHTS` — and GEPA can Pareto-optimize without collapsing them, and (b) GEPA's reflective mutation reads the agent's natural-language `diagnosis` field in our traces to inform each prompt mutation.
+
+The optimization target is the meta-action-picker — the LLM call inside `meta_loop.pick_action_via_llm` that decides between `regen_dataset` / `extend_search` / `terminate` each iteration. Its prompt is now `MetaActionPicker.__doc__` in `signatures.py`, and GEPA mutates that docstring.
+
+### Four-command runbook
+
+```bash
+# 1. Build (already done — this PR)
+pytest tests/ -v
+
+# 2. Collect traces (~$5-15 on gpt-5-mini, ~30-60min)
+./tools/collect_traces.sh --n 15 --model openai:gpt-5-mini
+
+# 3. Run GEPA (~$10-50 in optimization compute)
+PYTHONPATH=src/autotokamak python -m autotokamak.agent.dspy.optimize_meta \
+    --experiments-dir experiments/ \
+    --output src/autotokamak/agent/dspy/optimized/meta_picker.json \
+    --auto medium
+
+# 4. A/B verify
+./tools/collect_traces.sh --n 5 --use-baseline --tag baseline
+./tools/collect_traces.sh --n 5 --tag optimized
+# Compare scores in the two experiments_* directories
+```
+
+The runner picks up the optimized JSON automatically (via `module.load_module()`); pass `--use-baseline` to force the in-code baseline for A/B comparison.
+
+### Deferred Phase-4 follow-ups
+
+- **Phase-2 search-picker optimization** — same pattern, new signature for the surrogate_automl agent's per-round SearchSpec decisions.
+- **Phase-1 dataset_generation prompt optimization** — lowest leverage; the prompt is already tight and the main failure is solver-side (the isoflux fallback).
+- **Cross-prompt optimization** — once all three phase prompts are DSPy modules, run GEPA jointly over them.
+
+The original "Option A — full-pipeline optimization (destination)" framing (optimize the whole URSA planner instruction string with MIPROv2 + $500-1500 budget) is now superseded by the GEPA-on-meta-action-picker approach, which is cheaper and more contained.
 
 ## 8. Risks and open questions
 
@@ -149,13 +182,20 @@ Only attempt once Options C and B exist and the trace corpus is ≥50 runs. Budg
 2. **Budget for Options A, B?** Need a token-budget cap before we run MIPROv2.
 3. **Is the prompt-linter framing (Option C) interesting on its own?** Or does the advisor want us to push straight at Option A even though it's premature?
 
-## 10. What lives on this branch right now
+## 10. What lives in the repo today
 
-- This planning doc.
-- `src/autotokamak/agent/dspy/metric.py` — the composite scoring function (pure-Python, no DSPy dependency).
-- `src/autotokamak/agent/dspy/README.md` — orientation.
-- *No* DSPy library code yet. That's deliberate: this branch is a **proposal**, not an implementation. Until the prerequisites in §3 are met, writing DSPy modules would be premature.
+**Shipped:**
+- Run instrumentation (`agent/runners/trace.py`) — writes `experiments/<run_id>/trace.json` for every agent invocation.
+- Composite scorers (`agent/dspy/metric.py`, `metric_surrogate.py`, `metric_meta.py`) — pure-Python `ScoreReport` producers, designed to plug into DSPy as metrics.
+- **Option A (Phase 4)**: GEPA optimization of the meta-action-picker. See §7. New files:
+  - `agent/dspy/signatures.py` — `MetaActionPicker` dspy.Signature
+  - `agent/dspy/module.py` — `MetaActionPickerModule(dspy.ChainOfThought)` + ActionDecision coercion
+  - `agent/dspy/trace_loader.py` — converts `experiments/<id>/trace.json` + `meta_trace.json` → `dspy.Example`
+  - `agent/dspy/metric_adapter.py` — GEPAFeedbackMetric implementation
+  - `agent/dspy/optimize_meta.py` — CLI script
+  - `tools/collect_traces.sh` — drive N varied agent runs for the trainset
 
-When the user approves the plan, the next two steps on this branch are:
-1. Implement the run-instrumentation patch (§3).
-2. Implement `linter.py` (§5) and validate it on the first 10 traces.
+**Deferred / not yet implemented:**
+- Option C (`linter.py`) — pre-flight prompt linter
+- Option B — replan-step optimization
+- Phase-2 + Phase-1 prompt optimization via the same GEPA pattern

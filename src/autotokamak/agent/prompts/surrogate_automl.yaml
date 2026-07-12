@@ -21,8 +21,9 @@ problem: |
     The `autotokamak` package is already installed (importable as
     `autotokamak`). The Phase-1 dataset lives at
     `../dataset_generation/outputs/dataset.h5` and is symlinked into your
-    workspace as `./dataset.h5`. It has 16 successful fixed-boundary
-    equilibria with this schema:
+    workspace as `./dataset.h5`. It contains N ≈ 500 successful
+    fixed-boundary equilibria (query the actual `bundle.n_samples` at
+    load time — do NOT hardcode 500 or 16 anywhere) with this schema:
 
       grid/R                      : (64,)        float64
       grid/Z                      : (96,)        float64
@@ -41,7 +42,7 @@ problem: |
     load_dataset(h5_path) -> DatasetBundle
             # Fields: inputs (N,5), psi (N,nz,nr), R, Z, source_path.
             # Already filtered to success=True rows.
-    kfold(bundle, *, k=4, test_frac=2/16, seed=0) -> Splits
+    kfold(bundle, *, k=5, test_frac=0.15, seed=0) -> Splits
             # Splits.test_idx + Splits.folds (list of (train_idx, val_idx)).
             # USE THE SAME seed as in surrogate_config.yaml so the scorer
             # reproduces the same partitioning.
@@ -85,11 +86,11 @@ problem: |
 
     # surrogate_config.yaml  (validated against SurrogateConfig)
     dataset_h5: "dataset.h5"            # relative to workspace
-    time_budget_seconds: 300
-    n_pca_components_default: 12
+    time_budget_seconds: 1200           # a few thousand trials fits in this
+    n_pca_components_default: 24        # bigger N supports more components
     seed: 0
-    k_folds: 4
-    test_frac: 0.125                    # = 2/16
+    k_folds: 5
+    test_frac: 0.15
     output_dir: "outputs"
 
     # outputs/search_history.jsonl  (one SearchSpec per line, per round)
@@ -136,7 +137,7 @@ problem: |
          - OUTER LOOP (your decisions):
              * round 1: pick at least two models from the zoo; copy their
                `DEFAULT_SEARCH_SPACES` (you may narrow ranges) and a sensible
-               n_trials per model (5-15 is right for N=16); emit
+               n_trials per model (50-200 is right for N ≈ 500); emit
                search_spec.json to outputs/, append a line to
                search_history.jsonl, then call run_study
              * after run_study, call summarize_study; if any best_params hit
@@ -175,8 +176,56 @@ problem: |
     to call them in the right order.
 
   CONSTRAINTS
-    * Do NOT add tests, a verifier script, a CI config, a .gitignore, or
-      any other extras beyond the deliverables above. PoC, not production.
+    * Do NOT add tests, verifier scripts, smoke tests, CI configs,
+      .gitignore, requirements.txt, archive/backup scripts, dry-run flags,
+      seed_utils modules, or any other extras beyond the deliverables
+      above. Prior runs wasted budget on: smoke_test.py, verify_winner.py,
+      final_validation.py, archive_outputs.py, pca_extractor.py,
+      inspect_pca.py, requirements.txt, outputs.bak.*.tar.gz,
+      env_capture.py, preflight.py, warmup.py, dataset_validate.py,
+      verify_outputs.py, finalize_outputs.py, assemble_search_spec.py,
+      create_final_report.py, pre_cleanup_backup.py,
+      workspace_after_cleanup.txt, decision_record.txt,
+      run_output.txt, prelim_env_check.txt, dataset_validation_report.txt,
+      iteration_logs/, monitoring/, backups/, outputs_backup_*/,
+      outputs_iter_*/, tmp_forbidden_*/, run_surrogate_automl_iter_N.py,
+      surrogate_config_iter_N.yaml, iteration_N_diff.txt,
+      iteration_N_summary.md, iteration_N_run_diff.txt. NONE of these
+      belong in the workspace. If you find yourself about to write one,
+      stop and use that budget for another Optuna trial instead. This is
+      a PoC that measures search efficiency, not a production system.
+
+    * ONE runner, not one-per-iteration. Do NOT clone
+      run_surrogate_automl.py into run_surrogate_automl_iter_1.py /
+      _iter_2.py / _iter_3.py. Do NOT clone surrogate_config.yaml into
+      surrogate_config_iter_1.yaml etc. Iteration state lives in
+      outputs/search_history.jsonl and the growing outputs/study.db —
+      NOT in copies of the runner. Rewriting the runner between iterations
+      is a sign you are not using Optuna correctly.
+
+    * If `import autotokamak` fails, DO NOT invent workarounds
+      (backup/restore/env-capture scripts, iteration_logs, pre_cleanup
+      backups). The package IS installed; the failure means your shell is
+      using the wrong Python. Try `which python3` and `python3 -c "import
+      sys; print(sys.prefix)"` to diagnose; if the venv is not on PATH,
+      report the mismatch in your step summary and STOP — do not attempt
+      to reinstall or work around it. The platform will handle the fix.
+
+    * REVIEWER / PLANNER RULES (applies to the planner's OWN reviewer
+      loop): the planner's reviewer must REJECT plans that add unit
+      tests, CI-friendly quick modes, dry-run flags, requirements files,
+      archive-and-upload sections, or standalone verification scripts.
+      The prompt's deliverable list is COMPLETE and NORMATIVE — do not
+      "add robustness" by extending it. If the reviewer proposes any of
+      these, the planner should IGNORE that feedback and keep the plan
+      focused on the five deliverables and the actual Optuna search.
+      A planner that keeps expanding scope is a broken planner.
+
+    * MINIMUM SEARCH EFFORT: `n_total_trials` in `report.json` MUST be
+      >= 15 across all Optuna studies before you are allowed to emit
+      `action="terminate"`. Terminating with fewer trials means you spent
+      your budget on plumbing instead of the actual model search. The
+      search_efficiency scorer will report zero if you terminate early.
     * Do not run `pip install` or modify the environment. `optuna`,
       `joblib`, `scikit-learn`, `pyyaml`, `h5py`, `numpy`, `matplotlib`,
       and `autotokamak` are already installed.
@@ -190,10 +239,19 @@ problem: |
       `MLPRegressor` directly is graded down.
     * MUST USE the same seed/k_folds/test_frac the config declares so
       the scorer can reproduce the same splits.
-    * EXACTLY THREE files in the workspace ROOT when you finish:
+    * The three DELIVERABLE files at the workspace ROOT must be exactly:
       surrogate_config.yaml, run_surrogate_automl.py, README.md.
-      Everything else goes under outputs/. Delete any helper, sketch,
-      or scratch file before declaring done. Run `ls` to confirm.
+      All artifacts YOU produce (JSON, plots, pickles, DBs) go under
+      outputs/. Delete any helper, sketch, or scratch file you wrote
+      before declaring done.
+      DO NOT touch these paths — they are URSA infrastructure and the
+      symlinked dataset, and moving/renaming/deleting them will crash
+      the agent runtime:
+        - graph_store.sqlite   (URSA's live SQLite; keep at root)
+        - ursa_metrics/        (URSA's per-step logs; keep at root)
+        - dataset.h5           (symlink to the Phase-1 dataset; keep at root)
+      Run `ls` at the end and confirm the three deliverable files are
+      present; the URSA files being present is EXPECTED and correct.
     * After writing the files, RUN
       `python run_surrogate_automl.py surrogate_config.yaml`
       from your current directory and verify the FIVE outputs/ files
@@ -215,7 +273,7 @@ problem: |
     agent_decisiveness and search_efficiency terms will both report zero.
 
 workspace: examples/surrogate_automl
-model: openai:gpt-5.2
+model: openai:gpt-5-mini
 
 feedback_rounds: 3
 
@@ -224,6 +282,20 @@ expected_artifacts:
   - outputs/winner.pkl
   - outputs/report.json
   - outputs/study.db
+
+# Workspace hygiene: consumed by plan_execute_feedback to warn the planner
+# about extras between rounds. Any file at the workspace ROOT not on this
+# list AND not in the URSA infra whitelist is flagged.
+allowed_root_files:
+  - surrogate_config.yaml
+  - run_surrogate_automl.py
+  - README.md
+  - outputs                 # directory holding the agent's artifacts
+infra_root_files:
+  - graph_store.sqlite      # URSA's live SQLite (write; do not touch)
+  - ursa_metrics            # URSA per-step logs
+  - dataset.h5              # symlink to Phase-1 dataset
+  - __pycache__             # Python bytecode cache
 
 symlinks:
   - source: ./ursa

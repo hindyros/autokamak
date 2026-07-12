@@ -43,6 +43,14 @@ EXPECTED_DELIVERABLES = (
     "outputs/report.json",
     "README.md",
 )
+# Structured (automl_loop) workspaces have no agent-authored runner/README —
+# the loop is library code; the per-round decisions live in search_history.
+EXPECTED_DELIVERABLES_STRUCTURED = (
+    "surrogate_config.yaml",
+    "outputs/winner.pkl",
+    "outputs/report.json",
+    "outputs/search_history.jsonl",
+)
 ZOO_MODELS = ("gp", "kernel_ridge", "poly_ridge", "mlp")
 
 WEIGHTS = {
@@ -149,13 +157,24 @@ def _resolve_dataset_path(ws: Path) -> Path | None:
     return None
 
 
-def score_surrogate_run(workspace: str | Path) -> ScoreReport:
-    """Score a Phase-2 workspace produced by the surrogate_automl agent run."""
+def score_surrogate_run(workspace: str | Path, *, mode: str = "codegen") -> ScoreReport:
+    """Score a Phase-2 workspace.
+
+    ``mode="codegen"`` (default): workspace produced by the surrogate_automl
+    agent run (runner script + README expected).
+    ``mode="structured"``: workspace produced by ``surrogate.automl_loop``
+    (no runner script; cleanliness is judged from search_history.jsonl, and
+    the test evaluation uses the frozen shard recorded in report.json when
+    available — the structured winner trains on every train-pool row, so an
+    internal re-split would test on training data).
+    """
     ws = Path(workspace)
     report = ScoreReport(workspace=ws)
+    report.details["mode"] = mode
 
     # -- Hard gate 1: deliverables present --
-    missing = [f for f in EXPECTED_DELIVERABLES if not (ws / f).is_file()]
+    expected = EXPECTED_DELIVERABLES_STRUCTURED if mode == "structured" else EXPECTED_DELIVERABLES
+    missing = [f for f in expected if not (ws / f).is_file()]
     report.hard_gates["deliverables_present"] = not missing
     report.details["missing_deliverables"] = missing
 
@@ -175,23 +194,32 @@ def score_surrogate_run(workspace: str | Path) -> ScoreReport:
     dataset_path = _resolve_dataset_path(ws)
     test_psi_pred = None
     test_psi_true = None
+    shard_path = _resolve_shard_path(parsed_report) if mode == "structured" else None
     if winner_payload is not None and dataset_path is not None:
         try:
             from autotokamak.eval.data import load_dataset, kfold
             from autotokamak.surrogate.automl import predict_with_winner
 
             bundle = load_dataset(dataset_path)
-            # Reproduce the same split the runner used (default seed=0).
-            seed = (
-                int(parsed_report.model_extra.get("seed", 0))
-                if (parsed_report is not None and parsed_report.model_extra)
-                else 0
-            )
-            splits = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=seed)
-            X_test = bundle.inputs[splits.test_idx]
+            if shard_path is not None:
+                # Structured mode: evaluate on the frozen shard the loop
+                # recorded — the winner trained on every train-pool row.
+                shard = load_dataset(shard_path)
+                X_test = shard.inputs
+                test_psi_true = shard.psi
+                report.details["test_set"] = f"frozen shard ({shard_path})"
+            else:
+                # Reproduce the same split the runner used (default seed=0).
+                seed = (
+                    int(parsed_report.model_extra.get("seed", 0))
+                    if (parsed_report is not None and parsed_report.model_extra)
+                    else 0
+                )
+                splits = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=seed)
+                X_test = bundle.inputs[splits.test_idx]
+                test_psi_true = bundle.psi[splits.test_idx]
             test_psi_pred = predict_with_winner(winner_payload, X_test)
-            test_psi_true = bundle.psi[splits.test_idx]
-            expected_shape = (len(splits.test_idx), bundle.psi.shape[1], bundle.psi.shape[2])
+            expected_shape = (len(X_test), bundle.psi.shape[1], bundle.psi.shape[2])
             ok_predict = (
                 isinstance(test_psi_pred, np.ndarray) and test_psi_pred.shape == expected_shape
             )
@@ -260,9 +288,54 @@ def score_surrogate_run(workspace: str | Path) -> ScoreReport:
     report.quality["agent_decisiveness"] = 1.0 if parsed_report.terminated_by == "agent" else 0.0
 
     # -- runner_cleanliness --
-    report.quality["runner_cleanliness"] = _runner_cleanliness(ws / "run_surrogate_automl.py")
+    if mode == "structured":
+        report.quality["runner_cleanliness"] = _history_cleanliness(
+            ws / "outputs/search_history.jsonl"
+        )
+    else:
+        report.quality["runner_cleanliness"] = _runner_cleanliness(
+            ws / "run_surrogate_automl.py"
+        )
 
     return report
+
+
+def score_structured_surrogate_run(workspace: str | Path) -> ScoreReport:
+    """Dotted-path-friendly wrapper: ``score_surrogate_run(mode="structured")``."""
+    return score_surrogate_run(workspace, mode="structured")
+
+
+def _resolve_shard_path(parsed_report) -> Path | None:
+    """Frozen-shard path recorded by ``automl_loop`` in report.json extras."""
+    if parsed_report is None or not parsed_report.model_extra:
+        return None
+    raw = parsed_report.model_extra.get("test_shard_path")
+    if not raw:
+        return None
+    p = Path(str(raw))
+    return p if p.is_file() else None
+
+
+def _history_cleanliness(history_path: Path) -> float:
+    """Structured-mode cleanliness: fraction of history lines with a valid spec."""
+    if not history_path.is_file():
+        return 0.0
+    try:
+        from autotokamak.surrogate.schema import SearchSpec
+
+        lines = [ln for ln in history_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        if not lines:
+            return 0.0
+        ok = 0
+        for ln in lines:
+            try:
+                SearchSpec.model_validate(json.loads(ln).get("spec", {}))
+                ok += 1
+            except Exception:  # noqa: BLE001
+                pass
+        return ok / len(lines)
+    except Exception:  # noqa: BLE001
+        return 0.0
 
 
 def _search_efficiency(study_db_path: Path, winner_name: str) -> float | None:
@@ -327,7 +400,11 @@ def _workspace_root_hygiene(workspace: Path) -> float:
 
 
 def _runner_cleanliness(runner_path: Path) -> float:
-    """Lightweight static check the runner uses our library properly."""
+    """Codegen-mode cleanliness: library-usage check + workspace-root hygiene.
+
+    (Structured-mode workspaces have no agent-authored runner; they are graded
+    by ``_history_cleanliness`` instead.)
+    """
     if not runner_path.is_file():
         return 0.0
     src = runner_path.read_text(encoding="utf-8", errors="replace")
@@ -351,8 +428,10 @@ def _runner_cleanliness(runner_path: Path) -> float:
 
 __all__ = [
     "EXPECTED_DELIVERABLES",
+    "EXPECTED_DELIVERABLES_STRUCTURED",
     "ScoreReport",
     "WEIGHTS",
     "ZOO_MODELS",
+    "score_structured_surrogate_run",
     "score_surrogate_run",
 ]

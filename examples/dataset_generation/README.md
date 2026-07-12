@@ -1,73 +1,73 @@
-# Fixed-boundary Grad–Shafranov dataset generation (autotokamak)
+Dataset generation example for fixed-boundary Grad-Shafranov equilibria
 
-This example generates a small dataset of **fixed-boundary** Grad–Shafranov (GS)
-equilibria using `autotokamak.core`. It sweeps a few geometry / physics parameters
-(`r0`, `a`, `kappa`, `delta`, `Ip`), solves one equilibrium per sample, and interpolates
-poloidal flux `psi(R,Z)` onto a common rectilinear grid for surrogate-model training.
+This example demonstrates a small, config-driven pipeline that samples tokamak
+shape and current parameters, builds LCFS and meshes with autotokamak.core,
+solves Grad-Shafranov equilibria (via OpenFUSIONToolkit through autotokamak),
+and writes a compact HDF5 dataset ready for surrogate-model training.
 
-## Requirements / preflight
+Files
+- dataset_config.yaml  : example configuration (sampling, parameters, grid,
+                         plotting, output path).
+- run_dataset_sweep.py  : runner script. Call with the config path as the sole
+                         argument.
+- README.md             : this file.
 
-This example expects a Python 3.11 environment with these importable packages:
-`PyYAML (yaml)`, `h5py`, `numpy`, `scipy`, `matplotlib`, and `autotokamak`
-(plus its solver backend via OpenFUSIONToolkit/TokaMaker).
+Quick start
+1) From the workspace root run:
+   python run_dataset_sweep.py dataset_config.yaml
 
-The runner performs a lightweight **preflight** at startup: it checks the Python
-version and that these imports succeed before attempting the sweep.
+2) The script will write outputs/dataset.h5 and create diagnostic plots in
+   outputs/plots/ as it runs.
 
-## Run
+What the runner does
+- Samples n_samples parameter vectors (Latin Hypercube or uniform; see
+  dataset_config.yaml).
+- For each sample:
+  - Builds an LCFS with autotokamak.core.geometry.build_lcfs
+  - Builds a mesh with autotokamak.core.geometry.build_mesh
+  - Calls autotokamak.core.solver.solve_equilibrium with an isoflux
+    boundary constraint (the runner records whether the isoflux fitter
+    actually held via get_last_solve_info()['isoflux_used']).
+  - Interpolates the nodal psi values onto a common (R,Z) grid using
+    matplotlib.tri.LinearTriInterpolator (with scipy.griddata fallback).
+  - Writes inputs and outputs into outputs/dataset.h5 and updates
+    diagnostic plots in outputs/plots/.
 
-From this directory:
+Note on isoflux
+The installed OpenFUSIONToolkit build in some environments has a known bug
+where the isoflux constraint fitter fails. The autotokamak solver wrapper
+falls back to an unconstrained solve in that case. Per the example's
+requirements, we record get_last_solve_info()['isoflux_used'] per sample but
+count unconstrained-fallback solves as successful if the final psi(R,Z)
+interpolation contains finite values.
 
-```bash
-python run_dataset_sweep.py dataset_config.yaml
-```
+HDF5 layout (outputs/dataset.h5)
+- /grid/R, /grid/Z           : 1-D float64 coordinate arrays (len nr, nz)
+- /inputs/r0, /a, /kappa, /delta, /Ip : (n_samples,) float64
+- /outputs/psi               : (n_samples, nz, nr) float64 (NaN for failed samples)
+- /outputs/success           : (n_samples,) bool
+- /outputs/isoflux_used      : (n_samples,) bool
+- /outputs/error_msgs        : (n_samples,) utf-8 strings
+- /outputs/solve_info        : (n_samples,) utf-8 JSON strings (solver info)
 
-Output is written to `output.dataset_path` (default: `outputs/dataset.h5`).
+Plots produced (outputs/plots/)
+- running_success.png  : running success fraction vs sample index
+- r0_vs_a.png          : scatter of sampled r0 vs a colored by success
+- latest_psi.png       : image of the most recent successful psi(R,Z)
+- input_histograms.png : histograms of input parameter distributions
 
-## YAML config schema (what matters)
+Limitations and notes
+- This is a PoC runner for dataset generation. It does not provide
+  checkpointing beyond the HDF5 file, nor does it parallelize solves.
+- The script relies on the autotokamak.core API; do not modify core/solver.py
+  or attempt to change OpenFUSIONToolkit internals to force isoflux success.
 
-See `dataset_config.yaml` for a concrete config. Key fields:
+Troubleshooting
+- If you get ModuleNotFoundError for required packages (numpy, scipy, h5py,
+  matplotlib, pyyaml, autotokamak, OpenFUSIONToolkit) the environment is
+  misconfigured. Do not pip-install inside this project; report the error.
 
-- `sampling.method`: `lhs` (Latin hypercube) or `uniform`
-- `sampling.n_samples`, `sampling.seed`
-- `parameters`: mapping of swept parameters to `{low, high}` (order matters)
-- `fixed`: `z0`, `F0`, `npts`, `mesh_dx`, `solver_order` (must be 1), `Ip_ratio`
-- `output_grid`: `r: {min, max, n}` and `z: {min, max, n}`
-- `output.dataset_path`: HDF5 output path
-
-## Conventions and failure semantics
-
-- Coordinates: `R` is major radius [m], `Z` is vertical [m].
-- `psi` is the Grad–Shafranov poloidal flux as returned by TokaMaker and then
-  interpolated to the `(R,Z)` grid. Units/normalization are solver-defined.
-- `success[i] == True` means the equilibrium solve completed without raising and the
-  grid interpolation produced an array for sample `i`.
-- If a sample fails (solve or interpolation exception), its `psi[i, :, :]` is left as
-  `NaN` everywhere and `success[i] == False`.
-- Even for successful samples, points outside the triangulation / convex hull may
-  remain `NaN` after interpolation.
-
-## Dataset layout (HDF5)
-
-All datasets use gzip compression (level 4). `/outputs/psi` is chunked as `(1, nz, nr)`
-for efficient per-sample reads.
-
-- `/grid/R` : `(nr,)` float64, R coordinates [m]
-- `/grid/Z` : `(nz,)` float64, Z coordinates [m]
-
-- `/inputs/r0`    : `(N,)` float64 [m]
-- `/inputs/a`     : `(N,)` float64 [m]
-- `/inputs/kappa` : `(N,)` float64 [1]
-- `/inputs/delta` : `(N,)` float64 [1]
-- `/inputs/Ip`    : `(N,)` float64 [A]
-
-- `/outputs/psi`     : `(N, nz, nr)` float64, axis order `psi[sample, z_index, r_index]`
-- `/outputs/success` : `(N,)` bool
-
-Self-describing/provenance extras:
-- `/config_yaml` : scalar bytes dataset with the full YAML config text
-- `/parameter_names` : `(5,)` list of swept parameter names (stored order)
-- `/parameter_bounds` : `(5,2)` float64 array of `[low, high]` (columns annotated)
-- `/inputs_matrix` : `(N,5)` float64 matrix matching `/parameter_names`
-- root attributes include: `created_utc`, `git_commit` (if available), units, and
-  interpolation method notes
+Contact
+- For issues with the isoflux fitter, contact the OpenFUSIONToolkit/maintainer
+  team. This runner records the isoflux flag per sample but treats
+  unconstrained-fallback solves as valid per the dataset-generation rules.

@@ -123,16 +123,21 @@ def kfold(
     The test set is intended to be evaluated EXACTLY ONCE, by the scorer,
     after the agent picks a winner. The folds are what the inner Optuna
     objective averages over.
+
+    ``test_frac=0.0`` yields an empty ``test_idx`` — used when an EXTERNAL
+    frozen test shard exists (meta-loop) so no samples are wasted on a
+    second internal holdout.
     """
     n = bundle.n_samples
-    if n < k + 2:
+    n_test = 0 if test_frac == 0.0 else max(1, int(round(test_frac * n)))
+    if n < k + n_test:
         raise ValueError(
-            f"Need at least k+2={k+2} samples for k={k}-fold + 1 test sample; got {n}"
+            f"Need at least k+n_test={k + n_test} samples for k={k}-fold "
+            f"+ {n_test} test sample(s); got {n}"
         )
 
     rng = np.random.default_rng(int(seed))
     perm = rng.permutation(n)
-    n_test = max(1, int(round(test_frac * n)))
     test_idx = np.sort(perm[:n_test])
     rest = perm[n_test:]
 

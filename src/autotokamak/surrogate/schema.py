@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ModelKind = Literal["gp", "kernel_ridge", "poly_ridge", "mlp"]
@@ -62,8 +62,37 @@ class SearchSpec(BaseModel):
     models: List[ModelSpec] = Field(min_length=1)
     n_pca_components: int = Field(ge=1, le=64)
     val_metric: Literal["psi_rmse"] = "psi_rmse"
-    action: Literal["initial", "widen_range", "add_model", "tighten_around_best", "terminate"]
+    # "continue" is the label the structured automl_loop uses for rounds >= 2
+    # that are not otherwise categorized; the other values are what the
+    # codegen-path agent emits.
+    action: Literal[
+        "initial", "continue", "widen_range", "add_model", "tighten_around_best", "terminate"
+    ]
     rationale: str = ""
+
+
+class RoundDecision(BaseModel):
+    """One typed decision per ``automl_loop`` round.
+
+    This is the structured replacement for the codegen agent's free-form
+    per-round logic: the LLM (or a scripted test double) emits exactly this
+    shape, and the deterministic loop executes it. Search-space widening /
+    tightening is expressed simply as the concrete ``search_space`` for this
+    round — the picker copies the defaults from its round context and edits
+    the ranges.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["run_round", "terminate"]
+    models: List[ModelSpec] = Field(default_factory=list)
+    n_pca_components: Optional[int] = Field(default=None, ge=1, le=64)
+    rationale: str = ""
+
+    @model_validator(mode="after")
+    def _models_required_for_run(self) -> "RoundDecision":
+        if self.action == "run_round" and not self.models:
+            raise ValueError("action='run_round' requires at least one ModelSpec")
+        return self
 
 
 # ----------------------------- study result ----------------------------- #
@@ -155,6 +184,7 @@ __all__ = [
     "ModelSpec",
     "ModelStudyResult",
     "ParamRange",
+    "RoundDecision",
     "SearchSpec",
     "StudyResult",
     "SurrogateConfig",

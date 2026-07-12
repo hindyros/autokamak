@@ -23,7 +23,11 @@ _OFT_ENV_CACHE: Any = None
 # value) so callers can opt in without forcing every existing caller to unpack
 # a tuple. Currently records whether the isoflux constraint was honored or
 # whether we fell back to the unconstrained solve.
-_LAST_SOLVE_INFO: Dict[str, Any] = {"isoflux_used": None, "fallback_reason": None}
+_LAST_SOLVE_INFO: Dict[str, Any] = {
+    "isoflux_used": None,
+    "fallback_reason": None,
+    "boundary_enforced_by": "none",
+}
 
 
 def get_last_solve_info() -> Dict[str, Any]:
@@ -31,11 +35,20 @@ def get_last_solve_info() -> Dict[str, Any]:
 
     Keys:
       isoflux_used    : bool | None  -- True if the isoflux-constrained solve
-                                        succeeded; False if we fell back to
-                                        the unconstrained solve; None if no
+                                        succeeded; False if the constraint was
+                                        not applied (fixed-boundary solves, or
+                                        a free-boundary fallback); None if no
                                         solve has run yet in this process.
       fallback_reason : str | None   -- the exception message that triggered
-                                        the fallback, if any.
+                                        a free-boundary fallback, if any. None
+                                        for fixed-boundary solves (nothing
+                                        failed; the constraint is inapplicable).
+      boundary_enforced_by : str     -- "mesh" for fixed-boundary solves (the
+                                        LCFS is the mesh boundary and psi=const
+                                        there by construction); "isoflux_fit"
+                                        when the constrained solve succeeded;
+                                        "none" for an unconstrained free-
+                                        boundary fallback.
     """
     return dict(_LAST_SOLVE_INFO)
 
@@ -149,30 +162,54 @@ def solve_equilibrium(
     lcfs: np.ndarray,
     cfg: Dict[str, Any],
 ) -> Any:
-    """End-to-end: create solver → seed psi → set isoflux constraint → solve.
+    """End-to-end: create solver → seed psi → (maybe constrain) → solve.
 
-    If the isoflux-constrained solve fails (some OFT builds choke on certain
-    mesh/shaping combinations), we rebuild a fresh ``TokaMaker`` on the *same*
-    OFT env (kernel-level singleton) and solve without the constraint, with a
-    loud warning. This preserves the exact retry behaviour from pre-refactor.
+    Fixed-boundary solves (``solver.free_boundary == False``) never apply the
+    isoflux constraint: the LCFS *is* the mesh boundary, where psi = const
+    holds by construction, so the shape is enforced exactly already. OFT's
+    isoflux constraint fitting exists to adjust free-boundary COIL currents;
+    on a plasma-only mesh there are no coils, the fitting system is singular
+    (LAPACK DGETRF info=1), and ``solve()`` fails unconditionally with
+    "Isoflux fitting failed" — for every shape, including reference configs.
+    Root-caused 2026-07-10; previously this cost a doomed constrained solve
+    plus a full solver rebuild on every dataset sample.
+
+    Free-boundary solves keep the try/fallback: attempt the isoflux-
+    constrained solve, and on failure rebuild a fresh ``TokaMaker`` on the
+    *same* OFT env (kernel-level singleton) and solve unconstrained, with a
+    loud warning.
 
     Returns the solved TokaMaker instance.
     """
     global _LAST_SOLVE_INFO
-    _LAST_SOLVE_INFO = {"isoflux_used": None, "fallback_reason": None}
+    _LAST_SOLVE_INFO = {"isoflux_used": None, "fallback_reason": None,
+                        "boundary_enforced_by": "none"}
+
+    free_boundary = bool((cfg.get("solver") or {}).get("free_boundary", False))
 
     env, gs = make_solver(mesh_pts=mesh_pts, mesh_lc=mesh_lc, mesh_reg=mesh_reg, cfg=cfg)
     _seed_psi(gs, cfg)
 
-    try:
-        gs.set_isoflux(np.asarray(lcfs, dtype=float))
+    if not free_boundary:
         gs.solve()
-        _LAST_SOLVE_INFO = {"isoflux_used": True, "fallback_reason": None}
+        _LAST_SOLVE_INFO = {
+            "isoflux_used": False,
+            "fallback_reason": None,
+            "boundary_enforced_by": "mesh",
+        }
+        return gs
+
+    try:
+        gs.set_isoflux_constraints(np.asarray(lcfs, dtype=float))
+        gs.solve()
+        _LAST_SOLVE_INFO = {"isoflux_used": True, "fallback_reason": None,
+                            "boundary_enforced_by": "isoflux_fit"}
         return gs
     except Exception as e:  # noqa: BLE001
         reason = str(e)
         print(
-            f"WARNING: set_isoflux/solve failed ({reason}). Falling back to unconstrained solve."
+            f"WARNING: isoflux-constrained solve failed ({reason}). "
+            f"Falling back to unconstrained solve."
         )
 
     # Retry path: reuse the existing OFT env (cannot create a new one in the
@@ -180,7 +217,8 @@ def solve_equilibrium(
     _, gs2 = make_solver(mesh_pts=mesh_pts, mesh_lc=mesh_lc, mesh_reg=mesh_reg, cfg=cfg, env=env)
     _seed_psi(gs2, cfg)
     gs2.solve()
-    _LAST_SOLVE_INFO = {"isoflux_used": False, "fallback_reason": reason}
+    _LAST_SOLVE_INFO = {"isoflux_used": False, "fallback_reason": reason,
+                        "boundary_enforced_by": "none"}
     return gs2
 
 

@@ -1,14 +1,14 @@
 sampling:
-  method: lhs
-  n_samples: 16
+  method: "lhs"
+  n_samples: 500
   seed: 0
 
 parameters:
-  r0:    {low: 0.35, high: 0.55}
-  a:     {low: 0.10, high: 0.20}
-  kappa: {low: 1.0,  high: 1.6}
-  delta: {low: 0.0,  high: 0.4}
-  Ip:    {low: 80000.0, high: 200000.0}
+  r0: {low: 0.35, high: 0.55}
+  a:  {low: 0.10, high: 0.20}
+  kappa: {low: 1.0, high: 1.6}
+  delta: {low: 0.0, high: 0.4}
+  Ip: {low: 80000, high: 200000}
 
 fixed:
   z0: 0.0
@@ -22,5 +22,9 @@ output_grid:
   R: {min: 0.15, max: 0.80, n: 64}
   Z: {min: -0.40, max: 0.40, n: 96}
 
-output:
-  dataset_path: outputs/dataset.h5
+output_path: "outputs/dataset.h5"
+
+plotting:
+  enabled: true
+  every_n_samples: 1
+  output_dir: "outputs/plots"
