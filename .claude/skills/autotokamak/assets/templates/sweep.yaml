@@ -1,0 +1,54 @@
+# Discretization sweep template — many solves, deep-merged overrides.
+#
+# Consumed by:
+#   python examples/config_driven_equilibrium/run_discretization_sweep.py <this file>
+#   (or) python scripts/sweep_parallel.py --config <this file> --workers N
+#
+# `base_config` is a path to an equilibrium YAML (see equilibrium.yaml). Each
+# entry in `cases[]` deep-merges its `overrides:` mapping into the base config,
+# then re-validates via EquilibriumConfig.
+#
+# `case_id` names the case's output directory. It should be filesystem-safe.
+
+base_config: discretization_config.yaml     # relative to this file's directory
+
+cases:
+  - case_id: dx0.020_p1
+    overrides:
+      mesh:
+        regions:
+          - name: plasma          # override the WHOLE regions list, not by index
+            type: plasma
+            dx: 0.020
+      solver:
+        order: 1
+
+  - case_id: dx0.015_p2
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            type: plasma
+            dx: 0.015
+      solver:
+        order: 2
+
+  - case_id: dx0.010_p2
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            type: plasma
+            dx: 0.010
+      solver:
+        order: 2
+
+  - case_id: dx0.010_p3
+    overrides:
+      mesh:
+        regions:
+          - name: plasma
+            type: plasma
+            dx: 0.010
+      solver:
+        order: 3

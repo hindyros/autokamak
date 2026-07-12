@@ -363,8 +363,48 @@ def _search_efficiency(study_db_path: Path, winner_name: str) -> float | None:
         return None
 
 
+ALLOWED_ROOT_FILES = {
+    "surrogate_config.yaml",
+    "run_surrogate_automl.py",
+    "README.md",
+}
+
+PLATFORM_ROOT_INFRA = {
+    "graph_store.sqlite",   # URSA state
+    "ursa_metrics",         # URSA per-step logs
+    "dataset.h5",           # symlinked in by the runner
+    "overlay_prompt.yaml",  # meta-loop's overlay for extend_search
+    "outputs",              # the deliverable outputs dir itself
+    "__pycache__",          # Python bytecode cache
+    ".DS_Store",            # macOS junk (ignore, don't penalize)
+}
+
+
+def _workspace_root_hygiene(workspace: Path) -> float:
+    """Fraction of workspace-root entries that are legitimate.
+
+    1.0 when workspace root has ONLY the 3 deliverables + platform infra.
+    Penalizes each extra file/dir linearly; hits 0.0 at 10+ extras. Catches
+    the sprawl the agent invents when it panics — env_capture.py, preflight.py,
+    warmup.py, iteration_logs/, backups/, outputs_backup_*, run_*_iter_N.py,
+    etc. — even when those exact names aren't in the CONSTRAINT text.
+    """
+    if not workspace.is_dir():
+        return 0.0
+    try:
+        seen = {p.name for p in workspace.iterdir()}
+    except OSError:
+        return 0.0
+    extras = seen - ALLOWED_ROOT_FILES - PLATFORM_ROOT_INFRA
+    return float(max(0.0, 1.0 - len(extras) / 10.0))
+
+
 def _runner_cleanliness(runner_path: Path) -> float:
-    """Lightweight static check the runner uses our library properly."""
+    """Codegen-mode cleanliness: library-usage check + workspace-root hygiene.
+
+    (Structured-mode workspaces have no agent-authored runner; they are graded
+    by ``_history_cleanliness`` instead.)
+    """
     if not runner_path.is_file():
         return 0.0
     src = runner_path.read_text(encoding="utf-8", errors="replace")
@@ -381,7 +421,9 @@ def _runner_cleanliness(runner_path: Path) -> float:
     n_dirty = sum(1 for pat in dirty if re.search(pat, src))
     clean_frac = n_clean / max(len(clean), 1)
     dirty_penalty = min(n_dirty / max(len(dirty), 1), 1.0)
-    return float(max(0.0, clean_frac - dirty_penalty))
+    import_score = float(max(0.0, clean_frac - dirty_penalty))
+    hygiene_score = _workspace_root_hygiene(runner_path.parent)
+    return 0.5 * import_score + 0.5 * hygiene_score
 
 
 __all__ = [

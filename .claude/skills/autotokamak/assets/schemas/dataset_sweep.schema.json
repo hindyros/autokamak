@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "FixedKnobs": {
+      "additionalProperties": false,
+      "description": "The non-per-sample knobs the runner needs.",
+      "properties": {
+        "z0": {
+          "default": 0.0,
+          "title": "Z0",
+          "type": "number"
+        },
+        "F0": {
+          "default": 0.10752,
+          "title": "F0",
+          "type": "number"
+        },
+        "npts": {
+          "default": 80,
+          "exclusiveMinimum": 0,
+          "maximum": 1000,
+          "title": "Npts",
+          "type": "integer"
+        },
+        "mesh_dx": {
+          "default": 0.015,
+          "exclusiveMinimum": 0.0,
+          "title": "Mesh Dx",
+          "type": "number"
+        },
+        "solver_order": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Solver Order",
+          "type": "integer"
+        },
+        "Ip_ratio": {
+          "default": 1.0,
+          "title": "Ip Ratio",
+          "type": "number"
+        },
+        "init_psi_method": {
+          "default": "isoflux",
+          "enum": [
+            "isoflux",
+            "tokamaker_default"
+          ],
+          "title": "Init Psi Method",
+          "type": "string"
+        }
+      },
+      "title": "FixedKnobs",
+      "type": "object"
+    },
+    "GridAxis": {
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "title": "Min",
+          "type": "number"
+        },
+        "max": {
+          "title": "Max",
+          "type": "number"
+        },
+        "n": {
+          "maximum": 4096,
+          "minimum": 2,
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min",
+        "max",
+        "n"
+      ],
+      "title": "GridAxis",
+      "type": "object"
+    },
+    "OutputGrid": {
+      "additionalProperties": false,
+      "properties": {
+        "R": {
+          "$ref": "#/$defs/GridAxis"
+        },
+        "Z": {
+          "$ref": "#/$defs/GridAxis"
+        }
+      },
+      "required": [
+        "R",
+        "Z"
+      ],
+      "title": "OutputGrid",
+      "type": "object"
+    },
+    "ParamBounds": {
+      "additionalProperties": false,
+      "properties": {
+        "low": {
+          "title": "Low",
+          "type": "number"
+        },
+        "high": {
+          "title": "High",
+          "type": "number"
+        }
+      },
+      "required": [
+        "low",
+        "high"
+      ],
+      "title": "ParamBounds",
+      "type": "object"
+    },
+    "SamplingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "default": "lhs",
+          "enum": [
+            "lhs",
+            "uniform"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "n_samples": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "N Samples",
+          "type": "integer"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n_samples"
+      ],
+      "title": "SamplingConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Programmatic equivalent of the Phase-1 agent's ``dataset_config.yaml``.\n\nThe meta-agent's ``regen_dataset`` action constructs one of these from a\nbase config + an overrides dict and hands it to ``data.sweep.run_sweep``.",
+  "properties": {
+    "sampling": {
+      "$ref": "#/$defs/SamplingConfig"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ParamBounds"
+      },
+      "title": "Parameters",
+      "type": "object"
+    },
+    "fixed": {
+      "$ref": "#/$defs/FixedKnobs"
+    },
+    "output_grid": {
+      "$ref": "#/$defs/OutputGrid"
+    },
+    "output_path": {
+      "default": "dataset.h5",
+      "title": "Output Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "sampling",
+    "parameters",
+    "output_grid"
+  ],
+  "title": "SweepConfig",
+  "type": "object"
+}
