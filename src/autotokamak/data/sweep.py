@@ -7,16 +7,13 @@ LLM. The agent-authored runner stays as-is for the standalone Phase-1
 workflow; this is the same code path for cases where the LLM round-trip
 adds no value.
 
-HDF5 schema written here matches the agent-authored contract exactly:
-
-    grid/R, grid/Z                        : (nr,), (nz,) float64
-    inputs/{r0,a,kappa,delta,Ip}          : (N,) float64
-    outputs/psi                           : (N, nz, nr) float64
-    outputs/success                       : (N,) bool
-    outputs/isoflux_used                  : (N,) bool
-
-So a dataset produced here is indistinguishable from one produced by the
-Phase-1 agent run downstream consumers (Phase-2 scorer, ``eval/data.py``).
+The HDF5 layout is owned by ``autotokamak.data.h5io`` (single source of
+truth for grid/inputs/outputs groups); this module delegates the write to
+``h5io.write_h5_arrays``, which is also atomic — a sweep killed mid-write
+leaves either the previous file or the complete new one, never a truncated
+dataset. A dataset produced here is indistinguishable from one produced by
+the Phase-1 agent runner to downstream consumers (Phase-2 scorer,
+``eval/data.py``, the meta-loop's merge/split helpers).
 """
 
 from __future__ import annotations
@@ -107,10 +104,9 @@ def run_sweep(cfg: SweepConfig, output_dir: Path | str) -> SweepResult:
     SweepResult
         Counts + path to the written file + config hash (for trace).
     """
-    import h5py
-
     from autotokamak.core.geometry import build_lcfs, build_mesh
     from autotokamak.core.solver import get_last_solve_info, solve_equilibrium
+    from autotokamak.data.h5io import DatasetArrays, write_h5_arrays
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -184,17 +180,17 @@ def run_sweep(cfg: SweepConfig, output_dir: Path | str) -> SweepResult:
             success[i] = False
             isoflux_used[i] = False
 
-    with h5py.File(out_path, "w") as h5:
-        g_grid = h5.create_group("grid")
-        g_grid.create_dataset("R", data=R, dtype="f8")
-        g_grid.create_dataset("Z", data=Z, dtype="f8")
-        g_in = h5.create_group("inputs")
-        for j, p in enumerate(PARAM_ORDER):
-            g_in.create_dataset(p, data=X[:, j].astype(np.float64), dtype="f8")
-        g_out = h5.create_group("outputs")
-        g_out.create_dataset("psi", data=psi_out, dtype="f8")
-        g_out.create_dataset("success", data=success, dtype=np.bool_)
-        g_out.create_dataset("isoflux_used", data=isoflux_used, dtype=np.bool_)
+    write_h5_arrays(
+        out_path,
+        DatasetArrays(
+            R=R,
+            Z=Z,
+            inputs={p: X[:, j].astype(np.float64) for j, p in enumerate(PARAM_ORDER)},
+            psi=psi_out,
+            success=success,
+            isoflux_used=isoflux_used,
+        ),
+    )
 
     return SweepResult(
         dataset_path=str(out_path),

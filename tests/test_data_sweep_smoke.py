@@ -83,3 +83,19 @@ def test_run_sweep_outputs_load_through_eval_data(tmp_path: Path):
     bundle = load_dataset(result.dataset_path)
     assert bundle.n_samples == result.n_succeeded
     assert bundle.grid_shape == (24, 16)
+
+
+def test_run_sweep_output_roundtrips_through_h5io(tmp_path: Path):
+    """run_sweep delegates the write to h5io — the layout owner must be able
+    to read its own output (this is what the meta-loop's merge/split rely on)."""
+    from autotokamak.data.h5io import read_h5_arrays
+    from autotokamak.data.schema import SweepConfig
+    from autotokamak.data.sweep import run_sweep
+
+    cfg = SweepConfig.model_validate(_tiny_config())
+    result = run_sweep(cfg, tmp_path)
+
+    arrays = read_h5_arrays(result.dataset_path)
+    assert arrays.n_rows == result.n_requested
+    assert int(arrays.success.sum()) == result.n_succeeded
+    assert arrays.psi.shape == (result.n_requested, 24, 16)
