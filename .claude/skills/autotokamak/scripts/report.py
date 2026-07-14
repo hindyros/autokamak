@@ -179,9 +179,17 @@ def _load_search_history(p: Path) -> list[dict]:
         if not line:
             continue
         try:
-            out.append(json.loads(line))
+            rec = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(rec.get("spec"), dict):
+            merged = dict(rec["spec"])
+            if isinstance(rec.get("summary"), dict):
+                merged["summary"] = rec["summary"]
+            if rec.get("elapsed_seconds") is not None:
+                merged["elapsed_seconds"] = rec["elapsed_seconds"]
+            rec = merged
+        out.append(rec)
     out.sort(key=lambda r: r.get("round", 0))
     return out
 
@@ -288,9 +296,16 @@ def _find_physics_config(workspace: Path) -> tuple[dict | None, str | None]:
         if grandparent.is_file():
             return _load_yaml(grandparent), str(grandparent)
 
-    fallback = workspace.parent / "dataset_generation" / "dataset_config.yaml"
-    if fallback.is_file():
-        return _load_yaml(fallback), str(fallback)
+    if surr_cfg and isinstance(surr_cfg.get("dataset_h5"), str):
+        h5_dir = (workspace / surr_cfg["dataset_h5"]).resolve().parent
+        iter_cfgs = sorted(h5_dir.glob("iter*_config.yaml"))
+        if iter_cfgs:
+            return _load_yaml(iter_cfgs[-1]), str(iter_cfgs[-1])
+
+    for anc in [workspace, *list(workspace.parents)[:5]]:
+        cand = anc / "dataset_generation" / "dataset_config.yaml"
+        if cand.is_file():
+            return _load_yaml(cand), str(cand)
 
     return None, None
 
