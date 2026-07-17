@@ -37,6 +37,10 @@ notes/
 # Run outputs (generated, never commit)
 outputs/
 
+# Pipeline mode outputs — examples/<workspace>/fast/ and ursa/ are live run artifacts
+examples/*/fast/
+examples/*/ursa/
+
 # URSA runtime scratch (created inside agent workspaces)
 graph_store.sqlite
 ursa_metrics/
