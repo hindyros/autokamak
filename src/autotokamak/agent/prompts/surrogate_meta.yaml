@@ -19,3 +19,8 @@ phase2_prompt: src/autotokamak/agent/prompts/surrogate_automl.yaml
 
 workspace: examples/surrogate_meta
 model: openai:gpt-5.2
+
+# Phase-2 execution strategy.
+# "structured" = Optuna + DSPy library calls (fast, no code-gen, default)
+# "codegen"    = URSA PlanningAgent + ExecutionAgent writes the runner from scratch
+phase2_mode: structured

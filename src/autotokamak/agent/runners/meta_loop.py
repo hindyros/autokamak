@@ -152,6 +152,7 @@ def run(
     phase2_time_budget_override: Optional[int] = None,
     use_baseline_picker: bool = False,
     workspace_override: Optional[str] = None,
+    phase2_mode_override: Optional[str] = None,
     target_rmse_override: Optional[float] = None,
     target_rmse_ratio_override: Optional[float] = None,
 ) -> MetaReport:
@@ -159,6 +160,10 @@ def run(
 
     ``model_override`` and ``max_iterations_override``, if set, win over the
     values in the meta YAML — convenient for cheap test runs.
+
+    ``phase2_mode_override`` selects the Phase-2 execution strategy:
+      "structured" (default) — Optuna + DSPy library (fast, no code-gen)
+      "codegen"             — URSA PlanningAgent + ExecutionAgent writes the runner
 
     ``use_baseline_picker=True`` forces the in-code baseline DSPy module
     (ignoring any saved optimized prompt). Used for A/B comparison after
@@ -169,6 +174,12 @@ def run(
         meta_config = meta_config.model_copy(update={"model": model_override})
     if max_iterations_override is not None:
         meta_config = meta_config.model_copy(update={"max_iterations": int(max_iterations_override)})
+    if phase2_mode_override is not None:
+        if phase2_mode_override not in ("structured", "codegen"):
+            raise ValueError(
+                f"phase2_mode_override must be 'structured' or 'codegen', got {phase2_mode_override!r}"
+            )
+        meta_config = meta_config.model_copy(update={"phase2_mode": phase2_mode_override})
     if target_rmse_override is not None:
         meta_config = meta_config.model_copy(update={"target_rmse": float(target_rmse_override)})
     if target_rmse_ratio_override is not None:
@@ -508,7 +519,21 @@ def main():
         help="Early-stop when shard RMSE <= ratio * baseline RMSE "
              "(scale-free; e.g. 0.3).",
     )
+    parser.add_argument(
+        "--mode",
+        choices=("fast", "ursa"),
+        default=None,
+        help="Phase-2 execution mode: 'fast' (Optuna+DSPy library, default) or "
+             "'ursa' (hybrid: URSA code-gen for nested Phase-2 searches). "
+             "Equivalent to --phase2-mode structured|codegen.",
+    )
     args = parser.parse_args()
+
+    phase2_mode = None
+    if args.mode == "fast":
+        phase2_mode = "structured"
+    elif args.mode == "ursa":
+        phase2_mode = "codegen"
 
     run(
         config_path=args.config,
@@ -520,6 +545,7 @@ def main():
         phase2_time_budget_override=args.time_budget_seconds,
         use_baseline_picker=args.use_baseline,
         workspace_override=args.workspace,
+        phase2_mode_override=phase2_mode,
         target_rmse_override=args.target_rmse,
         target_rmse_ratio_override=args.target_rmse_ratio,
     )
