@@ -18,6 +18,8 @@ Auth: CURSOR_API_KEY env, or a prior interactive ``cursor-agent login``.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -82,20 +84,43 @@ class CursorHarness(Harness):
         status, error, tail = "completed", None, ""
         usage, result_evt = None, None
         try:
-            proc = subprocess.run(
+            # Own process group + killpg, not subprocess.run(timeout=...):
+            # that kills only the direct child, then blocks in communicate()
+            # until grandchildren release the inherited pipes. See the note
+            # in pi.py — the identical pattern deadlocked a pi cell for 9h.
+            # It matters more here: this adapter already documents a known
+            # cursor-agent "-p hang mode", so the timeout path is load-bearing.
+            proc = subprocess.Popen(
                 _argv(task.render_prompt(self.name) + self.workspace_note(workspace),
                       self.resolve_model(task, model)),
                 cwd=workspace,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
+                start_new_session=True,
             )
-            events_path.write_text(proc.stdout, encoding="utf-8")
-            if proc.stderr:
-                (run_dir / "cursor_stderr.log").write_text(proc.stderr, encoding="utf-8")
-            tail = _events_tail(proc.stdout)
-            usage, result_evt = _final_result(proc.stdout)
-            if proc.returncode != 0:
+            try:
+                out, err = proc.communicate(timeout=timeout)
+                returncode = proc.returncode
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+                out, err = proc.communicate()
+                status = "timeout"
+                error = f"exceeded {timeout}s (known -p hang mode — killed)"
+                returncode = None
+
+            if out:
+                events_path.write_text(out, encoding="utf-8")
+                tail = _events_tail(out)
+                usage, result_evt = _final_result(out)
+            if err:
+                (run_dir / "cursor_stderr.log").write_text(err, encoding="utf-8")
+            if returncode is None:
+                pass  # already marked timeout above
+            elif returncode != 0:
                 # Prefer the stream's own verdict (parity with claude_sdk,
                 # which keys off ResultMessage.subtype): a non-zero exit
                 # after a successful final result event is a shutdown
@@ -105,17 +130,10 @@ class CursorHarness(Harness):
                     error = None
                 else:
                     status = "errored"
-                    error = f"cursor-agent exit {proc.returncode}: {proc.stderr[-500:]}"
+                    error = f"cursor-agent exit {returncode}: {(err or '')[-500:]}"
             elif result_evt and result_evt.get("is_error"):
                 status = "errored"
                 error = f"cursor result is_error (subtype={result_evt.get('subtype')})"
-        except subprocess.TimeoutExpired as exc:
-            status, error = "timeout", f"exceeded {timeout}s (known -p hang mode — killed)"
-            # keep the partial stream — diagnostics + token usage up to the kill
-            partial = exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            if partial:
-                events_path.write_text(partial, encoding="utf-8")
-                usage, _ = _final_result(partial)
         except FileNotFoundError:
             status, error = "errored", f"'{CURSOR_BIN}' not found on PATH"
         except KeyboardInterrupt:

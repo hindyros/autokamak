@@ -1,0 +1,45 @@
+# ACTIVE-LEARNING CONTROL ARM (docs/active_learning_design.md D5, system paper §5.7).
+#
+# The one experiment the paper's central active-learning claim rests on, and
+# the one that has never been run. Two arms, identical in every respect
+# except how the new solver calls are chosen:
+#
+#   treatment: forced enrich_active   (residual-UCB, targets measured weakness)
+#   control:   forced regen_dataset   (blind space-filling append)
+#
+# Driven by tools/run_control_arm.py, which supplies the forced picker from
+# autotokamak.policies.forced. Both arms get the SAME enrich_n_new per
+# iteration, because the question is quality PER EXPENSIVE SOLVE.
+#
+# eval_envelope is mandatory here: with a seed-shard eval set, enrich_active
+# can sample new geometries the eval set never covers, and the comparison
+# measures the wrong thing. The envelope also enables per-cell scoring, so
+# the headline metric is WORST-CELL accuracy — an adaptive method should
+# earn its keep exactly where the model is weakest.
+
+max_iterations: 4          # 1 warm-up (extend_search) + 3 data iterations
+seed: 0
+
+initial_dataset_h5: examples/dataset_generation/L0/outputs/dataset.h5
+base_sweep_config: examples/dataset_generation/dataset_config.yaml
+phase2_prompt: src/autotokamak/agent/prompts/surrogate_automl.yaml
+
+# Identical per-iteration solver budget for both arms. Do not vary this
+# between arms; it is the denominator of the whole comparison.
+enrich_n_new: 200
+
+workspace: examples/surrogate_meta
+model: openai:gpt-5.2      # unused: the forced picker makes no LLM calls
+phase2_mode: structured
+
+# No early stop. Both arms must run the full iteration count so the
+# per-solve comparison is over an equal budget; a target would let one arm
+# exit early and make the arms incomparable.
+
+eval_envelope:
+  n_eval: 256
+  seed: 1234
+  n_bins: 2
+  parameters:
+    kappa: {low: 1.0, high: 1.8}
+    delta: {low: 0.0, high: 0.5}

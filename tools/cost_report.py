@@ -131,8 +131,15 @@ def analyze_run(run_dir: Path, prices: dict) -> dict:
         usage = _cursor_usage_from_events(run_dir / "cursor_events.jsonl")
 
     toks = _tokens_normalized(usage)
+    unpriced_model = ""
     if cost is None and toks:
         p = _price_for(result.get("model", ""), prices)
+        if not p:
+            # Tokens in hand but no price entry: say so explicitly rather
+            # than reporting a blank that reads like "no data". Every
+            # cursor cell and every unpinned model lands here until the
+            # price table covers it.
+            unpriced_model = result.get("model", "") or "(unknown model)"
         if p:
             cost = round(
                 toks.get("in", 0) / 1e6 * p["in"]
@@ -163,7 +170,8 @@ def analyze_run(run_dir: Path, prices: dict) -> dict:
         "tok_out": toks.get("out", ""),
         "tok_cache": toks.get("cache_read", ""),
         "cost_usd": cost if cost is not None else "",
-        "cost_source": source or "proxy-only",
+        "cost_source": source or (f"unpriced:{unpriced_model}" if unpriced_model
+                                   else "proxy-only"),
         "n_solves": n_solves,
         "rel_l2_mean": round(fs["test_rel_l2"]["mean"], 4)
                         if isinstance(fs.get("test_rel_l2"), dict)
@@ -182,6 +190,14 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     exp_dir = Path(args.experiments_dir) if args.experiments_dir else repo_root / "experiments"
     prices = dict(DEFAULT_PRICES)
+    # Committed, dated price table wins over the built-ins; --price-table
+    # still wins over both. Keeping prices in a versioned asset means a
+    # published cost figure can be traced to the rates it was computed with.
+    shared = repo_root / "benchmarks" / "assets" / "prices.json"
+    if shared.is_file():
+        data = json.loads(shared.read_text())
+        prices.update({k: v for k, v in (data.get("prices") or {}).items()
+                       if isinstance(v, dict) and v.get("in") is not None})
     if args.price_table:
         prices.update(json.loads(Path(args.price_table).read_text()))
 
@@ -205,6 +221,11 @@ def main() -> int:
     total = sum(r["cost_usd"] for r in rows if isinstance(r["cost_usd"], (int, float)))
     known = sum(1 for r in rows if isinstance(r["cost_usd"], (int, float)))
     print(f"\nTotal (the {known}/{len(rows)} costed runs): ${total:.2f}")
+    missing = sorted({r["cost_source"].split(":", 1)[1]
+                      for r in rows if str(r["cost_source"]).startswith("unpriced:")})
+    if missing:
+        print("UNPRICED models (tokens known, no $/1M entry) — add them to "
+              f"benchmarks/assets/prices.json: {', '.join(missing)}")
     print(f"Wrote {csv_path}")
     return 0
 

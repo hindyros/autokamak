@@ -52,10 +52,16 @@ LLM-free — same seed ⇒ same decisions.
 
 ```bash
 python -m autotokamak.bench run  --task benchmarks/tasks/L3_from_scratch.yaml \
-                                 --harness claude_sdk [--model ...] [--tag aug09] [--dry-run]
+                                 --harness claude_sdk [--model ...] [--tag aug09] \
+                                 [--rep N] [--dry-run]
 python -m autotokamak.bench validate --workspace <ws> --task <task.yaml>
+python -m autotokamak.bench diagnose --tag aug09 [--rescore]   # backfill diagnostics
 python -m autotokamak.bench compare  --tag aug09
 python -m autotokamak.bench freeze-testset     # ground truth for head-to-head scoring
+
+# replicated campaign + the aggregated, error-barred table:
+tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 [--model ...]
+python tools/aggregate_matrix.py --tag <tag>
 ```
 
 Each run writes `experiments/<tag>/<condition>/<run_id>/{workspace/,
@@ -160,7 +166,10 @@ NaN outside the boundary — plus derived quantities.
   (`benchmarks/assets/eval_grid.json`), the test params
   (`benchmarks/assets/test_params.json`), or the deliverable contract
   (`bench/contract.py`) without versioning the change — old runs become
-  incomparable silently.
+  incomparable silently. Never regenerate `benchmarks/assets/test_set.h5`;
+  it carries provenance attrs (`bench.freeze.stamp_provenance`) and every
+  archived score is relative to it. New checks go in
+  `bench/diagnostics.py` as recorded measurements, NOT as contract gates.
 - Task YAMLs in `benchmarks/tasks/` and prompts in `agent/prompts/` contain
   hard `CONSTRAINTS:` blocks (no `git`, no `pip install`, no `input()`).
   Preserve them. The L2/L3 problem texts must stay identical except the

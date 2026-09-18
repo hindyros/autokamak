@@ -1,0 +1,943 @@
+# provenance: Human/Claude-authored platform code (engineered, not agent-generated)
+"""Extract WHAT each agent did and WHY, as a comparable record.
+
+Why this exists
+---------------
+Every other instrument in ``bench`` scores the OUTCOME: did the deliverable
+contract hold, what is the relative-L2 against the frozen test set, is the
+field physically valid. None of them can distinguish two runs that land on
+the same error by entirely different reasoning — a run that picked its 100
+adaptive points by ensemble disagreement and stopped because validation
+error crossed the task's threshold, versus one that relabelled uniform
+random sampling as "adaptive" and stopped because it ran out of rounds.
+That difference is the research question of this repo, and until now it
+survived only as prose in a README.
+
+Two things are extracted, mirroring the two questions asked of a method:
+
+1. **The chain of methods** (``method_chain`` / ``chain_signature``) — the
+   final pipeline the agent settled on, canonicalised into one vocabulary:
+   initial design -> representation -> model family -> HPO -> acquisition ->
+   stopping rule. This is the "what".
+2. **The per-iteration decision logic** (``iterations``) — for each adaptive
+   round: the criterion the agent stated, what it had measured when it chose
+   (validation error vs baseline), and what it decided next. This is the
+   "why", round by round.
+
+Design constraints, all deliberate
+----------------------------------
+* **Zero LLM, zero execution.** Deterministic over artifacts the agent
+  already had to write (the v3 task mandates an acquisition log, a
+  ``sampling_strategy`` string and ``report.json``), so the whole archived
+  corpus can be extracted at no cost and re-extracted identically.
+* **Measurement, never a gate.** Like ``bench.diagnostics``, nothing here
+  touches ``contract.passed``. Adding a stage to the vocabulary changes no
+  archived score.
+* **One vocabulary across access levels.** The canonical acquisition terms
+  are anchored on the L0/L1 typed action space
+  (``agent.orchestrator.schema.AcquisitionStrategy``), so the scripted
+  policy, the L1 typed picker and a from-scratch L3 agent are describable in
+  the same words and land in the same table.
+* **Unknown stays unknown.** Every field is Optional and nothing raises; a
+  missing log is a finding, not a crash. ``sources`` records which file
+  supplied each stage so a reader can audit any cell back to its evidence.
+
+What it cannot do: it reads stated criteria, not implemented ones. An agent
+that writes "ensemble disagreement" in its log and samples uniformly is
+recorded as *claiming* that criterion — ``criterion_stated_vs_random`` and
+the code-signal cross-check narrow this, and ``tools/judge_code.py`` remains
+the instrument for the qualitative call.
+"""
+from __future__ import annotations
+
+import ast
+import json
+import re
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any, Optional
+
+# Bounds. Acquisition logs are agent-authored and occasionally enormous;
+# extraction must stay cheap enough to run over a whole campaign.
+MAX_LOG_BYTES = 32 * 1024 * 1024
+MAX_LOG_RECORDS = 200_000
+MAX_CODE_FILES = 200
+MAX_CODE_BYTES = 400_000
+MAX_CRITERION_CHARS = 300
+
+EXCLUDE_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules",
+                ".ruff_cache", ".pytest_cache", ".ipynb_checkpoints",
+                "OpenFUSIONToolkit", "ursa_metrics"}
+
+# The task's own stopping rule: val_error <= 0.30 * baseline_error.
+STOP_THRESHOLD_RATIO = 0.30
+
+
+# ---------------------------------------------------------------------------
+# Canonical vocabulary
+# ---------------------------------------------------------------------------
+# Patterns are matched case-insensitively against agent prose (log criteria,
+# report.json sampling_strategy, README) and against agent code. Ordering
+# within a stage does not matter; every match is recorded, because real
+# pipelines combine (e.g. "distance-to-training + MC-dropout variance").
+
+INITIAL_DESIGN_PATTERNS: dict[str, str] = {
+    "lhs": r"latin[\s_-]?hypercube|\blhs\b|LatinHypercube|pydoe",
+    "sobol": r"\bsobol\b",
+    "halton": r"\bhalton\b",
+    "maximin": r"maximin|max[\s_-]?min\s+distance|poisson[\s_-]?disk",
+    "grid": r"full[\s_-]?factorial|factorial design|grid design",
+    "uniform_random": r"uniform(?:ly)?[\s_-]?random|random uniform|rng\.uniform|np\.random\.uniform",
+}
+
+REPRESENTATION_PATTERNS: dict[str, str] = {
+    "pca": r"\bpca\b|principal[\s_-]?component|TruncatedSVD",
+    "pod_svd": r"\bpod\b|proper orthogonal|\bsvd\b|randomized_svd",
+    "autoencoder": r"auto[\s_-]?encoder|latent (?:space|code)|encoder.{0,12}decoder",
+    "spline_basis": r"spline|RBFInterpolator|radial basis",
+    "per_pixel": r"per[\s_-]?pixel|pixel[\s_-]?wise|per[\s_-]?grid[\s_-]?point",
+}
+
+MODEL_PATTERNS: dict[str, str] = {
+    "gp": r"gaussian[\s_-]?process|GaussianProcessRegressor|gpytorch|\bkriging\b|\bgpr\b",
+    "kernel_ridge": r"KernelRidge|kernel[\s_-]?ridge",
+    "poly_ridge": r"PolynomialFeatures|polynomial regression",
+    "ridge_linear": r"\bRidge\b|LinearRegression|\blasso\b|ElasticNet|linear regression",
+    "random_forest": r"RandomForest|ExtraTrees",
+    "gradient_boosting": r"GradientBoosting|HistGradientBoosting|\bxgboost\b|\blightgbm\b|\bcatboost\b",
+    "svr": r"\bSVR\b|support vector regress",
+    "knn": r"KNeighbors|nearest[\s_-]?neighbou?r",
+    "mlp_sklearn": r"MLPRegressor",
+    "mlp_torch": r"torch\.nn|nn\.Linear|nn\.Module|\bpytorch\b",
+    "cnn_decoder": r"nn\.Conv(?:2d|Transpose2d)|ConvTranspose|u[\s_-]?net|deconv",
+    "rbf_interpolant": r"RBFInterpolator|\bRbf\b",
+}
+
+HPO_PATTERNS: dict[str, str] = {
+    "optuna": r"\boptuna\b",
+    "grid_search": r"GridSearchCV|grid[\s_-]?search",
+    "random_search": r"RandomizedSearchCV|random[\s_-]?search",
+    "cv_select": r"cross_val_score|KFold|cross[\s_-]?validat",
+    "manual_sweep": r"manual (?:sweep|tuning)|hand[\s_-]?tuned|hard[\s_-]?coded hyper",
+    "early_stopping": r"early[\s_-]?stopping|\bpatience\b",
+}
+
+ENSEMBLE_PATTERNS: dict[str, str] = {
+    "deep_ensemble": r"\bensemble\b|n_models|committee",
+    "mc_dropout": r"mc[\s_-]?dropout|monte[\s_-]?carlo dropout",
+    "bagging": r"\bbagging\b|bootstrap resampl",
+}
+
+# Acquisition vocabulary. The first three names are the L0/L1 typed
+# strategies verbatim (``AcquisitionStrategy``); the rest are terms this
+# corpus produced that the typed space has no word for.
+ACQUISITION_PATTERNS: dict[str, str] = {
+    "uncertainty": r"uncertain|posterior (?:variance|std)|predictive (?:variance|std)"
+                   r"|epistemic|\bucb\b|expected improvement|\bei\b\b",
+    "uncertainty_ensemble": r"ensemble[\w\s_-]{0,24}(?:variance|disagreement|std|spread)"
+                            r"|disagree|query[\s_-]?by[\s_-]?committee|mc[\s_-]?dropout"
+                            r"|monte[\s_-]?carlo[\s_-]?dropout|deep[\s_-]?ensemble",
+    "uncertainty_gp": r"gp[\s_-]?(?:variance|std)"
+                      r"|gaussian[\s_-]?process[\s_-]?(?:variance|posterior)"
+                      r"|kriging[\s_-]?variance",
+    "residual_ucb": r"residual|model error|error[\s_-]?driven|high[\s_-]?error"
+                    r"|worst[\s_-]?case error|loo[\s_-]?cv error|out[\s_-]?of[\s_-]?fold error",
+    "space_filling": r"space[\s_-]?filling|coverage|distance[\s_-]?to[\s_-]?training"
+                     r"|maximin|farthest[\s_-]?point|diversity|novelty|k[\s_-]?means",
+    "gradient_sensitivity": r"gradient|jacobian|sensitivit|curvature|steep",
+    "feasibility": r"feasib|unconverged|failure[\s_-]?(?:rate|region)|success[\s_-]?rate",
+    "random": r"\brandom\b|\buniform\b|\bi\.?i\.?d\.?\b",
+}
+
+STOP_RULE_PATTERNS: dict[str, str] = {
+    "val_threshold_70pct": r"0\.3\s*\*|30\s*%|70\s*%|0\.30\s*(?:\*|x)|70 percent"
+                           r"|reduc\w+ by at least 70",
+    "round_cap": r"round cap|max(?:imum)? rounds|cap of 3|3[\s_-]?round|all 3 rounds",
+    "plateau": r"plateau|no further improvement|diminishing return|converged",
+    "budget": r"solve budget|budget exhaust|out of budget",
+}
+
+STAGE_PATTERNS: dict[str, dict[str, str]] = {
+    "initial_design": INITIAL_DESIGN_PATTERNS,
+    "representation": REPRESENTATION_PATTERNS,
+    "model_family": MODEL_PATTERNS,
+    "hpo": HPO_PATTERNS,
+    "ensembling": ENSEMBLE_PATTERNS,
+    "acquisition": ACQUISITION_PATTERNS,
+    "stopping_rule": STOP_RULE_PATTERNS,
+}
+
+_COMPILED = {stage: {name: re.compile(pat, re.I) for name, pat in pats.items()}
+             for stage, pats in STAGE_PATTERNS.items()}
+
+# Chain order = the order the pipeline actually executes in, so the
+# signature reads as a pipeline rather than as an alphabetised bag.
+CHAIN_ORDER = ("initial_design", "representation", "model_family", "ensembling",
+               "hpo", "acquisition", "stopping_rule")
+
+
+def classify(text: Optional[str], stages: Iterable[str] = CHAIN_ORDER
+             ) -> dict[str, list[str]]:
+    """Canonical terms present in a piece of prose or code, by stage."""
+    if not text:
+        return {}
+    out: dict[str, list[str]] = {}
+    for stage in stages:
+        hits = [name for name, rx in _COMPILED[stage].items() if rx.search(text)]
+        if hits:
+            out[stage] = sorted(hits)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Artifact readers
+# ---------------------------------------------------------------------------
+
+def _load_json(path: Path) -> Optional[dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        return data if isinstance(data, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _iter_workspace_files(workspace: Path, suffixes: set[str],
+                          limit: int = MAX_CODE_FILES) -> list[Path]:
+    """Agent-authored files only: task symlinks and caches are not evidence."""
+    found: list[Path] = []
+    for p in sorted(workspace.rglob("*")):
+        if len(found) >= limit:
+            break
+        if p.is_symlink() or not p.is_file():
+            continue
+        if any(part in EXCLUDE_DIRS for part in p.relative_to(workspace).parts):
+            continue
+        if p.suffix.lower() in suffixes:
+            found.append(p)
+    return found
+
+
+def _read_capped(path: Path, cap: int = MAX_CODE_BYTES) -> str:
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as fh:
+            return fh.read(cap)
+    except OSError:
+        return ""
+
+
+def _rel(path: Path, workspace: Path) -> str:
+    """Workspace-relative display path; absolute only if it truly escapes."""
+    for base in (workspace, workspace.resolve()):
+        try:
+            return str(path.relative_to(base))
+        except ValueError:
+            continue
+    return str(path)
+
+
+def _log_candidates(workspace: Path, report: Optional[dict]) -> list[Path]:
+    """The declared acquisition log first, then anything that looks like one.
+
+    Agents declare the path in ``report.json`` (the v3 task requires it) but
+    have shipped absolute paths, paths outside the workspace, and no path at
+    all — so the declared value is a hint, and discovery is the fallback.
+    """
+    out: list[Path] = []
+    declared = None
+    if report:
+        for key in ("acquisition_log", "acquisition_log_path"):
+            v = report.get(key)
+            if isinstance(v, str) and v.strip():
+                declared = v.strip()
+                break
+    if declared:
+        for cand in (workspace / declared, Path(declared)):
+            try:
+                resolved = cand.resolve()
+                resolved.relative_to(workspace.resolve())
+            except (ValueError, OSError):
+                continue
+            if resolved.is_file():
+                out.append(resolved)
+                break
+    for p in sorted(workspace.rglob("*")):
+        if len(out) >= 4:
+            break
+        if p.is_symlink() or not p.is_file():
+            continue
+        try:
+            if any(p.resolve() == q.resolve() for q in out):
+                continue
+        except OSError:
+            pass
+        if any(part in EXCLUDE_DIRS for part in p.relative_to(workspace).parts):
+            continue
+        if re.search(r"acquisition|acquire|round_metrics|round_stats|campaign_log"
+                     r"|campaign_summary", p.name, re.I) \
+                and p.suffix.lower() in {".json", ".jsonl", ".csv", ".log", ".txt", ".md"}:
+            out.append(p)
+    return out
+
+
+def _read_log_records(path: Path) -> list[dict]:
+    """Records from a JSONL / JSON-array log. Non-JSON logs yield nothing."""
+    try:
+        if path.stat().st_size > MAX_LOG_BYTES:
+            return []
+    except OSError:
+        return []
+    text = _read_capped(path, MAX_LOG_BYTES)
+    records: list[dict] = []
+    stripped = text.lstrip()
+    if stripped.startswith("["):
+        try:
+            data = json.loads(text)
+            if isinstance(data, list):
+                records = [r for r in data if isinstance(r, dict)][:MAX_LOG_RECORDS]
+        except Exception:  # noqa: BLE001
+            records = []
+    if not records:
+        for line in text.splitlines()[:MAX_LOG_RECORDS]:
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(obj, dict):
+                records.append(obj)
+    return records
+
+
+# ---------------------------------------------------------------------------
+# Per-iteration decision logic
+# ---------------------------------------------------------------------------
+
+# Field names agents have used for the same three things. Kept explicit
+# rather than fuzzy-matched: a wrong guess here invents an agent's reasoning.
+_ROUND_KEYS = ("round", "round_id", "round_index", "iteration", "iter", "cycle", "step")
+_REASON_KEYS = ("reason", "criterion", "rationale", "why", "strategy", "acquisition",
+                "acquisition_strategy", "justification", "note", "decision", "explanation")
+_ERRORISH = re.compile(r"rel_l2|error|\berr\b|rmse|\bmse\b|loss|\bl2\b", re.I)
+_VAL_KEY = re.compile(r"(?:^|[^a-z])val(?:idation)?(?:[^a-z]|$)", re.I)
+# Keys that are counts/ids, never errors, whatever else they are named.
+_COUNTISH = re.compile(r"^n[_-]|[_-]n$|count|size|seed|round|index|\bts\b|time", re.I)
+_ACQUIRE_EVENTS = re.compile(r"acquire|acquisition|select|propose|candidate", re.I)
+# Events that carry a point but are not an acquisition decision (held-out
+# validation/test solves are logged the same way by several agents).
+_POINT_KEYS = ("params", "sample_id", "point", "candidate")
+
+
+def _extract_val_baseline(rec: dict) -> tuple[Optional[float], Optional[float]]:
+    """The round's measured validation error and its baseline, if logged."""
+    val = base = None
+    for key, raw in rec.items():
+        num = _mean_of(raw)
+        if num is None:
+            continue
+        key_l = str(key).lower()
+        if _COUNTISH.search(key_l):
+            continue
+        if "baseline" in key_l:
+            # A numeric key named "baseline" is the baseline error; nothing
+            # else in these logs is called that.
+            base = num if base is None else base
+            continue
+        # A bare dict ({"val": {"mean": ...}}) is self-describing; a scalar
+        # must name an error metric, or "n_val" would read as an error.
+        if not (isinstance(raw, dict) or _ERRORISH.search(key_l)):
+            continue
+        if _VAL_KEY.search(key_l):
+            val = num if val is None else val
+
+    # Second pass: a column named "val_model_mean" beside "val_baseline_mean"
+    # is unambiguously the validation error of the model, even though its
+    # name carries no metric word. Only attempted when a baseline pins the
+    # meaning, and never for count-like keys.
+    if base is not None and val is None:
+        for key, raw in rec.items():
+            key_l = str(key).lower()
+            if "baseline" in key_l or not _VAL_KEY.search(key_l):
+                continue
+            if _COUNTISH.search(key_l):
+                continue
+            num = _mean_of(raw)
+            if num is not None and 0.0 < num < 100.0:
+                val = num
+                break
+    return val, base
+
+
+def _mean_of(value: Any) -> Optional[float]:
+    """A metric written as a scalar, or as a dict carrying a mean."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, dict):
+        for k in ("mean", "avg", "average", "value", "rel_l2", "mean_rel_l2"):
+            v = value.get(k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                return float(v)
+    return None
+
+
+def _first_key(rec: dict, keys: Iterable[str]) -> Any:
+    for k in keys:
+        if k in rec and rec[k] is not None:
+            return rec[k]
+    return None
+
+
+def _round_of(rec: dict) -> Optional[int]:
+    v = _first_key(rec, _ROUND_KEYS)
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return int(v)
+    if isinstance(v, str) and re.fullmatch(r"\d{1,3}", v.strip()):
+        return int(v.strip())
+    return None
+
+
+def _reason_text(rec: dict) -> Optional[str]:
+    parts = []
+    for k in _REASON_KEYS:
+        v = rec.get(k)
+        if isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+        elif isinstance(v, dict):
+            parts.extend(x.strip() for x in v.values()
+                         if isinstance(x, str) and x.strip())
+    if not parts:
+        return None
+    # De-duplicate: a per-point log repeats the same reason 100 times.
+    seen, uniq = set(), []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            uniq.append(p)
+    return "; ".join(uniq)[:MAX_CRITERION_CHARS]
+
+
+def _iterations_from_records(records: list[dict]) -> list[dict]:
+    """Group an acquisition log into one record per adaptive round."""
+    rounds: dict[int, dict[str, Any]] = {}
+    for rec in records:
+        rnd = _round_of(rec)
+        if rnd is None:
+            continue
+        slot = rounds.setdefault(rnd, {
+            "round": rnd, "n_acquired": 0, "n_with_reason": 0,
+            "criteria": [], "val_rel_l2": None, "baseline_rel_l2": None,
+        })
+        event = str(rec.get("event") or rec.get("type") or "")
+        reason = _reason_text(rec)
+        has_point = any(k in rec for k in _POINT_KEYS)
+        if has_point and (not event or _ACQUIRE_EVENTS.search(event)):
+            slot["n_acquired"] += 1
+            if reason:
+                slot["n_with_reason"] += 1
+        if reason and reason not in slot["criteria"]:
+            slot["criteria"].append(reason)
+        val, base = _extract_val_baseline(rec)
+        if val is not None and slot["val_rel_l2"] is None:
+            slot["val_rel_l2"] = val
+        if base is not None and slot["baseline_rel_l2"] is None:
+            slot["baseline_rel_l2"] = base
+    return [rounds[k] for k in sorted(rounds)]
+
+
+def _round_metrics_from_csv(path: Path) -> dict[int, tuple[Optional[float], Optional[float]]]:
+    """Round -> (val, baseline) from a round-metrics CSV.
+
+    Several agents log per-point decisions as JSONL but per-round errors as
+    a CSV table; without this their rounds read as ungrounded when the
+    evidence was in fact recorded, one file over.
+    """
+    import csv as _csv
+
+    out: dict[int, tuple[Optional[float], Optional[float]]] = {}
+    text = _read_capped(path)
+    if not text.strip():
+        return out
+    try:
+        rows = list(_csv.DictReader(text.splitlines()))
+    except Exception:  # noqa: BLE001
+        return out
+    for row in rows[:MAX_LOG_RECORDS]:
+        coerced: dict[str, Any] = {}
+        for k, v in row.items():
+            if k is None:
+                continue
+            try:
+                coerced[k] = float(v)
+            except (TypeError, ValueError):
+                coerced[k] = v
+        rnd = _round_of(coerced)
+        if rnd is None:
+            continue
+        val, base = _extract_val_baseline(coerced)
+        if val is not None or base is not None:
+            out.setdefault(rnd, (val, base))
+    return out
+
+
+def _merge_round_evidence(rounds: list[dict],
+                          evidence: dict[int, tuple[Optional[float], Optional[float]]]
+                          ) -> None:
+    """Fill in missing per-round val/baseline from a secondary source."""
+    for r in rounds:
+        val, base = evidence.get(r["round"], (None, None))
+        if r.get("val_rel_l2") is None and val is not None:
+            r["val_rel_l2"] = val
+        if r.get("baseline_rel_l2") is None and base is not None:
+            r["baseline_rel_l2"] = base
+
+
+def _iterations_from_report(report: Optional[dict]) -> list[dict]:
+    """Fallback: some agents log rounds into report.json instead of the log."""
+    if not report:
+        return []
+    blocks = report.get("rounds")
+    if not isinstance(blocks, list):
+        for key in ("round_metrics", "round_stats", "campaign_rounds", "adaptive_rounds"):
+            v = report.get(key)
+            if isinstance(v, list):
+                blocks = v
+                break
+    if not isinstance(blocks, list):
+        return []
+    out = []
+    for i, b in enumerate(blocks):
+        if not isinstance(b, dict):
+            continue
+        out.append({
+            "round": _round_of(b) if _round_of(b) is not None else i,
+            "n_acquired": None,
+            "n_with_reason": 0,
+            "criteria": [c for c in [_reason_text(b)] if c],
+            "val_rel_l2": _extract_val_baseline(b)[0],
+            "baseline_rel_l2": _extract_val_baseline(b)[1],
+        })
+    return out
+
+
+def _finalise_iterations(raw: list[dict], fallback_criterion: Optional[str]
+                         ) -> list[dict]:
+    """Attach the classified criterion, the evidence, and the decision taken."""
+    out = []
+    for i, r in enumerate(raw):
+        text = "; ".join(r["criteria"]) if r["criteria"] else None
+        # A round with no criterion of its own inherits the campaign-level
+        # strategy statement — recorded as such, not as a per-round claim.
+        source = "round_log"
+        if not text and fallback_criterion:
+            text, source = fallback_criterion, "report_strategy"
+        classes = classify(text, ["acquisition"]).get("acquisition", [])
+
+        val, base = r["val_rel_l2"], r["baseline_rel_l2"]
+        ratio = (round(val / base, 4)
+                 if val is not None and base not in (None, 0) else None)
+        met = ratio <= STOP_THRESHOLD_RATIO if ratio is not None else None
+
+        is_last = i == len(raw) - 1
+        if not is_last:
+            decision = "continue"
+        elif met:
+            decision = "stop_threshold_met"
+        elif met is False:
+            decision = "stop_without_threshold"
+        else:
+            decision = "stop_unexplained"
+
+        n_acq, n_reason = r["n_acquired"], r["n_with_reason"]
+        out.append({
+            "round": r["round"],
+            "n_acquired": n_acq,
+            "criterion_text": text,
+            "criterion_source": source if text else None,
+            "criterion_classes": classes,
+            # The stated criterion names nothing but randomness/uniformity —
+            # the signature of adaptivity in name only.
+            "criterion_is_random_only": (classes == ["random"] if classes else None),
+            "val_rel_l2": val,
+            "baseline_rel_l2": base,
+            "val_over_baseline": ratio,
+            "met_stop_threshold": met,
+            # Did the agent have a measurement in hand when it chose, or is
+            # the round's reasoning unfalsifiable?
+            "evidence_grounded": ratio is not None,
+            "decision": decision,
+            "reason_coverage": (round(n_reason / n_acq, 3)
+                                if isinstance(n_acq, int) and n_acq else None),
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Method chain
+# ---------------------------------------------------------------------------
+
+def _code_signals(workspace: Path) -> tuple[dict[str, list[str]], list[str], list[str]]:
+    """Canonical terms evidenced by the code itself, plus its imports."""
+    files = _iter_workspace_files(workspace, {".py"})
+    blob_parts, imports = [], set()
+    for p in files:
+        src = _read_capped(p)
+        if not src:
+            continue
+        blob_parts.append(src)
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                imports.add(node.module.split(".")[0])
+    blob = "\n".join(blob_parts)
+    return (classify(blob), sorted(imports),
+            [str(p.relative_to(workspace)) for p in files])
+
+
+def _merge_stage(*sources: dict[str, list[str]]) -> dict[str, list[str]]:
+    merged: dict[str, set[str]] = {}
+    for s in sources:
+        for stage, hits in s.items():
+            merged.setdefault(stage, set()).update(hits)
+    return {k: sorted(v) for k, v in merged.items()}
+
+
+def _primary_model(models: list[str]) -> Optional[str]:
+    """One headline family when several are evidenced.
+
+    Code that trains an MLP but merely imports Ridge for a baseline hits
+    both; the specific/heavy family is the one that characterises the run,
+    so linear baselines lose to everything else.
+    """
+    if not models:
+        return None
+    priority = ["cnn_decoder", "gp", "mlp_torch", "mlp_sklearn", "gradient_boosting",
+                "random_forest", "svr", "kernel_ridge", "rbf_interpolant", "knn",
+                "poly_ridge", "ridge_linear"]
+    for name in priority:
+        if name in models:
+            return name
+    return sorted(models)[0]
+
+
+def _primary(hits: list[str], priority: list[str]) -> Optional[str]:
+    """The term that characterises a stage when several are evidenced."""
+    for name in priority:
+        if name in hits:
+            return name
+    return sorted(hits)[0] if hits else None
+
+
+DESIGN_PRIORITY = ["sobol", "halton", "lhs", "maximin", "grid", "uniform_random"]
+REPRESENTATION_PRIORITY = ["autoencoder", "pca", "pod_svd", "spline_basis", "per_pixel"]
+
+
+def build_chain_signature(chain: dict[str, Any], n_rounds: Optional[int]) -> str:
+    """One compact line per run — the column a matrix row can actually hold."""
+    def _fmt(stage: str, sep: str = "+") -> str:
+        v = chain.get(stage)
+        if not v:
+            return "?"
+        return sep.join(v) if isinstance(v, list) else str(v)
+
+    design = chain.get("design_primary") or _fmt("initial_design")
+    rep = chain.get("representation_primary") or _fmt("representation")
+    model = chain.get("model_primary") or _fmt("model_family")
+    ens = chain.get("ensembling") or []
+    model_part = f"{rep}+{model}" if rep != "?" else str(model)
+    if ens:
+        model_part += f"[{'+'.join(ens)}]"
+    acq = _fmt("acquisition", sep=",")
+    rounds = f"x{n_rounds}" if n_rounds else ""
+    stop = _fmt("stopping_rule", sep=",")
+    return f"{design} -> {model_part} -> acq:{acq}{rounds} -> stop:{stop}"
+
+
+# ---------------------------------------------------------------------------
+# Public entry points
+# ---------------------------------------------------------------------------
+
+def extract_methodology(workspace: Path) -> dict[str, Any]:
+    """Methodology record for an L2/L3 agent workspace. Never raises."""
+    workspace = Path(workspace)
+    report = _load_json(workspace / "report.json")
+
+    strategy_text = None
+    if report:
+        v = report.get("sampling_strategy")
+        if isinstance(v, str) and v.strip():
+            strategy_text = v.strip()[:MAX_CRITERION_CHARS]
+
+    readme_path = workspace / "README.md"
+    readme_text = _read_capped(readme_path) if readme_path.is_file() else ""
+
+    logs = _log_candidates(workspace, report)
+    records: list[dict] = []
+    log_used: Optional[str] = None
+    for lp in logs:
+        recs = _read_log_records(lp)
+        if recs:
+            records, log_used = recs, _rel(lp, workspace)
+            break
+
+    raw_rounds = _iterations_from_records(records)
+    rounds_source = "acquisition_log"
+    if not raw_rounds:
+        raw_rounds = _iterations_from_report(report)
+        rounds_source = "report_json" if raw_rounds else None
+
+    # Per-round errors are often recorded somewhere other than the log that
+    # carries the decisions: a round-metrics CSV, a second JSONL, or
+    # report.json. Grounding is a property of the run, not of one file.
+    if raw_rounds:
+        for lp in logs:
+            if lp.suffix.lower() == ".csv":
+                _merge_round_evidence(raw_rounds, _round_metrics_from_csv(lp))
+            elif lp.suffix.lower() == ".json" and isinstance(_load_json(lp), dict):
+                # A summary file shaped like report.json ("round_stats": [...]).
+                _merge_round_evidence(
+                    raw_rounds,
+                    {r["round"]: (r["val_rel_l2"], r["baseline_rel_l2"])
+                     for r in _iterations_from_report(_load_json(lp))})
+            elif _rel(lp, workspace) != log_used:
+                _merge_round_evidence(
+                    raw_rounds,
+                    {r["round"]: (r["val_rel_l2"], r["baseline_rel_l2"])
+                     for r in _iterations_from_records(_read_log_records(lp))})
+        _merge_round_evidence(
+            raw_rounds,
+            {r["round"]: (r["val_rel_l2"], r["baseline_rel_l2"])
+             for r in _iterations_from_report(report)})
+    # Round 0 is conventionally the initial design's evaluation, not an
+    # adaptive decision; keep it only when it is the sole evidence there is.
+    adaptive = [r for r in raw_rounds if (r["round"] or 0) >= 1] or raw_rounds
+    iterations = _finalise_iterations(adaptive, strategy_text)
+
+    code_hits, imports, code_files = _code_signals(workspace)
+    prose = " \n".join(x for x in (strategy_text, readme_text) if x)
+    prose_hits = classify(prose)
+    # Prose and code are kept separable: a claim only the README makes is
+    # weaker evidence than one the code carries, and the difference is
+    # exactly the honesty question this benchmark asks.
+    merged = _merge_stage(code_hits, prose_hits)
+
+    chain: dict[str, Any] = {stage: merged.get(stage, []) for stage in CHAIN_ORDER}
+    # The acquisition stage is what the rounds actually stated, when stated;
+    # the prose/code union is the fallback.
+    round_classes = sorted({c for it in iterations for c in it["criterion_classes"]})
+    if round_classes:
+        chain["acquisition"] = round_classes
+    chain["model_primary"] = _primary_model(chain.get("model_family") or [])
+    chain["design_primary"] = _primary(chain.get("initial_design") or [], DESIGN_PRIORITY)
+    chain["representation_primary"] = _primary(chain.get("representation") or [],
+                                               REPRESENTATION_PRIORITY)
+
+    n_rounds = len(iterations) or None
+    signature = build_chain_signature(chain, n_rounds)
+
+    criteria_seq = [tuple(it["criterion_classes"]) for it in iterations]
+    distinct_criteria = len({c for c in criteria_seq if c})
+    grounded = [it for it in iterations if it["evidence_grounded"]]
+    covs = [it["reason_coverage"] for it in iterations
+            if isinstance(it["reason_coverage"], (int, float))]
+
+    logic = {
+        "n_rounds": n_rounds,
+        "rounds_source": rounds_source,
+        "criterion_classes": round_classes,
+        # Did the criterion CHANGE between rounds? A fixed rule executed
+        # three times and a rule revised after seeing round-1 error are
+        # different logics that produce identical chains.
+        "criterion_switched": (distinct_criteria > 1 if distinct_criteria else None),
+        "criterion_stated_every_round": (
+            all(bool(it["criterion_text"]) for it in iterations) if iterations else None),
+        "criterion_per_round_specific": (
+            any(it["criterion_source"] == "round_log" for it in iterations)
+            if iterations else None),
+        "adaptive_in_name_only": (
+            all(it["criterion_is_random_only"] for it in iterations)
+            if iterations and all(it["criterion_is_random_only"] is not None
+                                  for it in iterations) else None),
+        "rounds_evidence_grounded": len(grounded),
+        "evidence_grounded_fraction": (round(len(grounded) / len(iterations), 3)
+                                       if iterations else None),
+        "acquisition_reason_coverage": (round(sum(covs) / len(covs), 3) if covs else None),
+        "stop_decision": iterations[-1]["decision"] if iterations else None,
+        "stop_rule_stated": chain.get("stopping_rule") or [],
+        # The agent's own claim, recorded separately from anything measured.
+        "self_claimed_adaptivity_helped": _self_claimed_helped(report),
+    }
+
+    return {
+        "method_chain": chain,
+        "chain_signature": signature,
+        "iterations": iterations,
+        "decision_logic": logic,
+        "evidence": {
+            "acquisition_log": log_used,
+            "acquisition_log_candidates": [_rel(p, workspace) for p in logs],
+            "n_log_records": len(records),
+            "sampling_strategy_text": strategy_text,
+            "code_terms": code_hits,
+            "prose_terms": prose_hits,
+            # Claimed in prose but absent from the code: candidates for the
+            # "said it, never built it" finding.
+            "prose_only_terms": {
+                stage: sorted(set(prose_hits.get(stage, [])) - set(code_hits.get(stage, [])))
+                for stage in CHAIN_ORDER
+                if set(prose_hits.get(stage, [])) - set(code_hits.get(stage, []))
+            },
+            "imports": imports,
+            "n_code_files": len(code_files),
+        },
+    }
+
+
+def _self_claimed_helped(report: Optional[dict]) -> Optional[bool]:
+    if not report:
+        return None
+    block = report.get("adaptive_vs_initial")
+    if isinstance(block, bool):
+        return block
+    if isinstance(block, dict):
+        for key in ("helped", "adaptive_helped", "did_help"):
+            v = block.get(key)
+            if isinstance(v, bool):
+                return v
+        text = " ".join(str(v) for v in block.values() if isinstance(v, str))
+    elif isinstance(block, str):
+        text = block
+    else:
+        return None
+    if not text:
+        return None
+    if re.search(r"\bdid not help|\bno(?:t)? help|\bworse\b|\bno improvement", text, re.I):
+        return False
+    if re.search(r"\bhelp\w*\b|\bimproved?\b|\bbetter\b", text, re.I):
+        return True
+    return None
+
+
+def extract_meta_methodology(workspace: Path) -> dict[str, Any]:
+    """Methodology record for an L0/L1 pipeline workspace.
+
+    These cells never had this problem: the meta-loop already forces one
+    typed ``ActionDecision`` per iteration, rationale included. This maps
+    that structure onto the SAME record shape as the agent workspaces so
+    scripted, typed-LLM and free-form agent runs sit in one table.
+    """
+    workspace = Path(workspace)
+    manifest = _load_json(workspace / "manifest.json") or {}
+    trace = _load_json(workspace / "meta_trace.json") or {}
+    iters = trace.get("iterations") if isinstance(trace.get("iterations"), list) else []
+
+    iterations = []
+    for i, rec in enumerate(iters):
+        if not isinstance(rec, dict):
+            continue
+        decision = rec.get("decision") or {}
+        action = decision.get("action")
+        payload = next((decision.get(k) for k in ("regen", "enrich", "extend", "terminate")
+                        if isinstance(decision.get(k), dict)), {}) or {}
+        rationale = payload.get("rationale") or payload.get("reason") or ""
+        strategy = payload.get("strategy")
+        diag = rec.get("diagnostics") or {}
+        interpretations = "; ".join(
+            str(v.get("interpretation")) for v in diag.values()
+            if isinstance(v, dict) and v.get("interpretation"))
+        classes = classify(f"{strategy or ''} {rationale}", ["acquisition"]
+                           ).get("acquisition", [])
+        iterations.append({
+            "round": rec.get("iteration", i),
+            "n_acquired": payload.get("n_new"),
+            "action": action,
+            # The scripted L0 policy carries no rationale by construction —
+            # falling back to the action keeps the column meaningful and the
+            # absence of prose visible in `reason_coverage`.
+            "criterion_text": ((f"{strategy}: {rationale}" if strategy else rationale)
+                               or str(action or ""))[:MAX_CRITERION_CHARS] or None,
+            "criterion_source": "typed_decision",
+            "criterion_classes": classes,
+            "criterion_is_random_only": (classes == ["random"] if classes else None),
+            # The typed loop hands the picker measured diagnostics every
+            # iteration, so grounding is structural rather than hoped for.
+            "evidence_grounded": bool(diag),
+            "evidence_summary": interpretations[:MAX_CRITERION_CHARS] or None,
+            "decision": "continue" if action != "terminate" else "stop_terminate_action",
+            "val_rel_l2": None,
+            "baseline_rel_l2": None,
+            "val_over_baseline": None,
+            "met_stop_threshold": None,
+            "reason_coverage": 1.0 if rationale else 0.0,
+        })
+
+    actions = [it["action"] for it in iterations if it["action"]]
+    strategies = sorted({c for it in iterations for c in it["criterion_classes"]})
+    chain = {
+        "initial_design": ["lhs"],           # sweeps sample the envelope by LHS
+        "representation": ["pca"],           # phase-2 folds PCA inside training
+        "model_family": ["zoo:gp+kernel_ridge+poly_ridge+mlp"],
+        "ensembling": [],
+        "hpo": ["optuna"],
+        "acquisition": strategies or (["residual_ucb"] if "enrich_active" in actions else []),
+        "stopping_rule": ([manifest.get("terminated_by")]
+                          if manifest.get("terminated_by") else []),
+        "model_primary": manifest.get("winner_model_name"),
+    }
+    return {
+        "method_chain": chain,
+        "chain_signature": build_chain_signature(chain, len(iterations) or None),
+        "iterations": iterations,
+        "decision_logic": {
+            "n_rounds": len(iterations) or None,
+            "rounds_source": "meta_trace",
+            "action_sequence": actions,
+            "criterion_classes": strategies,
+            "criterion_switched": (len({tuple(it["criterion_classes"])
+                                        for it in iterations}) > 1
+                                   if iterations else None),
+            "criterion_stated_every_round": (
+                all(bool(it["criterion_text"]) for it in iterations)
+                if iterations else None),
+            "criterion_per_round_specific": bool(iterations),
+            "adaptive_in_name_only": None,
+            "rounds_evidence_grounded": sum(1 for it in iterations
+                                            if it["evidence_grounded"]),
+            "evidence_grounded_fraction": (
+                round(sum(1 for it in iterations if it["evidence_grounded"])
+                      / len(iterations), 3) if iterations else None),
+            "acquisition_reason_coverage": (
+                round(sum(it["reason_coverage"] for it in iterations) / len(iterations), 3)
+                if iterations else None),
+            "stop_decision": manifest.get("terminated_by"),
+            "stop_rule_stated": ([manifest.get("terminated_by")]
+                                 if manifest.get("terminated_by") else []),
+            "self_claimed_adaptivity_helped": None,
+        },
+        "evidence": {
+            "policy": manifest.get("policy"),
+            "n_iterations_manifest": manifest.get("n_iterations"),
+            "acquisition_log": "meta_trace.json" if iters else None,
+            "n_log_records": len(iters),
+        },
+    }
+
+
+__all__ = [
+    "ACQUISITION_PATTERNS",
+    "CHAIN_ORDER",
+    "STOP_THRESHOLD_RATIO",
+    "build_chain_signature",
+    "classify",
+    "extract_meta_methodology",
+    "extract_methodology",
+]

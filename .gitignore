@@ -75,3 +75,6 @@ notebooks/scaling_runs/
 # reference_runs/ READMEs are tracked; the agent-generated workspaces are not.
 benchmarks/assets/*.h5
 benchmarks/reference_runs/*/workspace/
+
+# Archived example run dirs (heavy artifacts; `examples/*/L0|L1/` misses these)
+examples/*/L?_archive*/

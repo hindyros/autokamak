@@ -28,7 +28,12 @@ from typing import Optional
 from autotokamak.agent.runners.config import REPO_ROOT
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
-from autotokamak.harnesses.base import Harness, RunResult
+from autotokamak.harnesses.base import (
+    Harness,
+    HarnessTimeout,
+    RunResult,
+    time_limit,
+)
 
 MAX_TOOL_OUTPUT_CHARS = 8_000
 MAX_SHELL_TIMEOUT = 4 * 3600  # a full campaign may run in one command
@@ -334,8 +339,15 @@ class DspyHarness(Harness):
             fix_rounds=max(0, task.feedback_rounds - 1),
         )
 
+        # The CLI always passes one; fall back to the task's own cap so a
+        # direct adapter call is never unbounded either. A single jailed
+        # shell call may still hold MAX_SHELL_TIMEOUT internally; the outer
+        # alarm is what actually bounds the run.
+        effective_timeout = timeout_seconds or task.timeout_seconds
+
         try:
-            final = campaign(task=task.render_prompt(self.name), trace=trace)
+            with time_limit(effective_timeout):
+                final = campaign(task=task.render_prompt(self.name), trace=trace)
             trace.record_artifacts(workspace, expected_artifacts=task.expected_artifacts)
             from autotokamak.bench.scoring import try_score
 
@@ -344,6 +356,9 @@ class DspyHarness(Harness):
                 trace.record_score(score)
             trace.mark_completed()
             print(f"\n=== FINAL ===\n{final}\nWorkspace: {workspace}")
+        except HarnessTimeout as exc:
+            trace.mark_errored(exc)
+            status, error = "timeout", str(exc)
         except KeyboardInterrupt:
             trace.mark_interrupted()
             status, error = "interrupted", "KeyboardInterrupt"

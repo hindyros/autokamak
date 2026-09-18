@@ -14,7 +14,12 @@ from typing import Optional
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
-from autotokamak.harnesses.base import Harness, RunResult
+from autotokamak.harnesses.base import (
+    Harness,
+    HarnessTimeout,
+    RunResult,
+    time_limit,
+)
 
 DEFAULT_MODEL = "openai:gpt-5.2"
 
@@ -48,6 +53,10 @@ class UrsaHarness(Harness):
 
         status, error = "completed", None
         cost_usd, usage = None, None
+        # The CLI always passes one; fall back to the task's own cap so a
+        # direct adapter call is never unbounded either.
+        effective_timeout = timeout_seconds or task.timeout_seconds
+        cb = None
         try:
             # Import inside the guard: pulls in langchain + ursa, which are
             # optional for every other harness — a missing dep must still
@@ -73,19 +82,27 @@ class UrsaHarness(Harness):
                 )
 
             if get_openai_callback is not None:
-                with get_openai_callback() as cb:
-                    _invoke()
-                if cb.total_tokens:
-                    cost_usd = round(cb.total_cost, 6) if cb.total_cost else None
-                    usage = {"prompt_tokens": cb.prompt_tokens,
-                             "completion_tokens": cb.completion_tokens,
-                             "n_lm_calls": cb.successful_requests}
+                with get_openai_callback() as _cb:
+                    cb = _cb
+                    with time_limit(effective_timeout):
+                        _invoke()
             else:
-                _invoke()
+                with time_limit(effective_timeout):
+                    _invoke()
+        except HarnessTimeout as exc:
+            status, error = "timeout", str(exc)
         except KeyboardInterrupt:
             status, error = "interrupted", "KeyboardInterrupt"
         except Exception as exc:  # noqa: BLE001 — trace already marked errored
             status, error = "errored", f"{type(exc).__name__}: {exc}"
+
+        # Salvage token/cost accounting even when the run timed out or threw:
+        # a cell that burned budget must still report what it burned.
+        if cb is not None and getattr(cb, "total_tokens", 0):
+            cost_usd = round(cb.total_cost, 6) if cb.total_cost else None
+            usage = {"prompt_tokens": cb.prompt_tokens,
+                     "completion_tokens": cb.completion_tokens,
+                     "n_lm_calls": cb.successful_requests}
 
         return RunResult(
             status=status,

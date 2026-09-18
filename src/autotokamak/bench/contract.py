@@ -23,6 +23,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -262,6 +263,104 @@ def nan_at_finite_fraction(psi_pred: np.ndarray, psi_true: np.ndarray) -> float:
     return hits / total if total else 0.0
 
 
+def full_grid_rel_l2_errors(psi_pred: np.ndarray, psi_true: np.ndarray) -> np.ndarray:
+    """Relative L2 that ALSO charges for predicted field outside the plasma.
+
+    The contract metric (:func:`rel_l2_errors`) masks to finite ground truth,
+    so a prediction that fills the vacuum region is scored as if it had not.
+    That is not hypothetical: one run reported 0.1142 on the interior while
+    emitting a near-full-magnitude spurious plasma outside the boundary; its
+    honest score is 1.94, four times WORSE than the mean-map baseline.
+
+    Ground truth outside the last closed flux surface is "no plasma", so the
+    correct target there is zero contribution and any predicted magnitude is
+    error. The denominator stays the interior norm of truth, so the two
+    metrics are directly comparable and their RATIO is the size of the
+    exterior violation in physical terms.
+
+    This is recorded ALONGSIDE the contract metric, never in place of it —
+    archived scores stay comparable.
+    """
+    if len(psi_pred) != len(psi_true):
+        raise ValueError(
+            f"sample count mismatch: {len(psi_pred)} predictions "
+            f"vs {len(psi_true)} ground-truth maps"
+        )
+    errs = []
+    for pred, true in zip(psi_pred, psi_true):
+        interior = np.isfinite(true)
+        exterior = ~interior
+        denom = np.linalg.norm(true[interior])
+        if denom <= 0:
+            errs.append(np.inf)
+            continue
+        sq = np.linalg.norm(np.nan_to_num(pred[interior]) - true[interior]) ** 2
+        # A finite prediction where there is no plasma is spurious field.
+        sq += np.linalg.norm(np.nan_to_num(pred[exterior])) ** 2
+        errs.append(np.sqrt(sq) / denom)
+    return np.array(errs)
+
+
+def prediction_shape_stats(psi_pred: np.ndarray, psi_true: np.ndarray) -> dict[str, float]:
+    """Structural checks on a prediction that relative-L2 alone cannot see.
+
+    Two failure modes in the existing corpus motivate these, and neither
+    trips a contract gate:
+
+    * ``nan_mask_agreement`` — matrix-v2's L3-ursa passed 9/9 gates at
+      rel-L2 0.96 because ``predict.py`` wrote **zeros** where the plasma
+      boundary ends instead of NaN. The field was structurally wrong in a
+      way a scalar error norm reports only as "large".
+    * ``pred_pixel_std_mean`` — a predictor that ignores its inputs and
+      emits one constant map still produces finite, correctly shaped
+      output. Near-zero spread across test samples is the signature.
+      Reported next to the ground truth's own spread so it is a ratio the
+      reader can judge, not a bare number.
+    """
+    agree = total = 0
+    for pred, true in zip(psi_pred, psi_true):
+        agree += int(np.sum(np.isnan(pred) == np.isnan(true)))
+        total += int(true.size)
+    # Pixels outside every test plasma are NaN in all samples, so nanmean /
+    # nanstd over them is an expected empty slice, not a defect.
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        pred_std = float(np.nanmean(np.nanstd(psi_pred, axis=0)))
+        true_std = float(np.nanmean(np.nanstd(psi_true, axis=0)))
+    return {
+        "nan_mask_agreement": round(agree / total, 6) if total else 0.0,
+        "pred_nan_fraction": round(float(np.mean(np.isnan(psi_pred))), 6),
+        "truth_nan_fraction": round(float(np.mean(np.isnan(psi_true))), 6),
+        "pred_pixel_std_mean": pred_std if np.isfinite(pred_std) else None,
+        "truth_pixel_std_mean": true_std if np.isfinite(true_std) else None,
+        "pred_over_truth_spread": (round(pred_std / true_std, 6)
+                                   if np.isfinite(pred_std) and np.isfinite(true_std)
+                                   and true_std > 0 else None),
+    }
+
+
+def baseline_rel_l2(psi_true: np.ndarray) -> dict[str, Any]:
+    """Relative L2 of the trivial mean-psi-map predictor on the SAME set.
+
+    This is the yardstick every accuracy figure is quoted against, and it
+    was previously recomputed on each ``tools/matrix_report.py`` render and
+    never stored. Persisting it with the score makes a result.json
+    self-contained.
+    """
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN columns
+        mean_map = np.nanmean(psi_true, axis=0)
+    errs = rel_l2_errors(np.repeat(mean_map[None, ...], len(psi_true), axis=0), psi_true)
+    finite = errs[np.isfinite(errs)]
+    if not finite.size:
+        return {"mean": None, "median": None, "p90": None}
+    return {
+        "mean": float(np.mean(finite)),
+        "median": float(np.median(finite)),
+        "p90": float(np.percentile(finite, 90)),
+    }
+
+
 def score_against_frozen(
     workspace: Path,
     test_set_h5: Path,
@@ -289,13 +388,39 @@ def score_against_frozen(
         )
     errs = rel_l2_errors(psi_pred, psi_true)
     finite = errs[np.isfinite(errs)]
+    base = baseline_rel_l2(psi_true)
+    test_mean = float(np.mean(finite)) if finite.size else None
+    # Accuracy against the mean-psi-map baseline, the figure the matrix
+    # report has always plotted; stored here so it survives without a
+    # re-render. Same definition: 100 * (1 - rel_l2 / baseline_rel_l2).
+    accuracy_pct = (round(100.0 * (1.0 - test_mean / base["mean"]), 4)
+                    if test_mean is not None and base["mean"] else None)
+    # Full-grid variant: same denominator, but spurious exterior field is
+    # charged for. The inflation ratio IS the mask-failure measure, and
+    # unlike a pixel-count it scales with how wrong the field actually is.
+    full = full_grid_rel_l2_errors(psi_pred, psi_true)
+    full_finite = full[np.isfinite(full)]
+    full_mean = float(np.mean(full_finite)) if full_finite.size else None
+    inflation = (round(full_mean / test_mean, 4)
+                 if full_mean is not None and test_mean else None)
     return {
         "n_test": int(len(errs)),
         "n_scored": int(len(finite)),
         "pred_nan_at_finite": round(nan_at_finite_fraction(psi_pred, psi_true), 6),
+        "test_rel_l2_full_grid": {
+            "mean": full_mean,
+            "median": float(np.median(full_finite)) if full_finite.size else None,
+            "p90": float(np.percentile(full_finite, 90)) if full_finite.size else None,
+        },
+        # >1 means the prediction puts field where there is vacuum. ~1.0 is
+        # clean; ~1.2 is a NaN-convention slip; ~17 is a fabricated plasma.
+        "exterior_inflation": inflation,
         "test_rel_l2": {
-            "mean": float(np.mean(finite)) if finite.size else None,
+            "mean": test_mean,
             "median": float(np.median(finite)) if finite.size else None,
             "p90": float(np.percentile(finite, 90)) if finite.size else None,
         },
+        "baseline_rel_l2": base,
+        "accuracy_pct": accuracy_pct,
+        **prediction_shape_stats(psi_pred, psi_true),
     }

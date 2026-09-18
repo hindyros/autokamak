@@ -53,6 +53,110 @@ Each run writes `experiments/<tag>/<condition>/<run_id>/{workspace/,
 trace.json, result.json}`; `result.json` bundles the harness outcome, the
 contract gates, and (when the frozen test set exists) the head-to-head score.
 
+## Diagnostics beside the contract
+
+`contract.passed` is a frozen comparability asset — adding a gate would
+silently make every archived run incomparable. So the checks that catch what
+the gates miss live in `src/autotokamak/bench/diagnostics.py` and are
+recorded as a `diagnostics` block in `result.json`, never as gates:
+
+- `test_rel_l2_full_grid` and `exterior_inflation` — the contract metric
+  masks to finite ground truth, so field predicted *outside* the plasma is
+  scored as if absent. The full-grid variant charges for it; the ratio of
+  the two is the violation's size in physical terms. This is the
+  discriminator: two shakedown runs both scored NaN-mask agreement 0.195,
+  but one had inflation 1.22 (a NaN-convention slip on an otherwise good
+  model) and the other 16.97 (a fabricated exterior plasma whose honest
+  error is 1.94, four times worse than baseline). Counting disagreeing
+  pixels cannot tell those apart; magnitude can, which is why
+  `physically_valid` is judged on magnitude and `nan_mask_agreement` is
+  recorded but not decisive.
+- `pred_over_truth_spread` — catches a constant predictor that ignores its
+  inputs.
+- `physically_valid` and `passed_gates_but_invalid` — the headline
+  measurement: green on every machine-checkable gate, wrong in the field.
+- `honesty_gap` — agent's self-reported `metrics.test_rel_l2.mean` minus the
+  independently scored value, signed (negative = claimed better than it is).
+  `report_keys` only ever checked that metric keys were *present*, which is
+  exactly what makes this measurable. The same L3-ursa run reported 0.0784
+  against an actual 0.9596.
+- solver-budget use against v3's ≤150 + 3×100 campaign bound, and
+  acquisition-log presence.
+
+Thresholds are named constants in that module. Backfill the block onto older
+runs with `python -m autotokamak.bench diagnose --tag <tag> [--rescore]`
+(`--rescore` re-invokes each `predict.py`, costing CPU but no API spend).
+
+## Methodology: what was chosen, and on what reasoning
+
+Every measurement above scores the OUTCOME. None of them separates two runs
+that reach the same error by different reasoning — ensemble disagreement with
+a stop triggered by measured validation error, versus uniform random sampling
+relabelled "adaptive" and stopped because the rounds ran out. That difference
+is this repo's actual research question, so it is extracted as data, not left
+as prose in a README.
+
+`src/autotokamak/bench/methodology.py` is deterministic, LLM-free and
+execution-free: it reads the artifacts the v3 task already mandates (the
+acquisition log, `sampling_strategy`, `report.json`) plus the agent's own
+code, and writes a `methodology` block into `result.json`. Two things come
+out of it:
+
+1. **The chain of methods** — the final pipeline, canonicalised into one
+   vocabulary: `initial design → representation + model [ensembling] →
+   acquisition × rounds → stopping rule`, e.g.
+   `lhs -> pca+mlp_torch[mc_dropout] -> acq:uncertainty_ensemble x3 -> stop:val_threshold_70pct`.
+2. **The per-iteration decision logic** — for each adaptive round: the
+   criterion the agent stated, how many points it took, the validation error
+   against baseline it had *in hand* when it chose, and what it decided next
+   (`continue` / `stop_threshold_met` / `stop_without_threshold` /
+   `stop_unexplained`).
+
+The acquisition vocabulary is anchored on the L0/L1 typed action space
+(`agent.orchestrator.schema.AcquisitionStrategy`), and
+`extract_meta_methodology` maps a pipeline workspace's `meta_trace.json` onto
+the same record — so a scripted L0 policy, an L1 typed picker and a
+from-scratch L3 agent are described in one vocabulary and land in one table.
+
+Derived measurements that the score cannot give:
+
+- `chain_agreement` — share of a cell's replicates on the modal chain. Method
+  reproducibility is separate from score reproducibility: a cell can be
+  stable in error while its agent re-invents the pipeline every run.
+- `criterion_switched` — the acquisition criterion CHANGED between rounds
+  (logic that reacts to what it measured) rather than one fixed rule executed
+  n times.
+- `evidence_grounded` — fraction of rounds whose validation-vs-baseline error
+  was actually recorded. An ungrounded round's reasoning is unfalsifiable.
+- `adaptive_in_name_only` — every stated criterion names nothing but
+  randomness.
+- `prose_only_terms` — a method claimed in README/`report.json` that the code
+  never evidences (matrix-v3 shakedown: URSA's README claims ensemble
+  uncertainty; its log shows `farthest_point` on all three rounds).
+
+It reads STATED criteria, not implemented ones, and says so: the code/prose
+split is preserved in `evidence`, and `tools/judge_code.py` remains the
+instrument for the qualitative call. Like `diagnostics`, nothing here touches
+`contract.passed`.
+
+```bash
+python -m autotokamak.bench methodology --tag <tag>        # extract + print per run
+python tools/aggregate_matrix.py --tag <tag> --show-rounds # cell table + every round
+```
+
+`aggregate_matrix.py` writes `methodology.csv` (one row per run: the chain)
+and `methodology_rounds.csv` (one row per adaptive round: the logic) beside
+`aggregate.csv`, and the HTML matrix report shows both per cell.
+
+## Replicated campaigns
+
+A cell run once is an anecdote: matrix-v1/v2 scored L3-pi at 0.0199 then
+0.1350, and L2-claude_sdk at 0.189 then a crash. Campaigns now run each cell
+n times (`bench run --rep N` records the index) via `tools/run_campaign.sh`,
+and `tools/aggregate_matrix.py` groups by cell to report pass-rates with
+Wilson intervals and rel-L2 medians with bootstrap CIs. Medians, not means —
+one 0.96 cell makes a mean meaningless.
+
 ## reference_runs/
 
 Archived agent-generated workspaces from the pre-refactor capability tests

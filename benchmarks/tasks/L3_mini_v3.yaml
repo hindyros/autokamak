@@ -1,3 +1,17 @@
+# FEEDBACK ROUNDS (2026-09-18): lowered 2 -> 1 to EQUALISE compute
+# across substrates. Only ursa and dspy implement outer feedback
+# rounds; pi, cursor and claude_sdk run a single session and ignore
+# the field entirely. At 2 the former got a second review-and-fix
+# pass the latter never got — an arbitrary two-tier design that was
+# the mechanical cause of their longer runtimes and ~6x cost. 1 is
+# the only value every adapter honours identically. CONFIG only:
+# the problem text is untouched, so prompt_version stays 3.
+# MODEL PIN (2026-09-17): added `cursor: gpt-5.2` so every harness in
+# the campaign runs the SAME model and the harness axis is not
+# confounded with the model. cursor-agent uses bare model ids
+# (`gpt-5.2`), not the `openai:`/`openai/` prefixes the other
+# adapters take. This changes CONFIG only — the problem text is
+# untouched, so prompt_version stays 3 and v3 runs remain comparable.
 # PROMPT v3 (2026-08-18): fixed budget numbers left over from the full-size
 # tasks (500-per-round / 10-round cap -> the mini campaign's 100 / 3). The
 # v2 text stated both budgets at once; agents could legitimately read a 17x
@@ -133,6 +147,7 @@ model:
   ursa: openai:gpt-5.2
   dspy: openai/gpt-5.2
   pi: openai:gpt-5.2
+  cursor: gpt-5.2
 harness_notes:
   ursa: |
     URSA RUNTIME NOTE
@@ -141,5 +156,5 @@ harness_notes:
       them entirely: do not read, write, delete, test, or build any
       guard/tooling around them.
 timeout_seconds: 5400
-feedback_rounds: 2
+feedback_rounds: 1
 prompt_version: 3

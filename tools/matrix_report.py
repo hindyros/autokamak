@@ -375,6 +375,38 @@ def _bench_choices(workspace: Path) -> dict:
             if "model" in k.lower() or "hyper" in k.lower():
                 out.setdefault("report model fields", {})[k] = v
     out["model (from README)"] = _first_readme_model_lines(workspace)
+    # Canonical methodology record — the same extractor the matrix table and
+    # result.json use, so the HTML and the CSVs cannot drift apart.
+    out.update(_methodology_choices(workspace))
+    return out
+
+
+def _methodology_choices(workspace: Path) -> dict:
+    """The chain of methods, and the reasoning of each adaptive round."""
+    try:
+        from autotokamak.bench.methodology import extract_methodology
+
+        m = extract_methodology(workspace)
+    except Exception:  # noqa: BLE001 — a report must never die on a nicety
+        return {}
+    logic = m.get("decision_logic") or {}
+    rounds = []
+    for it in m.get("iterations") or []:
+        rounds.append(
+            f"r{it['round']}: n={it['n_acquired']} "
+            f"[{', '.join(it['criterion_classes']) or 'unclassified'}] "
+            f"val/baseline={it['val_over_baseline']} → {it['decision']}"
+            + (f" — \u201c{it['criterion_text'][:110]}\u201d"
+               if it.get("criterion_text") else ""))
+    out = {
+        "method chain": m.get("chain_signature"),
+        "per-round decision logic": rounds,
+        "rounds evidence-grounded": logic.get("evidence_grounded_fraction"),
+        "criterion switched between rounds": logic.get("criterion_switched"),
+    }
+    prose_only = (m.get("evidence") or {}).get("prose_only_terms") or {}
+    if prose_only:
+        out["claimed in prose, absent from code"] = prose_only
     return out
 
 
@@ -402,6 +434,7 @@ def _meta_setup_and_choices(workspace: Path, manifest: dict) -> tuple[dict, dict
         except Exception:  # noqa: BLE001
             continue
     choices = {
+        **_meta_methodology_choices(workspace),
         "actions taken": actions,
         "winner model": rep.get("winner_model_name"),
         "winner hyperparameters": rep.get("winner_hyperparams"),
@@ -409,6 +442,27 @@ def _meta_setup_and_choices(workspace: Path, manifest: dict) -> tuple[dict, dict
                                     f"{rep.get('n_test_samples')} samples"),
     }
     return {k: v for k, v in given.items() if v is not None}, choices
+
+
+def _meta_methodology_choices(workspace: Path) -> dict:
+    """L0/L1 cells, in the same vocabulary as the agent cells."""
+    try:
+        from autotokamak.bench.methodology import extract_meta_methodology
+
+        m = extract_meta_methodology(workspace)
+    except Exception:  # noqa: BLE001
+        return {}
+    logic = m.get("decision_logic") or {}
+    return {
+        "method chain": m.get("chain_signature"),
+        "per-round decision logic": [
+            f"iter {it['round']}: {it['action']} "
+            f"[{', '.join(it['criterion_classes']) or 'typed action only'}]"
+            + (f" — \u201c{it['criterion_text'][:110]}\u201d"
+               if it.get("criterion_text") else "")
+            for it in m.get("iterations") or []],
+        "criterion switched between rounds": logic.get("criterion_switched"),
+    }
 
 
 # Plain-English meaning of each contract gate, shown whenever it fails.
