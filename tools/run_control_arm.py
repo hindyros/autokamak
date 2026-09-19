@@ -40,11 +40,32 @@ DEFAULT_CONFIG = REPO_ROOT / "benchmarks" / "configs" / "control_arm_meta.yaml"
 ARMS = {"active": "forced_enrich", "random": "forced_regen"}
 
 
+def _seeded_config(config: Path, seed: int, out_dir: Path) -> Path:
+    """A copy of the config with its seed replaced.
+
+    Replicates need different seeds or they are not replicates. The L0 path
+    is deterministic by design ("same seed => same decisions"), and
+    meta_loop.run exposes no seed override, so the seed has to travel in the
+    config. Without this, --reps 3 ran one experiment three times and
+    produced results identical to fourteen decimal places — observed, on the
+    first attempt at this arm.
+    """
+    import yaml
+
+    data = yaml.safe_load(config.read_text(encoding="utf-8"))
+    data["seed"] = seed
+    dest = out_dir / "configs" / f"{config.stem}_seed{seed}.yaml"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return dest
+
+
 def run_one(arm: str, rep: int, config: Path, n_new: int,
-            iterations: int | None, out_dir: Path) -> dict:
+            iterations: int | None, out_dir: Path, seed: int) -> dict:
     from autotokamak.agent.runners import meta_loop
     from autotokamak.policies import get_meta_policy
 
+    config = _seeded_config(config, seed, out_dir)
     picker = get_meta_policy(ARMS[arm], forced_n_new=n_new)
     started = time.time()
     report = meta_loop.run(
@@ -59,6 +80,7 @@ def run_one(arm: str, rep: int, config: Path, n_new: int,
     return {
         "arm": arm,
         "rep": rep,
+        "seed": seed,
         "wall_s": round(time.time() - started, 1),
         "n_iterations": d.get("n_iterations"),
         "actions": d.get("actions_taken"),
@@ -86,6 +108,9 @@ def main() -> int:
     ap.add_argument("--iterations", type=int, default=None,
                     help="Override max_iterations (default: from the config)")
     ap.add_argument("--config", default=str(DEFAULT_CONFIG))
+    ap.add_argument("--base-seed", type=int, default=100,
+                    help="Rep r runs with seed base+r; both arms of a rep "
+                         "share a seed, so they are paired")
     ap.add_argument("--tag", default="control-arm")
     args = ap.parse_args()
 
@@ -98,7 +123,8 @@ def main() -> int:
             print(f"\n=== {arm} arm, rep {rep}/{args.reps} ===", flush=True)
             try:
                 row = run_one(arm, rep, Path(args.config), args.n_new,
-                              args.iterations, out_dir)
+                              args.iterations, out_dir,
+                              seed=args.base_seed + rep)
             except Exception as exc:  # noqa: BLE001 — one bad rep must not lose the rest
                 row = {"arm": arm, "rep": rep, "error": f"{type(exc).__name__}: {exc}"}
                 print(f"  FAILED: {row['error']}", file=sys.stderr)

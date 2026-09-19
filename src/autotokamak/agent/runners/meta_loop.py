@@ -496,6 +496,19 @@ def _diagnostics_with_winner(state: MetaState) -> dict:
     )
 
 
+def _count_train_pool(setup, split_info: dict) -> int:
+    """Successful samples in the CURRENT train pool, however it has grown."""
+    try:
+        from autotokamak.data.h5io import read_h5_arrays
+
+        import numpy as np
+
+        arrays = read_h5_arrays(setup.train_pool)
+        return int(np.asarray(arrays.success, dtype=bool).sum())
+    except Exception:  # noqa: BLE001 — fall back to the initial split
+        return int(split_info["n_train_success"])
+
+
 def run(
     config_path: str,
     *,
@@ -822,7 +835,11 @@ def run(
             baseline_rmse=float(baseline_rmse),
             test_shard_path=str(setup.eval_h5),
             n_test_samples=int(split_info["n_test"]),
-            n_train_pool_samples=int(split_info["n_train_success"]),
+            # The pool GROWS: every enrich_active / regen_dataset iteration
+            # appends solves to it. Reporting the initial split's count made
+            # a run that trained on 2598 samples report 1999 — which in a
+            # per-solve comparison is the denominator, so it mattered.
+            n_train_pool_samples=_count_train_pool(setup, split_info),
             initial_rmse=state.rmse_history[0] if state.rmse_history else None,
             winner_model_name=(
                 state.best_surrogate_report.get("winner_model_name", "none")
