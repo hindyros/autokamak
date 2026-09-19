@@ -33,6 +33,12 @@
 #                  A shorter per-cell cap for a substrate known not to
 #                  terminate, so a non-terminating cell wastes 45 minutes
 #                  rather than 110.
+#   --tpd-headroom stop launching when the day's tokens reach this fraction
+#                  of the org's daily cap (benchmarks/assets/rate_limits.json;
+#                  0.85 by default, 0 to disable). TPM bounds a burst and is
+#                  not the campaign's problem; the DAILY cap is, because
+#                  hitting it stops every substrate at once, mid-run. The fix
+#                  is to resume after the reset, not to raise a ceiling.
 #   preflight      keys, CLIs, model pins, frozen assets, disk and git state
 #                  are checked BEFORE the first paid call
 #                  (tools/campaign_guard.py; --skip-preflight to bypass).
@@ -46,7 +52,7 @@ cd "$(dirname "$0")/.."
 
 TAG=""; REPS=5; PARALLEL=3; MODEL=""; DRY=0; TIMEOUT=""
 RESUME=0; BUDGET=""; SKIP_PREFLIGHT=0; MIN_DISK_GB=10
-HARNESS_BUDGET=""; HARNESS_TIMEOUT=""
+HARNESS_BUDGET=""; HARNESS_TIMEOUT=""; TPD_HEADROOM=0.85; TPD_MODEL="gpt-5.2"
 HARNESSES="ursa dspy pi cursor"
 LEVELS="L3 L2"
 TASK_SUFFIX="mini_v3"
@@ -66,6 +72,8 @@ while [[ $# -gt 0 ]]; do
     --budget-usd) BUDGET="$2"; shift 2 ;;
     --harness-budget)  HARNESS_BUDGET="$2"; shift 2 ;;
     --harness-timeout) HARNESS_TIMEOUT="$2"; shift 2 ;;
+    --tpd-headroom) TPD_HEADROOM="$2"; shift 2 ;;
+    --tpd-model)    TPD_MODEL="$2"; shift 2 ;;
     --min-disk-gb) MIN_DISK_GB="$2"; shift 2 ;;
     --skip-preflight) SKIP_PREFLIGHT=1; shift ;;
     --dry-run)    DRY=1; shift ;;
@@ -97,7 +105,8 @@ if [[ "$SKIP_PREFLIGHT" != "1" && "$DRY" != "1" ]]; then
   first_level="${LEVELS%% *}"
   echo "--- worst-case exposure ---"
   $GUARD forecast --harnesses "$HARNESSES" --reps "$REPS" --levels "$LEVELS" \
-         --parallel "$PARALLEL" || true
+         --parallel "$PARALLEL" --harness-budget "$HARNESS_BUDGET" \
+         --harness-timeout "$HARNESS_TIMEOUT" --model "$TPD_MODEL" || true
   echo "--- rate limits (this key, this model) ---"
   $GUARD ratelimits --tag "$TAG" --parallel "$PARALLEL" || true
   echo "---"
@@ -194,6 +203,19 @@ run_cell() {
   echo "$rc" >"$LOGS/$name.exit"
   echo "[$(date +%H:%M:%S)] DONE  $name (exit $rc)"
 
+  # The daily token cap, checked the same way and for the same reason. It
+  # is a WALL, not a budget: when it is hit every substrate stops at once
+  # until the reset, so the campaign stops itself just short and resumes
+  # tomorrow with its completed cells intact.
+  if [[ -n "${TPD_HEADROOM:-}" ]] && [[ "$TPD_HEADROOM" != "0" ]]; then
+    if ! python tools/campaign_guard.py tokens --tag "$TAG" \
+           --model "$TPD_MODEL" --since-hours 24 \
+           --headroom "$TPD_HEADROOM" >/dev/null 2>&1; then
+      echo "daily token cap approached (>= ${TPD_HEADROOM} of the model's TPD); resume after the reset" >"$ABORT"
+      echo "[$(date +%H:%M:%S)] TPD STOP — no further cells will start today"
+    fi
+  fi
+
   # Spend is checked AFTER each cell rather than on a timer: a cell's cost
   # only becomes visible when it writes result.json.
   if [[ -n "${BUDGET:-}" ]]; then
@@ -208,6 +230,7 @@ run_cell() {
 }
 export -f run_cell
 export LOGS CELL_HARD_TIMEOUT ABORT BUDGET TAG HARNESS_BUDGET HARNESS_TIMEOUT
+export TPD_HEADROOM TPD_MODEL
 
 for level in $LEVELS; do
   task="benchmarks/tasks/${level}_${TASK_SUFFIX}.yaml"

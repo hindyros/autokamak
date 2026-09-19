@@ -296,6 +296,14 @@ printed, labelled descriptive.
   honouring rep caps, harness budgets and harness timeouts. The three levers
   together take the v3 campaign from **$192 / 9.4 h worst case to $98 /
   4.8 h**, with ursa down from 65% to 31% of exposure.
+- `--tpd-headroom 0.85` stops launching when the day's tokens reach that
+  fraction of the org's **daily** cap. TPM bounds a burst and is not this
+  campaign's problem; TPD is, because hitting it stops every substrate at
+  once, mid-run, and the fix is the clock rather than a bigger ceiling. The
+  org's limits are committed in `benchmarks/assets/rate_limits.json` —
+  headers carry TPM and RPM but never TPD, so the daily cap is only knowable
+  from the dashboard. `campaign_guard tokens --tag <tag> --since-hours 24`
+  reports the day's consumption per substrate.
 - `ratelimits` reads this key's ACTUAL limits from the response headers of
   one minimal call, and sizes `--parallel` against measured per-session
   consumption rather than a number written in a doc. On the archived v3
@@ -304,6 +312,16 @@ printed, labelled descriptive.
   so the standard `--parallel 3` has roughly 3x of room. `cursor-agent`
   routes through Cursor's backend, so its tokens do not touch this key's
   quota and are excluded from the sizing.
+
+**The daily cap is the real campaign-scale constraint.** At gpt-5.2's
+200,000,000 TPD, the measured per-run footprints (pi 5.7M, dspy 2.9M, ursa
+~5.3M inferred from spend, cursor 0 on this key) put the unconstrained
+5-rep campaign at **139M — 70% of one day** — so a re-run or a second arm on
+the same day would hit the wall. The ring-fenced configuration comes to
+**99M, 50%**. `forecast` prints this before anything is spent. Cached input
+is counted throughout: whether it consumes quota is not documented, and
+assuming it does is the direction that cannot cause an unplanned stop — if
+it turns out not to, these figures roughly halve.
 - `reconcile` writes a stub `result.json` for cells the watchdog killed. They
   otherwise vanish from every report — the denominator silently shrinks, and
   a substrate that always times out looks like one that was never run (the
