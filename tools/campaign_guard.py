@@ -22,7 +22,9 @@ as a gate.
     python tools/campaign_guard.py preflight --harnesses "ursa dspy pi cursor" \
         --task benchmarks/tasks/L3_mini_v3.yaml [--min-disk-gb 10]
     python tools/campaign_guard.py completed --tag t --condition L3-pi --rep 2
-    python tools/campaign_guard.py spend --tag t [--budget 150]
+    python tools/campaign_guard.py spend --tag t [--budget 150] [--harness ursa]
+    python tools/campaign_guard.py ratelimits [--tag t] [--parallel 3]
+    python tools/campaign_guard.py forecast --harnesses "ursa dspy pi cursor" --reps 5
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS = REPO_ROOT / "experiments"
@@ -80,7 +83,8 @@ def cmd_completed(args) -> int:
     return 1
 
 
-def measured_spend(tag: str) -> tuple[float, list[str]]:
+def measured_spend(tag: str, harness: Optional[str] = None
+                   ) -> tuple[float, list[str]]:
     """Dollars spent under a tag, best-effort, with what could not be priced.
 
     Self-reported cost first; then tools/cost_report.py's derived figures
@@ -93,9 +97,16 @@ def measured_spend(tag: str) -> tuple[float, list[str]]:
     if not tag_dir.is_dir():
         return 0.0, ["no such tag dir"]
 
+    def _match(condition: Optional[str]) -> bool:
+        # Conditions are "<level>-<harness>"; a per-harness ceiling spans
+        # levels, because it is the SUBSTRATE that runs away, not the level.
+        return harness is None or str(condition).partition("-")[2] == harness
+
     priced_runs = set()
     for rp, r in _runs(tag_dir):
         run_key = (r.get("condition"), rp.parent.name)
+        if not _match(run_key[0]):
+            continue
         c = r.get("cost_usd")
         if isinstance(c, (int, float)):
             total += float(c)
@@ -111,7 +122,7 @@ def measured_spend(tag: str) -> tuple[float, list[str]]:
             with csv_path.open(newline="") as fh:
                 for row in _csv.DictReader(fh):
                     key = (row.get("condition"), row.get("run_id"))
-                    if key in priced_runs:
+                    if key in priced_runs or not _match(key[0]):
                         continue
                     try:
                         total += float(row["cost_usd"])
@@ -126,7 +137,7 @@ def measured_spend(tag: str) -> tuple[float, list[str]]:
     # Killed runs: no result.json, but URSA wrote its own accounting.
     for metrics in tag_dir.glob("*/*/workspace/ursa_metrics/*.json"):
         key = (metrics.parents[2].parent.name, metrics.parents[2].name)
-        if key in priced_runs:
+        if key in priced_runs or not _match(key[0]):
             continue
         try:
             data = json.loads(metrics.read_text(encoding="utf-8"))
@@ -137,6 +148,230 @@ def measured_spend(tag: str) -> tuple[float, list[str]]:
         except Exception:  # noqa: BLE001
             continue
     return total, unpriced
+
+
+# Worst observed cost and duration per substrate, from the archived v3
+# shakedown (experiments/matrix-v3-n10-20260917 + the aborted n=10 attempt).
+# Used only to FORECAST exposure before spending; measured spend always
+# comes from the runs themselves.
+OBSERVED_WORST: dict[str, dict[str, float]] = {
+    # ursa's figures are from the aborted attempt, where it ran 10h18m
+    # against a 90-minute cap and recovered $12.31 from its own metrics.
+    "ursa": {"usd": 12.5, "minutes": 110.0},
+    "dspy": {"usd": 3.0, "minutes": 28.0},
+    "pi": {"usd": 2.0, "minutes": 15.0},
+    "cursor": {"usd": 1.7, "minutes": 17.0},
+    "claude_sdk": {"usd": 6.0, "minutes": 40.0},
+    "echo": {"usd": 0.0, "minutes": 1.0},
+}
+
+
+def cmd_forecast(args) -> int:
+    """Worst-case exposure before a single call is made.
+
+    A budget ceiling only tells you where the campaign STOPS; this tells you
+    what it can cost if every cell runs to its worst observed length. The
+    per-harness rows are what matter: one slow substrate can eat a shared
+    ceiling and starve the other three, which is why the driver takes
+    per-harness caps as well as a global one.
+    """
+    def _cap(spec: str, name: str):
+        for part in (spec or "").split(","):
+            k, _, v = part.partition("=")
+            if k.strip() == name:
+                try:
+                    return float(v)
+                except ValueError:
+                    return None
+        return None
+
+    total_usd = total_min = 0.0
+    rows = []
+    n_levels = max(1, len(args.levels.split()))
+    for spec in args.harnesses.split():
+        name, _, cap = spec.partition(":")
+        reps = int(cap) if cap.isdigit() else args.reps
+        w = dict(OBSERVED_WORST.get(name, {"usd": 5.0, "minutes": 60.0}))
+        # A shorter per-cell cap truncates the worst case: spend tracks time
+        # for a substrate that runs until it is stopped.
+        tcap = _cap(args.harness_timeout, name)
+        if tcap and tcap / 60 < w["minutes"]:
+            w["usd"] *= (tcap / 60) / w["minutes"]
+            w["minutes"] = tcap / 60
+        # An explicit ring-fence is a hard ceiling, whatever the cells cost.
+        bcap = _cap(args.harness_budget, name)
+        cells = reps * n_levels
+        usd = cells * w["usd"]
+        if bcap is not None:
+            usd = min(usd, bcap)
+        minutes = cells * w["minutes"]
+        total_usd += usd
+        total_min += minutes
+        rows.append((name, cells, w["usd"], usd, w["minutes"], minutes))
+
+    print(f"{'harness':<12}{'cells':>6}{'$/cell':>9}{'$ worst':>10}"
+          f"{'min/cell':>10}{'h serial':>10}")
+    for name, cells, per, usd, per_min, minutes in sorted(
+            rows, key=lambda r: -r[3]):
+        print(f"{name:<12}{cells:>6}{per:>9.2f}{usd:>10.2f}"
+              f"{per_min:>10.0f}{minutes / 60:>10.1f}")
+    print(f"{'TOTAL':<12}{sum(r[1] for r in rows):>6}{'':>9}{total_usd:>10.2f}"
+          f"{'':>10}{total_min / 60:>10.1f}")
+    print(f"\nWall clock at --parallel {args.parallel}: "
+          f"~{total_min / 60 / max(1, args.parallel):.1f} h worst case "
+          f"(cells are not evenly sized, so treat it as an upper bound).")
+    if rows:
+        worst = max(rows, key=lambda r: r[3])
+        share = worst[3] / total_usd * 100 if total_usd else 0
+        print(f"Largest exposure: {worst[0]} at ${worst[3]:.2f} "
+              f"({share:.0f}% of the worst case). Ring-fence it with "
+              f"--harness-budget \"{worst[0]}=<usd>\" so it cannot starve "
+              f"the others.")
+    return 0
+
+
+def _ratelimit_headers(model: str) -> tuple[dict, Optional[str]]:
+    """One minimal completion, read for its rate-limit headers.
+
+    Costs a fraction of a cent and is the only way to know this key's ACTUAL
+    limits: they are per-account, per-model and change with tier, so any
+    number written into a repo is a guess with a shelf life.
+    """
+    import httpx
+
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        return {}, "OPENAI_API_KEY is not set"
+    try:
+        r = httpx.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"model": model,
+                  "messages": [{"role": "user", "content": "hi"}],
+                  "max_completion_tokens": 1},
+            timeout=60.0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {}, f"probe failed: {type(exc).__name__}: {exc}"
+    headers = {k.lower(): v for k, v in r.headers.items()
+               if k.lower().startswith("x-ratelimit")}
+    if r.status_code >= 400 and not headers:
+        return {}, f"probe returned HTTP {r.status_code}: {r.text[:200]}"
+    return headers, None
+
+
+def _parse_limit(value: Optional[str]) -> Optional[float]:
+    """OpenAI writes these as 10000, 30000000, or 1.5k / 2m."""
+    if not value:
+        return None
+    v = value.strip().lower()
+    mult = 1.0
+    if v.endswith("k"):
+        mult, v = 1e3, v[:-1]
+    elif v.endswith("m"):
+        mult, v = 1e6, v[:-1]
+    try:
+        return float(v) * mult
+    except ValueError:
+        return None
+
+
+def observed_session_rates(tag: Optional[str]) -> list[tuple[str, float, float]]:
+    """(condition, tokens-per-minute, requests-per-minute) per archived run.
+
+    Measured, not assumed: a campaign's rate-limit risk is entirely about how
+    fast ONE agent session consumes tokens, and that varies ~4x across these
+    substrates (a cached-heavy cursor session burns far more TPM than a dspy
+    one at the same dollar cost).
+    """
+    import csv as _csv
+
+    out: list[tuple[str, float, float]] = []
+    if not tag:
+        return out
+    csv_path = EXPERIMENTS / tag / "cost_report.csv"
+    if not csv_path.is_file():
+        return out
+    try:
+        with csv_path.open(newline="") as fh:
+            for row in _csv.DictReader(fh):
+                try:
+                    minutes = float(row.get("wall_min") or 0)
+                    if minutes <= 0:
+                        continue
+                    tokens = sum(float(row.get(k) or 0)
+                                 for k in ("tok_in", "tok_out", "tok_cache"))
+                    turns = float(row.get("turns") or 0)
+                    out.append((row.get("condition", "?"), tokens / minutes,
+                                turns / minutes))
+                except (TypeError, ValueError):
+                    continue
+    except OSError:
+        pass
+    return out
+
+
+def cmd_ratelimits(args) -> int:
+    """This key's real limits, against this campaign's measured appetite."""
+    headers, err = _ratelimit_headers(args.model)
+    if err:
+        print(f"[ratelimits] {err}", file=sys.stderr)
+        if args.tpm is None:
+            print("[ratelimits] pass --tpm/--rpm to reason without a probe",
+                  file=sys.stderr)
+            return 1
+    for k in sorted(headers):
+        print(f"[ratelimits] {k}: {headers[k]}")
+
+    tpm = args.tpm or _parse_limit(headers.get("x-ratelimit-limit-tokens"))
+    rpm = args.rpm or _parse_limit(headers.get("x-ratelimit-limit-requests"))
+    if tpm:
+        print(f"[ratelimits] token limit: {tpm:,.0f} TPM")
+    if rpm:
+        print(f"[ratelimits] request limit: {rpm:,.0f} RPM")
+
+    rates = observed_session_rates(args.tag)
+    if not rates:
+        print("[ratelimits] no measured session rates "
+              "(run tools/cost_report.py --tag <tag> first) — cannot size "
+              "--parallel from evidence")
+        return 0
+
+    # cursor-agent calls the model through Cursor's own backend, so its
+    # tokens are billed and rate-limited THERE, not against this key. Its
+    # rate is still printed (it is a real load, on someone's quota) but it
+    # must not size this key's parallelism.
+    on_key = [r for r in rates if "cursor" not in r[0]]
+    sizing = on_key or rates
+    peak_tpm = max(r[1] for r in sizing)
+    peak_rpm = max(r[2] for r in sizing)
+    print("\n[ratelimits] measured per-session consumption "
+          f"(n={len(rates)} archived runs):")
+    for cond, t, rq in sorted(rates, key=lambda x: -x[1]):
+        note = "  (billed via Cursor, not this key)" if "cursor" in cond else ""
+        print(f"    {cond:<12} {t:>10,.0f} tok/min" +
+              (f"  {rq:>6.1f} req/min" if rq else "") + note)
+
+    if tpm:
+        # Headroom factor: agent sessions are bursty — a session averaging
+        # 300k TPM does not spread it evenly, and a 429 inside a harness is
+        # retried at best and fatal at worst.
+        safe = int(tpm * args.headroom / peak_tpm) if peak_tpm else 0
+        print(f"\n[ratelimits] worst-case session burns {peak_tpm:,.0f} tok/min; "
+              f"at {args.headroom:.0%} headroom that supports "
+              f"--parallel {max(1, safe)}")
+        if args.parallel and args.parallel > max(1, safe):
+            print(f"[ratelimits] WARNING: --parallel {args.parallel} exceeds "
+                  f"that. Expect 429s; substrates differ in whether they "
+                  f"retry or fail the run.", file=sys.stderr)
+            return 2
+    if rpm and peak_rpm and args.parallel:
+        if peak_rpm * args.parallel > rpm * args.headroom:
+            print(f"[ratelimits] WARNING: {args.parallel} x {peak_rpm:.0f} "
+                  f"req/min approaches the {rpm:,.0f} RPM limit",
+                  file=sys.stderr)
+            return 2
+    return 0
 
 
 def cmd_reconcile(args) -> int:
@@ -196,7 +431,7 @@ def cmd_reconcile(args) -> int:
 
 
 def cmd_spend(args) -> int:
-    total, unpriced = measured_spend(args.tag)
+    total, unpriced = measured_spend(args.tag, harness=args.harness)
     print(f"{total:.2f}")
     if args.verbose and unpriced:
         print(f"  unpriced runs (cost not yet recoverable): {len(unpriced)}",
@@ -324,8 +559,33 @@ def main() -> int:
     p.add_argument("--tag", required=True)
     p.add_argument("--budget", type=float, default=None,
                    help="Exit 2 when spend has reached this ceiling")
+    p.add_argument("--harness", default=None,
+                   help="Count only this substrate's runs (across levels)")
     p.add_argument("--verbose", action="store_true")
     p.set_defaults(fn=cmd_spend)
+
+    p = sub.add_parser("ratelimits",
+                       help="This key's real limits vs measured session rates")
+    p.add_argument("--model", default="gpt-5.2")
+    p.add_argument("--tag", default=None,
+                   help="Tag whose cost_report.csv supplies measured rates")
+    p.add_argument("--parallel", type=int, default=None)
+    p.add_argument("--headroom", type=float, default=0.6,
+                   help="Fraction of the limit to plan against (default 0.6)")
+    p.add_argument("--tpm", type=float, default=None, help="Skip the probe")
+    p.add_argument("--rpm", type=float, default=None)
+    p.set_defaults(fn=cmd_ratelimits)
+
+    p = sub.add_parser("forecast", help="Worst-case spend and wall clock")
+    p.add_argument("--harnesses", required=True)
+    p.add_argument("--reps", type=int, default=5)
+    p.add_argument("--levels", default="L3 L2")
+    p.add_argument("--parallel", type=int, default=3)
+    p.add_argument("--harness-timeout", default="",
+                   help='e.g. "ursa=2700" — truncates that row\'s worst case')
+    p.add_argument("--harness-budget", default="",
+                   help='e.g. "ursa=45" — caps that row\'s worst case')
+    p.set_defaults(fn=cmd_forecast)
 
     args = ap.parse_args()
     return args.fn(args)

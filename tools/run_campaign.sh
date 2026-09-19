@@ -22,6 +22,17 @@
 #                  mints a new run_id.
 #   --budget-usd   stop launching new cells once recorded spend reaches a
 #                  ceiling. Cells in flight are allowed to finish.
+#   --harness-budget "ursa=40,dspy=30"
+#                  RING-FENCE a substrate. A global ceiling alone lets the
+#                  slowest, dearest substrate eat it and starve the rest:
+#                  on the observed figures ursa is 65% of the worst case
+#                  ($125 of $192 at 5 reps x 2 levels). When a substrate
+#                  reaches its own cap its remaining cells are skipped and
+#                  the campaign CONTINUES with the others.
+#   --harness-timeout "ursa=2700"
+#                  A shorter per-cell cap for a substrate known not to
+#                  terminate, so a non-terminating cell wastes 45 minutes
+#                  rather than 110.
 #   preflight      keys, CLIs, model pins, frozen assets, disk and git state
 #                  are checked BEFORE the first paid call
 #                  (tools/campaign_guard.py; --skip-preflight to bypass).
@@ -35,6 +46,7 @@ cd "$(dirname "$0")/.."
 
 TAG=""; REPS=5; PARALLEL=3; MODEL=""; DRY=0; TIMEOUT=""
 RESUME=0; BUDGET=""; SKIP_PREFLIGHT=0; MIN_DISK_GB=10
+HARNESS_BUDGET=""; HARNESS_TIMEOUT=""
 HARNESSES="ursa dspy pi cursor"
 LEVELS="L3 L2"
 TASK_SUFFIX="mini_v3"
@@ -52,6 +64,8 @@ while [[ $# -gt 0 ]]; do
     --task-suffix) TASK_SUFFIX="$2"; shift 2 ;;
     --resume)     RESUME=1; shift ;;
     --budget-usd) BUDGET="$2"; shift 2 ;;
+    --harness-budget)  HARNESS_BUDGET="$2"; shift 2 ;;
+    --harness-timeout) HARNESS_TIMEOUT="$2"; shift 2 ;;
     --min-disk-gb) MIN_DISK_GB="$2"; shift 2 ;;
     --skip-preflight) SKIP_PREFLIGHT=1; shift ;;
     --dry-run)    DRY=1; shift ;;
@@ -71,9 +85,22 @@ rm -f "$ABORT"
 
 GUARD="python tools/campaign_guard.py"
 
+# "ursa=40,dspy=30" -> the value for one harness, or empty.
+harness_cap() {
+  [[ -n "${1:-}" ]] || return 0
+  printf '%s' "$1" | tr ',' '\n' | awk -F= -v n="$2" '$1==n {print $2; exit}'
+}
+export -f harness_cap
+
 # ---- preflight: everything cheaper to find now than at 2am ---------------
 if [[ "$SKIP_PREFLIGHT" != "1" && "$DRY" != "1" ]]; then
   first_level="${LEVELS%% *}"
+  echo "--- worst-case exposure ---"
+  $GUARD forecast --harnesses "$HARNESSES" --reps "$REPS" --levels "$LEVELS" \
+         --parallel "$PARALLEL" || true
+  echo "--- rate limits (this key, this model) ---"
+  $GUARD ratelimits --tag "$TAG" --parallel "$PARALLEL" || true
+  echo "---"
   if ! $GUARD preflight --harnesses "$HARNESSES" \
         --task "benchmarks/tasks/${first_level}_${TASK_SUFFIX}.yaml" \
         --min-disk-gb "$MIN_DISK_GB"; then
@@ -106,6 +133,29 @@ run_cell() {
     echo "[$(date +%H:%M:%S)] SKIP  $name ($(cat "$ABORT"))"
     return 0
   fi
+  # Cell names are "<level>-<harness>-r<n>"; the substrate is what a
+  # ring-fenced budget and a shortened cap are keyed on.
+  local harness="${name#*-}"; harness="${harness%-r*}"
+
+  local hcap
+  hcap="$(harness_cap "${HARNESS_BUDGET:-}" "$harness")"
+  if [[ -n "$hcap" ]]; then
+    local hspent
+    hspent=$(python tools/campaign_guard.py spend --tag "$TAG" \
+             --harness "$harness" 2>/dev/null | tail -1)
+    if python -c "import sys; sys.exit(0 if float('${hspent:-0}') >= float('$hcap') else 1)"; then
+      echo "[$(date +%H:%M:%S)] SKIP  $name (harness budget \$$hcap reached; "         "spent \$$hspent) — other substrates continue"
+      echo "skipped-harness-budget" >"$LOGS/$name.exit"
+      return 0
+    fi
+  fi
+
+  # A substrate known not to terminate gets a shorter leash than the rest.
+  local cap="$CELL_HARD_TIMEOUT"
+  local hto
+  hto="$(harness_cap "${HARNESS_TIMEOUT:-}" "$harness")"
+  [[ -n "$hto" ]] && cap=$(( hto + 1200 ))
+
   echo "[$(date +%H:%M:%S)] START $name"
 
   # Job control gives this child its own process group (pgid == pid), so
@@ -126,8 +176,8 @@ run_cell() {
   # 80 sleeps). Polling costs a wakeup every 5s and leaves nothing behind.
   local waited=0
   while kill -0 "$pid" 2>/dev/null; do
-    if (( waited >= CELL_HARD_TIMEOUT )); then
-      echo "[watchdog] hard-killing $name: exceeded ${CELL_HARD_TIMEOUT}s" \
+    if (( waited >= cap )); then
+      echo "[watchdog] hard-killing $name: exceeded ${cap}s" \
         | tee -a "$LOGS/$name.log"
       kill -TERM -- "-$pid" 2>/dev/null
       sleep 15
@@ -157,7 +207,7 @@ run_cell() {
   fi
 }
 export -f run_cell
-export LOGS CELL_HARD_TIMEOUT ABORT BUDGET TAG
+export LOGS CELL_HARD_TIMEOUT ABORT BUDGET TAG HARNESS_BUDGET HARNESS_TIMEOUT
 
 for level in $LEVELS; do
   task="benchmarks/tasks/${level}_${TASK_SUFFIX}.yaml"
@@ -181,7 +231,11 @@ for level in $LEVELS; do
       fi
       cmd="python -m autotokamak.bench run --task $task --harness $h --tag $TAG --rep $rep"
       [[ -n "$MODEL" ]]   && cmd="$cmd --model $MODEL"
-      [[ -n "$TIMEOUT" ]] && cmd="$cmd --timeout $TIMEOUT"
+      # Per-harness timeout wins over the campaign-wide one: it exists
+      # precisely because one substrate needs a different leash.
+      cell_timeout="$(harness_cap "$HARNESS_TIMEOUT" "$h")"
+      [[ -z "$cell_timeout" ]] && cell_timeout="$TIMEOUT"
+      [[ -n "$cell_timeout" ]] && cmd="$cmd --timeout $cell_timeout"
       jobs+="${level}-${h}-r${rep} ${cmd}"$'\n'
     done
   done

@@ -62,7 +62,10 @@ python -m autotokamak.bench freeze-testset     # ground truth for head-to-head s
 # replicated campaign + the aggregated, error-barred table:
 tools/campaign_guard.py preflight --harnesses "ursa dspy pi cursor" \
                         --task benchmarks/tasks/L3_mini_v3.yaml
-tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 --budget-usd 200
+tools/campaign_guard.py forecast --harnesses "ursa:3 dspy pi cursor" --reps 5
+tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 --budget-usd 150 \
+    --harnesses "ursa:3 dspy pi cursor" \
+    --harness-budget "ursa=45" --harness-timeout "ursa=2700"
 tools/run_campaign.sh --tag <tag> --reps 5 --resume     # after any stop
 python tools/cost_report.py     --tag <tag>
 python tools/aggregate_matrix.py --tag <tag>

@@ -283,6 +283,27 @@ printed, labelled descriptive.
   `bench run` always mints a new run_id.
 - `--budget-usd N` stops launching new cells once recorded spend reaches a
   ceiling; cells in flight finish and record their cost.
+- `--harness-budget "ursa=45"` **ring-fences a substrate**. A single global
+  ceiling is not enough: ursa does not reliably terminate under v3, runs to
+  its cap, and on observed figures is **65% of the worst case** ($125 of $192
+  at 5 reps x 2 levels). Left alone it eats the ceiling and starves the other
+  three. When a substrate reaches its own cap its remaining cells are skipped
+  and the campaign CONTINUES.
+- `--harness-timeout "ursa=2700"` gives a known non-terminator a shorter
+  leash, so such a cell wastes 45 minutes instead of 110. Spend tracks time
+  for a substrate that runs until stopped, so this truncates cost too.
+- `forecast` prints worst-case exposure per substrate BEFORE the first call,
+  honouring rep caps, harness budgets and harness timeouts. The three levers
+  together take the v3 campaign from **$192 / 9.4 h worst case to $98 /
+  4.8 h**, with ursa down from 65% to 31% of exposure.
+- `ratelimits` reads this key's ACTUAL limits from the response headers of
+  one minimal call, and sizes `--parallel` against measured per-session
+  consumption rather than a number written in a doc. On the archived v3
+  runs a single session burns 88k-391k tokens/min; with the observed
+  4,000,000 TPM / 10,000 RPM ceiling, 60% headroom supports `--parallel 6`,
+  so the standard `--parallel 3` has roughly 3x of room. `cursor-agent`
+  routes through Cursor's backend, so its tokens do not touch this key's
+  quota and are excluded from the sizing.
 - `reconcile` writes a stub `result.json` for cells the watchdog killed. They
   otherwise vanish from every report — the denominator silently shrinks, and
   a substrate that always times out looks like one that was never run (the
