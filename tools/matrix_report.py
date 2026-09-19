@@ -398,11 +398,29 @@ def _methodology_choices(workspace: Path) -> dict:
             f"val/baseline={it['val_over_baseline']} → {it['decision']}"
             + (f" — \u201c{it['criterion_text'][:110]}\u201d"
                if it.get("criterion_text") else ""))
+    code = m.get("code_logic") or {}
+    svi = m.get("stated_vs_implemented") or {}
     out = {
         "method chain": m.get("chain_signature"),
         "per-round decision logic": rounds,
         "rounds evidence-grounded": logic.get("evidence_grounded_fraction"),
         "criterion switched between rounds": logic.get("criterion_switched"),
+        # The code's own logic, read from the AST of whatever chooses the
+        # next batch — independent of the run's account of itself.
+        "implemented logic (from code)": code.get("code_logic_signature"),
+        "chooser functions": [
+            f"{h.get('function') or '(module scope)'} @ {h['where']} → "
+            f"{', '.join(h['classes'])}"
+            + (f"; selection {', '.join(h['selection'])}" if h.get("selection") else "")
+            + f"; calls the model: {'yes' if h.get('model_informed') else 'no'}"
+            for h in (code.get("chooser_functions") or [])[:6]],
+        "stated vs implemented": (
+            f"{svi.get('verdict')}"
+            + (f" — claimed but not computed: {', '.join(svi['only_stated'])}"
+               if svi.get("only_stated") else "")
+            + (f" — computed but not claimed: {', '.join(svi['only_implemented'])}"
+               if svi.get("only_implemented") else "")
+            if svi.get("verdict") else None),
     }
     prose_only = (m.get("evidence") or {}).get("prose_only_terms") or {}
     if prose_only:

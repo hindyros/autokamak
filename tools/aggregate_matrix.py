@@ -179,11 +179,27 @@ def _methodology_fields(meth: Any) -> dict:
                 "n_rounds": None, "criterion_switched": None,
                 "evidence_grounded": None, "stop_decision": None,
                 "adaptive_in_name_only": None, "prose_only": False,
-                "iterations": []}
+                "iterations": [], "code_acq": [], "code_logic_signature": None,
+                "code_evidence_scope": None, "selection_rule": [],
+                "model_informed": None, "stated_vs_code": None,
+                "only_stated": [], "only_implemented": [], "chooser_where": ""}
     chain = meth.get("method_chain") or {}
     logic = meth.get("decision_logic") or {}
+    code = meth.get("code_logic") or {}
+    svi = meth.get("stated_vs_implemented") or {}
     prose_only = (meth.get("evidence") or {}).get("prose_only_terms") or {}
     return {
+        # What the CODE computes, and whether it matches what the run said.
+        "code_acq": code.get("acquisition_implemented") or [],
+        "code_logic_signature": code.get("code_logic_signature"),
+        "code_evidence_scope": code.get("evidence_scope"),
+        "selection_rule": code.get("selection_rule") or [],
+        "model_informed": code.get("model_informed"),
+        "stated_vs_code": svi.get("verdict"),
+        "only_stated": svi.get("only_stated") or [],
+        "only_implemented": svi.get("only_implemented") or [],
+        "chooser_where": "; ".join(h.get("where", "")
+                                   for h in (code.get("chooser_functions") or [])[:3]),
         "chain": meth.get("chain_signature"),
         "acq_classes": logic.get("criterion_classes") or [],
         "model_primary": chain.get("model_primary"),
@@ -209,6 +225,10 @@ def summarise_methodology(runs: list[dict]) -> dict:
     chains = [r["chain"] for r in runs if r["chain"]]
     chain_counts = Counter(chains)
     modal, modal_n = (chain_counts.most_common(1)[0] if chain_counts else (None, 0))
+    code_sigs = [r["code_logic_signature"] for r in runs if r["code_logic_signature"]]
+    code_counts = Counter(code_sigs)
+    code_modal, code_modal_n = (code_counts.most_common(1)[0] if code_counts
+                                else (None, 0))
     rounds = [r["n_rounds"] for r in runs if isinstance(r["n_rounds"], int)]
     grounded = [r["evidence_grounded"] for r in runs
                 if isinstance(r["evidence_grounded"], (int, float))]
@@ -229,6 +249,17 @@ def summarise_methodology(runs: list[dict]) -> dict:
         "evidence_grounded_median": (round(float(np.median(grounded)), 2)
                                      if grounded else None),
         "stop_decisions": _counts([r["stop_decision"] for r in runs]),
+        # ---- the code-comparison columns --------------------------------
+        "code_acq": _counts([c for r in runs for c in r["code_acq"]]),
+        "code_logic_modal": code_modal,
+        "code_logic_agreement": (round(code_modal_n / len(code_sigs), 2)
+                                 if code_sigs else None),
+        "n_distinct_code_logics": len(code_counts),
+        "selection_rule": _counts([s for r in runs for s in r["selection_rule"]]),
+        "model_informed_k": sum(1 for r in runs if r["model_informed"]),
+        "model_informed_n": sum(1 for r in runs if r["model_informed"] is not None),
+        "stated_vs_code": _counts([r["stated_vs_code"] for r in runs]),
+        "claimed_not_implemented": _counts([c for r in runs for c in r["only_stated"]]),
         "adaptive_in_name_only_k": sum(1 for r in runs if r["adaptive_in_name_only"]),
         "prose_only_claim_k": sum(1 for r in runs if r["prose_only"]),
     }
@@ -240,13 +271,18 @@ def write_methodology_csvs(runs: list[dict], out_dir: Path) -> tuple[Path, Path]
     fields = ["tag", "condition", "level", "harness", "run_id", "replicate", "status",
               "chain", "model_primary", "acq_classes", "n_rounds", "criterion_switched",
               "evidence_grounded", "stop_decision", "adaptive_in_name_only",
-              "prose_only", "rel_l2", "contract_passed", "physically_valid"]
+              "prose_only", "code_acq", "code_logic_signature", "code_evidence_scope",
+              "selection_rule", "model_informed", "stated_vs_code", "only_stated",
+              "only_implemented", "chooser_where",
+              "rel_l2", "contract_passed", "physically_valid"]
     with per_run.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         for r in runs:
             row = dict(r)
-            row["acq_classes"] = "|".join(r["acq_classes"])
+            for key in ("acq_classes", "code_acq", "selection_rule",
+                        "only_stated", "only_implemented"):
+                row[key] = "|".join(r[key])
             w.writerow(row)
 
     per_round = out_dir / "methodology_rounds.csv"
@@ -422,6 +458,25 @@ def main() -> int:
          "adaptive_in_name_only_k", "prose_only_claim_k"],
         "Methodology matrix (what each cell chose, and how firmly)",
     )
+    print_table(
+        meth_rows,
+        ["condition", "code_acq", "selection_rule", "model_informed_k",
+         "model_informed_n", "stated_vs_code", "claimed_not_implemented",
+         "code_logic_agreement", "n_distinct_code_logics"],
+        "Code comparison (what the generated code actually computes)",
+    )
+    print("\n  Modal implemented logic per cell (from the code, not the prose):")
+    for row in meth_rows:
+        print(f"    {row['condition']:<16} {row['code_logic_modal'] or '-'}")
+    print("\n  code_acq = acquisition criterion classified from the AST of the "
+          "functions that choose the next batch.")
+    print("  model_informed = that chooser actually calls the surrogate; a "
+          "model-derived criterion that never does is not one.")
+    print("  stated_vs_code = agree / partial / mismatch / unverifiable_from_code "
+          "/ undocumented, comparing the run's stated criterion to its code.")
+    print("  claimed_not_implemented = criterion families named in the log or "
+          "report that the chooser never computes.")
+
     print("\n  Modal chain per cell "
           "(design -> representation+model[ensembling] -> acquisition x rounds -> stop):")
     for row in meth_rows:

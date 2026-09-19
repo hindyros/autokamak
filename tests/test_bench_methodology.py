@@ -235,3 +235,87 @@ def test_meta_workspace_maps_typed_decisions_onto_the_same_record(tmp_path):
     assert m["decision_logic"]["evidence_grounded_fraction"] == 1.0
     assert m["method_chain"]["model_primary"] == "gp"
     assert m["decision_logic"]["stop_decision"] == "target_reached"
+
+
+# ---------------------------------------------------------------------------
+# Implemented logic: what the generated CODE computes
+# ---------------------------------------------------------------------------
+
+def test_code_logic_reads_the_chooser_not_the_whole_workspace(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    # Standardising parameters uses .std() too; only the chooser counts.
+    _write(ws, "prep.py", "def standardise(x):\n    return (x - x.mean()) / x.std()\n")
+    _write(ws, "acq.py",
+           "import numpy as np\n"
+           "def acquire_batch(models, pool, k):\n"
+           "    preds = np.stack([m.predict(pool) for m in models])\n"
+           "    scores = preds.std(axis=0).mean(axis=(1, 2))\n"
+           "    return pool[np.argsort(-scores)[:k]]\n")
+    code = extract_methodology(ws)["code_logic"]
+    assert code["acquisition_implemented"] == ["uncertainty", "uncertainty_ensemble"]
+    assert code["selection_rule"] == ["top_k"]
+    assert code["model_informed"] is True
+    assert code["chooser_functions"][0]["where"].startswith("acq.py:")
+
+
+def test_model_derived_criteria_require_the_model_to_be_called(tmp_path):
+    # Farthest-point selection standardises its inputs with .std(); without
+    # this rule that reads as "uncertainty sampling", which it is not.
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _write(ws, "acq.py",
+           "import numpy as np\n"
+           "from scipy.spatial.distance import cdist\n"
+           "def propose_batch(train, pool, k):\n"
+           "    xs = (pool - train.mean(0)) / train.std(0)\n"
+           "    d = cdist(xs, train).min(axis=1)\n"
+           "    return pool[np.argsort(-d)[:k]]\n")
+    code = extract_methodology(ws)["code_logic"]
+    assert code["acquisition_implemented"] == ["space_filling"]
+    assert code["model_informed"] is False
+
+
+def test_stated_criterion_contradicted_by_the_code_is_a_mismatch(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _write(ws, "report.json", json.dumps({"sampling_strategy": "ensemble disagreement"}))
+    _write(ws, "acquisition_log.jsonl", _jsonl([
+        {"event": "acquire", "round": 1, "params": {}, "reason": "ensemble disagreement"},
+    ]))
+    _write(ws, "acq.py",
+           "import numpy as np\n"
+           "def select_batch(pool, k, rng):\n"
+           "    return rng.choice(pool, size=k, replace=False)\n")
+    m = extract_methodology(ws)
+    assert m["code_logic"]["acquisition_implemented"] == ["random"]
+    assert m["stated_vs_implemented"]["verdict"] == "mismatch"
+    assert m["stated_vs_implemented"]["only_stated"] == ["uncertainty"]
+
+
+def test_random_candidate_pool_is_not_read_as_the_criterion(tmp_path):
+    # Nearly every implementation draws a random pool and then ranks it.
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _write(ws, "acquisition_log.jsonl", _jsonl([
+        {"event": "acquire", "round": 1, "params": {}, "reason": "predictive std"},
+    ]))
+    _write(ws, "acq.py",
+           "import numpy as np\n"
+           "def acquire(model, k, rng):\n"
+           "    pool = rng.uniform(0, 1, size=(500, 5))\n"
+           "    psi_mean, psi_std = model.predict(pool, return_std=True)\n"
+           "    return pool[np.argsort(-psi_std.mean(axis=1))[:k]]\n")
+    m = extract_methodology(ws)
+    assert "random" in m["code_logic"]["acquisition_implemented"]
+    assert m["stated_vs_implemented"]["verdict"] == "agree"
+
+
+def test_code_logic_is_unverifiable_rather_than_wrong_when_absent(tmp_path):
+    ws = tmp_path / "workspace"
+    ws.mkdir()
+    _write(ws, "report.json", json.dumps({"sampling_strategy": "uncertainty sampling"}))
+    _write(ws, "train.py", "def train():\n    return 1\n")
+    m = extract_methodology(ws)
+    assert m["code_logic"]["acquisition_implemented"] == []
+    assert m["stated_vs_implemented"]["verdict"] == "unverifiable_from_code"

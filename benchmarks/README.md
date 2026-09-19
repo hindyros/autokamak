@@ -134,10 +134,43 @@ Derived measurements that the score cannot give:
   never evidences (matrix-v3 shakedown: URSA's README claims ensemble
   uncertainty; its log shows `farthest_point` on all three rounds).
 
-It reads STATED criteria, not implemented ones, and says so: the code/prose
-split is preserved in `evidence`, and `tools/judge_code.py` remains the
-instrument for the qualitative call. Like `diagnostics`, nothing here touches
-`contract.passed`.
+### The code comparison
+
+Everything above reads the agent's own account of itself — a log's "reason",
+a README's prose. `analyse_code_logic` reads the decision CODE instead. It
+parses every agent-authored `.py`, locates the functions that choose the next
+batch (by name: `acquire`/`select`/`propose`/`score`/`uncertainty`/…, falling
+back to file scope for straight-line scripts), and classifies the arithmetic
+each one actually performs — into the same vocabulary — with `file:line`
+evidence for every claim:
+
+- `code_acq` — the criterion the chooser computes: a standard deviation over
+  stacked model predictions, a `cdist` to the training set, `rng.choice`.
+- `model_informed` — whether that chooser calls the surrogate at all. This is
+  load-bearing: model-derived criteria (uncertainty, residual) are DROPPED
+  when it does not, because a `.std()` used to standardise parameters is
+  indistinguishable from one ranking predictive spread until you ask whether
+  the model was consulted. URSA's `propose_adaptive_batch` standardises with
+  `.std()` and never predicts — it is farthest-point, and is recorded as
+  such, whatever its docstring calls it.
+- `selection_rule` — `top_k` (argsort/topk) vs `random_draw` vs `threshold`.
+- `stated_vs_code` — the comparison column: `agree` / `partial` / `mismatch` /
+  `unverifiable_from_code` / `undocumented`, with `only_stated` (claimed but
+  never computed) and `only_implemented` (computed but never claimed).
+  Compared at the level of criterion FAMILY, not exact formula. A random
+  candidate POOL is discounted when the chooser also ranks: nearly every
+  implementation draws one, and it is not the selection criterion.
+
+Per cell the matrix then carries `code_logic_modal`, `code_logic_agreement`
+(replicates implementing the same logic), `n_distinct_code_logics`,
+`model_informed_k/n`, `stated_vs_code` verdict counts and
+`claimed_not_implemented`.
+
+Prose, log and code are kept as three separate witnesses and never merged:
+`prose_only_terms` is what the README claims over the code, `stated_vs_code`
+is what the run's own log claims against it. `tools/judge_code.py` remains
+the instrument for the qualitative call. Like `diagnostics`, nothing here
+touches `contract.passed`.
 
 ```bash
 python -m autotokamak.bench methodology --tag <tag>        # extract + print per run

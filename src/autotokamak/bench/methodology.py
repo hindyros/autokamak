@@ -663,6 +663,226 @@ def build_chain_signature(chain: dict[str, Any], n_rounds: Optional[int]) -> str
 
 
 # ---------------------------------------------------------------------------
+# Implemented logic: what the CODE computes, not what the agent says it does
+# ---------------------------------------------------------------------------
+# The record above reads stated criteria — an acquisition log's "reason", a
+# README's prose. Both are the agent's own account of itself. This section
+# reads the decision code instead: it locates the functions that choose the
+# next batch and classifies the arithmetic they actually perform, so
+# "ensemble disagreement" can be checked against a body that computes a
+# standard deviation over stacked model predictions rather than one that
+# calls rng.choice.
+#
+# Scoped to candidate functions on purpose. A whole-workspace regex says
+# "this run mentions variance somewhere"; a per-function one says "the
+# function that picks the points ranks them by variance", with file:line.
+
+ACQ_FUNC_NAME = re.compile(
+    r"acquire|acquisition|select|propose|next_batch|next_points|candidate"
+    r"|rank|choose|pick|active|query|score|uncertain|disagree", re.I)
+
+# Applied to ONE function's source. Order is irrelevant; all hits recorded.
+CODE_LOGIC_PATTERNS: dict[str, str] = {
+    "uncertainty": r"\.std\(|np\.std|\.var\(|np\.var|torch\.(?:std|var)"
+                   r"|nanstd|variance|uncertaint|_std\b|\bstd_\w+|\bsigma\b"
+                   r"|stdev|predictive",
+    "uncertainty_gp": r"return_std\s*=\s*True|posterior|\.sample_y\(|kernel_|gpytorch",
+    "uncertainty_ensemble": r"\bensemble\b|for\s+\w+\s+in\s+(?:self\.)?models"
+                            r"|\bdropout\b|\.train\(\)|mc_|n_models|committee",
+    "residual_ucb": r"residual|\boof\b|leave[_-]?one[_-]?out|y_true\s*-|err\w*\s*="
+                    r"|abs\(\s*\w*err|\bucb\b",
+    "space_filling": r"cdist|pairwise_distances|KDTree|cKDTree|farthest|maximin"
+                     r"|min_dist|np\.linalg\.norm|kmeans|KMeans|greedy",
+    "random": r"np\.random\.(?:choice|uniform|permutation|randint)"
+              r"|rng\.(?:choice|uniform|permutation|integers)|random\.sample|shuffle",
+    "feasibility": r"success|converged|failed|feasib|valid_mask",
+}
+_CODE_LOGIC = {k: re.compile(v, re.I) for k, v in CODE_LOGIC_PATTERNS.items()}
+
+# How the scored candidates are turned into a batch.
+SELECTION_PATTERNS: dict[str, str] = {
+    "top_k": r"argsort|argpartition|\.topk\(|nlargest|argmax|\[:\s*n_\w+\]|sorted\(",
+    "random_draw": r"np\.random\.choice|rng\.choice|random\.sample|\.sample\(",
+    "threshold": r">=\s*thresh|>\s*thresh|threshold\s*[<>=]",
+}
+_SELECTION = {k: re.compile(v, re.I) for k, v in SELECTION_PATTERNS.items()}
+
+# Does the chooser consult the surrogate at all? A purely geometric rule
+# (distance to training points) never calls it; an error- or
+# uncertainty-driven one must.
+_MODEL_CALL = re.compile(
+    r"\bpredict\w*\(|\.forward\(|\bforward\(|\bmodel\w*\(|\bnet\w*\("
+    r"|\bsurrogate\w*\(|\bensemble\w*\(|\binfer\w*\(|\.__call__\("
+    r"|no_grad\(|\.eval\(\)", re.I)
+# Evaluation data reaching the chooser is a leakage smell, not a proof.
+_TEST_REF = re.compile(r"\btest\w*\b", re.I)
+
+
+def _function_sources(workspace: Path) -> list[tuple[str, int, str, str]]:
+    """(relative path, line, function name, source) for agent-authored code."""
+    out = []
+    for path in _iter_workspace_files(workspace, {".py"}):
+        src = _read_capped(path)
+        if not src:
+            continue
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                try:
+                    body = ast.unparse(node)
+                except Exception:  # noqa: BLE001 — unparse is best-effort
+                    continue
+                out.append((_rel(path, workspace), node.lineno, node.name, body))
+    return out
+
+
+# Model-derived criteria. Claiming any of them while never consulting the
+# surrogate is incoherent: an np.std() used to standardise parameters looks
+# identical to one used to rank predictive uncertainty until you ask whether
+# the model was called at all.
+MODEL_DERIVED = {"uncertainty", "uncertainty_ensemble", "uncertainty_gp", "residual_ucb"}
+
+# Files that plausibly hold the decision logic when it is not in a function
+# with a recognisable name (several agents write straight-line scripts).
+ACQ_FILE_NAME = re.compile(r"acquir|acquisition|campaign|active|sampl|select|round", re.I)
+
+
+def _classify_body(body: str) -> tuple[list[str], list[str], bool]:
+    classes = sorted(k for k, rx in _CODE_LOGIC.items() if rx.search(body))
+    # A generic variance hit is only "ensemble uncertainty" when the body
+    # also shows an ensemble; otherwise it stays unqualified.
+    if "uncertainty_ensemble" in classes and "uncertainty" not in classes:
+        classes.remove("uncertainty_ensemble")
+    model_informed = bool(_MODEL_CALL.search(body))
+    if not model_informed:
+        classes = [c for c in classes if c not in MODEL_DERIVED]
+    selection = sorted(k for k, rx in _SELECTION.items() if rx.search(body))
+    return classes, selection, model_informed
+
+
+def analyse_code_logic(workspace: Path) -> dict[str, Any]:
+    """Classify the decision logic the agent's code actually implements."""
+    workspace = Path(workspace)
+    sources = {_rel(p, workspace): _read_capped(p)
+               for p in _iter_workspace_files(workspace, {".py"})}
+    functions = _function_sources(workspace)
+
+    chooser_hits: list[dict[str, Any]] = []
+    for rel, lineno, name, body in functions:
+        if not ACQ_FUNC_NAME.search(name):
+            continue
+        classes, selection, model_informed = _classify_body(body)
+        if not classes:
+            continue
+        # Scoring and selecting are routinely split across two functions, so
+        # an empty selection here is answered by the enclosing file.
+        if not selection:
+            selection = sorted(k for k, rx in _SELECTION.items()
+                               if rx.search(sources.get(rel, "")))
+        chooser_hits.append({
+            "function": name,
+            "where": f"{rel}:{lineno}",
+            "scope": "function",
+            "classes": classes,
+            "selection": selection,
+            "model_informed": model_informed,
+            "references_test_data": bool(_TEST_REF.search(body)),
+            "n_lines": body.count("\n") + 1,
+        })
+
+    # Fallback: straight-line scripts with no named chooser. Coarser — the
+    # whole file is the unit — and marked as such so it is never read as
+    # function-level evidence.
+    if not chooser_hits:
+        for rel, src in sources.items():
+            if not src or not ACQ_FILE_NAME.search(Path(rel).name):
+                continue
+            classes, selection, model_informed = _classify_body(src)
+            if not classes:
+                continue
+            chooser_hits.append({
+                "function": None,
+                "where": rel,
+                "scope": "file",
+                "classes": classes,
+                "selection": selection,
+                "model_informed": model_informed,
+                "references_test_data": bool(_TEST_REF.search(src)),
+                "n_lines": src.count("\n") + 1,
+            })
+
+    implemented = sorted({c for h in chooser_hits for c in h["classes"]})
+    selection = sorted({s for h in chooser_hits for s in h["selection"]})
+    model_informed = (any(h["model_informed"] for h in chooser_hits)
+                      if chooser_hits else None)
+    scope = ("function" if any(h["scope"] == "function" for h in chooser_hits)
+             else ("file" if chooser_hits else None))
+    signature = "|".join([
+        "acq:" + (",".join(implemented) or "?"),
+        "sel:" + (",".join(selection) or "?"),
+        "model_informed:" + ("?" if model_informed is None
+                             else ("yes" if model_informed else "no")),
+    ])
+    return {
+        "acquisition_implemented": implemented,
+        "selection_rule": selection,
+        "model_informed": model_informed,
+        "code_logic_signature": signature,
+        "evidence_scope": scope,
+        "n_functions": len(functions),
+        "n_chooser_functions": sum(1 for h in chooser_hits if h["scope"] == "function"),
+        # Evidence, so any cell in the matrix can be audited back to a line.
+        "chooser_functions": chooser_hits[:12],
+        "test_data_in_chooser": (any(h["references_test_data"] for h in chooser_hits)
+                                 if chooser_hits else None),
+    }
+
+
+def compare_stated_to_implemented(stated: list[str], implemented: list[str]
+                                  ) -> dict[str, Any]:
+    """Does the code do what the run said it did?
+
+    Deliberately coarse — agreement at the level of the criterion FAMILY,
+    not the exact formula. A stated "ensemble disagreement" implemented as a
+    standard deviation over stacked predictions agrees; implemented as
+    rng.choice does not.
+    """
+    stated_set, impl_set = set(stated or []), set(implemented or [])
+    # Almost every implementation draws its CANDIDATE POOL at random and then
+    # ranks it; that is not the selection criterion. Random counts as the
+    # criterion only when it is the only thing the chooser does.
+    if len(impl_set) > 1:
+        impl_set.discard("random")
+    # "uncertainty" is the family; "_ensemble"/"_gp" are its refinements, so
+    # a stated refinement and an implemented family are not a contradiction.
+    def _families(x: set[str]) -> set[str]:
+        return {c.split("_")[0] if c.startswith("uncertainty") else c for c in x}
+
+    if not impl_set:
+        verdict = "unverifiable_from_code"
+    elif not stated_set:
+        verdict = "undocumented"
+    elif _families(stated_set) & _families(impl_set):
+        # Partial: the families overlap, but one side names a criterion the
+        # other does not — a claimed component that the code never computes
+        # (or an undocumented one it does).
+        verdict = ("partial"
+                   if _families(stated_set) ^ _families(impl_set) else "agree")
+    else:
+        verdict = "mismatch"
+    return {
+        "verdict": verdict,
+        "stated": sorted(stated_set),
+        "implemented": sorted(impl_set),
+        "only_stated": sorted(_families(stated_set) - _families(impl_set)),
+        "only_implemented": sorted(_families(impl_set) - _families(stated_set)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
 
@@ -723,6 +943,7 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
     iterations = _finalise_iterations(adaptive, strategy_text)
 
     code_hits, imports, code_files = _code_signals(workspace)
+    code_logic = analyse_code_logic(workspace)
     prose = " \n".join(x for x in (strategy_text, readme_text) if x)
     prose_hits = classify(prose)
     # Prose and code are kept separable: a claim only the README makes is
@@ -777,11 +998,18 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
         "self_claimed_adaptivity_helped": _self_claimed_helped(report),
     }
 
+    stated_vs_code = compare_stated_to_implemented(
+        round_classes or (chain.get("acquisition") or []),
+        code_logic["acquisition_implemented"])
+
     return {
         "method_chain": chain,
         "chain_signature": signature,
         "iterations": iterations,
         "decision_logic": logic,
+        # What the code computes, independent of what the run claims.
+        "code_logic": code_logic,
+        "stated_vs_implemented": stated_vs_code,
         "evidence": {
             "acquisition_log": log_used,
             "acquisition_log_candidates": [_rel(p, workspace) for p in logs],
@@ -934,6 +1162,8 @@ def extract_meta_methodology(workspace: Path) -> dict[str, Any]:
 
 __all__ = [
     "ACQUISITION_PATTERNS",
+    "analyse_code_logic",
+    "compare_stated_to_implemented",
     "CHAIN_ORDER",
     "STOP_THRESHOLD_RATIO",
     "build_chain_signature",
