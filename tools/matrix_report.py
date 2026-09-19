@@ -375,9 +375,6 @@ def _bench_choices(workspace: Path) -> dict:
             if "model" in k.lower() or "hyper" in k.lower():
                 out.setdefault("report model fields", {})[k] = v
     out["model (from README)"] = _first_readme_model_lines(workspace)
-    # Canonical methodology record — the same extractor the matrix table and
-    # result.json use, so the HTML and the CSVs cannot drift apart.
-    out.update(_methodology_choices(workspace))
     return out
 
 
@@ -452,7 +449,6 @@ def _meta_setup_and_choices(workspace: Path, manifest: dict) -> tuple[dict, dict
         except Exception:  # noqa: BLE001
             continue
     choices = {
-        **_meta_methodology_choices(workspace),
         "actions taken": actions,
         "winner model": rep.get("winner_model_name"),
         "winner hyperparameters": rep.get("winner_hyperparams"),
@@ -606,6 +602,9 @@ def build_html(tag: str, rows: list[dict], bars_b64: str, baseline_mean: float) 
         if r.get("choices"):
             body.append("<h3>Pipeline choices made (the agent's own account)</h3>"
                         + _render_kv(r["choices"]))
+        if r.get("reasoning"):
+            body.append("<h3>Reasoning — method chain, per-round logic, and what "
+                        "the code actually computes</h3>" + _render_kv(r["reasoning"]))
         if r.get("error"):
             body.append(f"<p class='bad'>harness error: {html.escape(str(r['error'])[:400])}</p>")
         gates = r.get("contract", {}).get("gates")
@@ -682,11 +681,13 @@ def main() -> int:
                     pass
             row["given"] = _campaign_given(ws.parent / "trace.json")
             row["choices"] = _bench_choices(ws)
+            row["reasoning"] = _methodology_choices(ws)
             row["surrogate"] = _short_model_label(ws, None)
         else:
             row["self_reported"] = (c.get("meta") or {}).get("self_accuracy_pct")
             row["given"], row["choices"] = _meta_setup_and_choices(
                 c["_workspace"], c.get("_manifest") or {})
+            row["reasoning"] = _meta_methodology_choices(c["_workspace"])
             row["surrogate"] = _short_model_label(c["_workspace"], c.get("meta"))
 
         # Head-to-head on the frozen set.
