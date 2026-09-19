@@ -270,6 +270,26 @@ the within-harness median difference. At 5 replicates x 4 harnesses x 2
 levels it separates a 0.10 rel-L2 effect at p≈0.0002. The sign test is still
 printed, labelled descriptive.
 
+**Pilot first.** `tools/run_campaign.sh --tag <campaign-tag> --pilot` is the
+cheapest run that still exercises every moving part: one replicate, L3 only,
+`--parallel 4`, ursa on a 20-minute leash, preceded by a smoke pass. **~$9 and
+~20 minutes, 10M tokens (5% of the daily cap)** against ~$98 and ~5 h for the
+full campaign. Two things make it close to free:
+
+- `--smoke-first` runs `smoke.yaml` on every harness beforehand — seconds and
+  ~$0.03 each — and refuses to start the paid wave if any fails. A previous
+  smoke pass caught cursor and pi erroring at zero cost. Smoke runs go to
+  `<tag>-smoke`, never the campaign tag, so they cannot mix prompt versions
+  into the analysis.
+- Give the pilot the CAMPAIGN's tag and its cells ARE replicate 1: the full
+  run with `--resume` skips them. The pilot then costs nothing extra — it is
+  the first slice of the campaign, run early enough to learn from.
+
+What it proves before the expensive part: every adapter authenticates and
+completes on the real task, the cost and token model matches actual billing,
+the chosen parallelism does not trip rate limits, and the contract, scoring
+and methodology extraction all work on fresh runs.
+
 **Money guards** (`tools/campaign_guard.py`, wired into `run_campaign.sh`):
 
 - `preflight` refuses to start on a missing key, a logged-out CLI, a harness

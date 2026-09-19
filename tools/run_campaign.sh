@@ -33,6 +33,15 @@
 #                  A shorter per-cell cap for a substrate known not to
 #                  terminate, so a non-terminating cell wastes 45 minutes
 #                  rather than 110.
+#   --smoke-first  run benchmarks/tasks/smoke.yaml on every harness first
+#                  (seconds, ~$0.03 each) and refuse to start the real wave
+#                  if any fails. Smoke runs go to "<tag>-smoke", never the
+#                  campaign tag, so they cannot pollute the analysis.
+#   --pilot        shorthand for the cheapest run that still proves the whole
+#                  chain: --reps 1 --levels L3 --parallel 4 --smoke-first
+#                  with ursa on a 20-minute leash. ~$9 and ~30 min. Give it
+#                  the CAMPAIGN's tag and its cells become replicate 1:
+#                  --resume then skips them, so the pilot costs nothing extra.
 #   --tpd-headroom stop launching when the day's tokens reach this fraction
 #                  of the org's daily cap (benchmarks/assets/rate_limits.json;
 #                  0.85 by default, 0 to disable). TPM bounds a burst and is
@@ -53,6 +62,7 @@ cd "$(dirname "$0")/.."
 TAG=""; REPS=5; PARALLEL=3; MODEL=""; DRY=0; TIMEOUT=""
 RESUME=0; BUDGET=""; SKIP_PREFLIGHT=0; MIN_DISK_GB=10
 HARNESS_BUDGET=""; HARNESS_TIMEOUT=""; TPD_HEADROOM=0.85; TPD_MODEL="gpt-5.2"
+SMOKE_FIRST=0; PILOT=0
 HARNESSES="ursa dspy pi cursor"
 LEVELS="L3 L2"
 TASK_SUFFIX="mini_v3"
@@ -74,6 +84,8 @@ while [[ $# -gt 0 ]]; do
     --harness-timeout) HARNESS_TIMEOUT="$2"; shift 2 ;;
     --tpd-headroom) TPD_HEADROOM="$2"; shift 2 ;;
     --tpd-model)    TPD_MODEL="$2"; shift 2 ;;
+    --smoke-first)  SMOKE_FIRST=1; shift ;;
+    --pilot)        PILOT=1; shift ;;
     --min-disk-gb) MIN_DISK_GB="$2"; shift 2 ;;
     --skip-preflight) SKIP_PREFLIGHT=1; shift ;;
     --dry-run)    DRY=1; shift ;;
@@ -81,6 +93,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -n "$TAG" ]] || { echo "--tag is required" >&2; exit 2; }
+
+# --pilot: the cheapest run that still exercises every moving part — one
+# replicate, the harder level only, and a short leash on the substrate that
+# does not terminate. Explicit flags still win, so --pilot --reps 2 works.
+if [[ "$PILOT" == "1" ]]; then
+  [[ "$REPS" == "5" ]]      && REPS=1
+  [[ "$LEVELS" == "L3 L2" ]] && LEVELS="L3"
+  [[ "$PARALLEL" == "3" ]]  && PARALLEL=4
+  [[ -z "$HARNESS_TIMEOUT" ]] && HARNESS_TIMEOUT="ursa=1200"
+  SMOKE_FIRST=1
+  echo "=== PILOT: reps=$REPS levels=$LEVELS parallel=$PARALLEL "\
+       "harness-timeout='$HARNESS_TIMEOUT' ==="
+fi
 
 [[ -f venv/bin/activate ]] && source venv/bin/activate
 [[ -f .env ]] && { set -a; source .env; set +a; }
@@ -103,6 +128,30 @@ export -f harness_cap
 # ---- preflight: everything cheaper to find now than at 2am ---------------
 if [[ "$SKIP_PREFLIGHT" != "1" && "$DRY" != "1" ]]; then
   first_level="${LEVELS%% *}"
+  # Smoke first: seconds and pennies, and it catches the failures that would
+  # otherwise surface an hour into a paid cell — a logged-out CLI, a revoked
+  # key, an adapter that cannot write to its workspace. A previous
+  # smoke-verify run caught cursor and pi erroring at zero cost.
+  if [[ "$SMOKE_FIRST" == "1" ]]; then
+    echo "--- smoke (task=benchmarks/tasks/smoke.yaml, tag=${TAG}-smoke) ---"
+    smoke_failed=""
+    for spec in $HARNESSES; do
+      h="${spec%%:*}"
+      if python -m autotokamak.bench run --task benchmarks/tasks/smoke.yaml \
+           --harness "$h" --tag "${TAG}-smoke" \
+           >"$LOGS/smoke-$h.log" 2>&1; then
+        echo "  smoke $h: ok"
+      else
+        echo "  smoke $h: FAILED (see $LOGS/smoke-$h.log)"
+        smoke_failed="$smoke_failed $h"
+      fi
+    done
+    if [[ -n "$smoke_failed" ]]; then
+      echo "Refusing to start the paid wave: smoke failed for$smoke_failed" >&2
+      exit 4
+    fi
+  fi
+
   echo "--- worst-case exposure ---"
   $GUARD forecast --harnesses "$HARNESSES" --reps "$REPS" --levels "$LEVELS" \
          --parallel "$PARALLEL" --harness-budget "$HARNESS_BUDGET" \

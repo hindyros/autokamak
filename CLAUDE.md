@@ -63,6 +63,7 @@ python -m autotokamak.bench freeze-testset     # ground truth for head-to-head s
 tools/campaign_guard.py preflight --harnesses "ursa dspy pi cursor" \
                         --task benchmarks/tasks/L3_mini_v3.yaml
 tools/campaign_guard.py forecast --harnesses "ursa:3 dspy pi cursor" --reps 5
+tools/run_campaign.sh --tag <tag> --pilot      # ~$9, ~20 min; becomes rep 1
 tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 --budget-usd 150 \
     --harnesses "ursa:3 dspy pi cursor" \
     --harness-budget "ursa=45" --harness-timeout "ursa=2700"
