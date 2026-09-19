@@ -183,9 +183,12 @@ def measured_spend(tag: str, harness: Optional[str] = None
 # reports usage, inferred from spend where it does not (ursa), and zero for
 # cursor, which consumes Cursor's quota rather than ours.
 OBSERVED_WORST: dict[str, dict[str, float]] = {
-    # ursa's figures are from the aborted attempt, where it ran 10h18m
-    # against a 90-minute cap and recovered $12.31 from its own metrics.
-    "ursa": {"usd": 12.5, "minutes": 110.0, "tokens": 5.3e6},
+    # Recalibrated on the 2026-09-19 pilot, which is the first run where all
+    # four substrates were measured under one configuration. ursa is the
+    # correction that mattered: it burns $0.179/min (it timed out at 20.6 min
+    # having spent $3.68), 57% dearer per minute than the earlier estimate
+    # taken from the aborted long run.
+    "ursa": {"usd": 16.1, "minutes": 90.0, "tokens": 7.4e6},
     "dspy": {"usd": 3.0, "minutes": 28.0, "tokens": 2.93e6},
     "pi": {"usd": 2.0, "minutes": 15.0, "tokens": 5.68e6},
     "cursor": {"usd": 1.7, "minutes": 17.0, "tokens": 0.0},
