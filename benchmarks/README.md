@@ -258,6 +258,36 @@ and `tools/aggregate_matrix.py` groups by cell to report pass-rates with
 Wilson intervals and rel-L2 medians with bootstrap CIs. Medians, not means —
 one 0.96 cell makes a mean meaningless.
 
+**The primary test is a stratified permutation test, not the sign test.**
+With 4-5 harnesses the paired sign test cannot reach p<0.05 however clean the
+result is: its smallest attainable two-sided p-value is 0.125 at n=4 pairs
+and 0.0625 at n=5. Reporting only that would cap the paper's central claim
+for reasons that have nothing to do with the evidence. So the primary
+contrast shuffles L2/L3 labels WITHIN each harness across that harness's
+runs — harness stays a blocking factor, the null is "access level does not
+matter within a substrate", and the statistic is the mean across harnesses of
+the within-harness median difference. At 5 replicates x 4 harnesses x 2
+levels it separates a 0.10 rel-L2 effect at p≈0.0002. The sign test is still
+printed, labelled descriptive.
+
+**Money guards** (`tools/campaign_guard.py`, wired into `run_campaign.sh`):
+
+- `preflight` refuses to start on a missing key, a logged-out CLI, a harness
+  the task does not pin a model for, a missing frozen asset, or under 10 GB
+  of free disk. It also refuses `claude_sdk` unless asked explicitly: this
+  campaign pins an OpenAI model across substrates and that adapter is
+  Anthropic by construction, so including it would spend on another provider
+  AND confound the harness axis with the model axis.
+- `--resume` skips (condition, replicate) pairs that already completed. Without
+  it a crash at hour 18 re-runs and re-pays for every finished cell, because
+  `bench run` always mints a new run_id.
+- `--budget-usd N` stops launching new cells once recorded spend reaches a
+  ceiling; cells in flight finish and record their cost.
+- `reconcile` writes a stub `result.json` for cells the watchdog killed. They
+  otherwise vanish from every report — the denominator silently shrinks, and
+  a substrate that always times out looks like one that was never run (the
+  matrix-v3 shakedown had 3 such invisible cells).
+
 ## reference_runs/
 
 Archived agent-generated workspaces from the pre-refactor capability tests

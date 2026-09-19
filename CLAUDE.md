@@ -60,7 +60,11 @@ python -m autotokamak.bench compare  --tag aug09
 python -m autotokamak.bench freeze-testset     # ground truth for head-to-head scoring
 
 # replicated campaign + the aggregated, error-barred table:
-tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 [--model ...]
+tools/campaign_guard.py preflight --harnesses "ursa dspy pi cursor" \
+                        --task benchmarks/tasks/L3_mini_v3.yaml
+tools/run_campaign.sh --tag <tag> --reps 5 --parallel 3 --budget-usd 200
+tools/run_campaign.sh --tag <tag> --reps 5 --resume     # after any stop
+python tools/cost_report.py     --tag <tag>
 python tools/aggregate_matrix.py --tag <tag>
 ```
 

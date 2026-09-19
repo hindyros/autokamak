@@ -76,6 +76,61 @@ def bootstrap_median_ci(values: list[float], n_boot: int = BOOTSTRAP_N
     return float(np.percentile(meds, 2.5)), float(np.percentile(meds, 97.5))
 
 
+def stratified_permutation_test(runs: list[dict], key: str,
+                                n_perm: int = 20_000
+                                ) -> tuple[Optional[float], Optional[float], int]:
+    """Exact-style permutation test for L2 vs L3, blocking on harness.
+
+    Why this exists: with 4-5 harnesses the paired SIGN test cannot reach
+    p<0.05 however clean the result is — its smallest attainable two-sided
+    p-value at n=4 pairs is 0.125, and at n=5 it is 0.0625. Reporting only
+    that would put a ceiling on the paper's primary claim that has nothing
+    to do with the evidence.
+
+    This test uses the RUNS rather than the cells: within each harness the
+    L2/L3 labels are shuffled among that harness's runs, so harness effects
+    (the blocking factor) cannot leak into the comparison, and the null is
+    "access level does not matter within a substrate". The statistic is the
+    mean across harnesses of the within-harness median difference, which
+    keeps the per-harness robustness of a median while weighting every
+    substrate equally regardless of how many replicates it completed.
+
+    Returns (observed statistic, two-sided p, n_runs_used).
+    """
+    by_harness: dict[str, dict[str, list[float]]] = defaultdict(
+        lambda: {"L2": [], "L3": []})
+    n_used = 0
+    for r in runs:
+        v = r.get(key)
+        if not isinstance(v, (int, float)) or r["level"] not in ("L2", "L3"):
+            continue
+        by_harness[r["harness"]][r["level"]].append(float(v))
+        n_used += 1
+    usable = {h: d for h, d in by_harness.items() if d["L2"] and d["L3"]}
+    if len(usable) < 2:
+        return None, None, n_used
+
+    def statistic(assignment: dict[str, tuple[list[float], list[float]]]) -> float:
+        diffs = [float(np.median(l3) - np.median(l2)) for l2, l3 in assignment.values()]
+        return float(np.mean(diffs))
+
+    observed = statistic({h: (d["L2"], d["L3"]) for h, d in usable.items()})
+    rng = np.random.default_rng(BOOTSTRAP_SEED)
+    pooled = {h: (np.array(d["L2"] + d["L3"], dtype=float), len(d["L2"]))
+              for h, d in usable.items()}
+    count = 0
+    for _ in range(n_perm):
+        assignment = {}
+        for h, (values, n_l2) in pooled.items():
+            perm = rng.permutation(values)
+            assignment[h] = (list(perm[:n_l2]), list(perm[n_l2:]))
+        if abs(statistic(assignment)) >= abs(observed) - 1e-12:
+            count += 1
+    # +1 smoothing: a permutation p of exactly 0 is not a thing you can
+    # observe from a finite number of shuffles.
+    return observed, (count + 1) / (n_perm + 1), n_used
+
+
 def sign_test_two_sided(diffs: list[float]) -> tuple[int, int, Optional[float]]:
     """Exact two-sided sign test. Ties dropped (standard)."""
     pos = sum(1 for d in diffs if d > 0)
@@ -641,8 +696,26 @@ def main() -> int:
             pstr = f"{p:.4f}" if p is not None else "n/a (all ties)"
             print(f"  {label}: L3 worse in {pos}/{pos + neg} harnesses "
                   f"(exact two-sided sign test p={pstr}, n_pairs={len(diffs)})")
-        print("  NOTE: with ~5 harnesses the sign test has very little power; "
-              "read the paired deltas, and treat p as descriptive.")
+        n_pairs = len(pass_diffs)
+        floor = min(1.0, 2 / (2 ** n_pairs)) if n_pairs else None
+        print(f"  NOTE: the sign test is DESCRIPTIVE here — with {n_pairs} "
+              f"harnesses its smallest attainable two-sided p is "
+              f"{floor:.3f}, whatever the data show.")
+
+        # The test with actual power: runs, not cells, blocked on harness.
+        for label, key in (("relative-L2", "rel_l2"),):
+            obs, p, n_used = stratified_permutation_test(runs, key)
+            if p is None:
+                print(f"  {label}: permutation test needs both levels in at "
+                      f"least two harnesses — skipped.")
+                continue
+            print(f"  {label} (PRIMARY): mean within-harness median difference "
+                  f"L3-L2 = {obs:+.4f}, stratified permutation p = {p:.4f} "
+                  f"(n={n_used} runs, labels shuffled within harness, "
+                  f"{BOOTSTRAP_N} shuffles).")
+            print("  Positive = L3 (from scratch) has the higher error. "
+                  "Harness is a blocking factor, so substrate differences "
+                  "cannot inflate this.")
     else:
         print("\n(no harness has both an L2 and an L3 cell — skipping the paired contrast)")
 
