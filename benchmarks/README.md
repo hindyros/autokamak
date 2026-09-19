@@ -208,6 +208,18 @@ wrong on real runs:
   test" is true of any single-file pipeline; "the function that calls
   `.fit()` touches a test path" is a specific thing to go and read.
 
+Every code either analysis emits is DEFINED, next to the detector that emits
+it (`VALUE_GLOSSARY` / `DIMENSION_NOTES` in `solution_shape.py`,
+`TERM_GLOSSARY` in `methodology.py`), and resolved for rendering by
+`bench/glossary.py` — which also handles composite values (`npz_per_solve+
+pickle+index` is three tokens) and counted ones (`11_modules`). In the HTML
+report every code is underlined and carries its definition on hover, the
+dimension names carry what they ask and why it matters, an `[src]` marker
+carries the `file:line` it was read from, and the whole vocabulary is listed
+in a glossary at the foot of the page. Tests fail if a detector gains a value
+or a pattern table gains a term without a definition — a code a reader cannot
+look up is not a measurement.
+
 `cross_compare` transposes it — one row per dimension, one column per cell,
 rows the agents disagreed on first — which is what a comparison has to look
 like to be read as one. It prints in `tools/aggregate_matrix.py`, lands in

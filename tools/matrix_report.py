@@ -21,6 +21,7 @@ import base64
 import html
 import io
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -224,6 +225,15 @@ th { background:#f6f8fa; } tr:nth-child(even) { background:#fafbfc; }
 img { max-width:100%; border-radius:6px; }
 code { background:#f6f8fa; padding:1px 5px; border-radius:4px; font-size:12px; }
 .small { color:#57606a; font-size:12px; }
+abbr.term { border-bottom:1px dotted #57606a; text-decoration:none;
+            cursor:help; }
+abbr.term:hover { background:#fff8c5; }
+details.glossary { border:1px solid #d0d7de; border-radius:8px; padding:10px 14px;
+                   margin:14px 0; background:#fafbfc; }
+details.glossary summary { cursor:pointer; font-weight:600; }
+details.glossary dt { font-family:ui-monospace,Menlo,monospace; font-size:12px;
+                      margin-top:8px; color:#0550ae; }
+details.glossary dd { margin:2px 0 0 18px; font-size:12px; color:#1f2328; }
 .gatefail { background:#fff5f5; border:1px solid #ffcdd2; border-radius:6px;
             padding:8px 12px; margin:8px 0; }
 pre { background:#f6f8fa; border:1px solid #d0d7de; border-radius:6px;
@@ -493,24 +503,42 @@ def _cross_comparison_table(rows: list[dict]) -> str:
               ((records[lab].get("dimensions") or {}).get(dim) or {}).get("evidence") or [])
           for lab in labels for dim in DIMENSION_QUESTIONS}
 
+    try:
+        from autotokamak.bench.glossary import dimension_help
+    except Exception:  # noqa: BLE001
+        def dimension_help(_):  # type: ignore[misc]
+            return ""
+
     out = ["<h2>How each agent solved the prompt — cross comparison</h2>",
            "<p class='small'>One row per demand of the task, answered from the code "
            "that plays that role — the file that builds <code>OFT_env</code>, the "
            "predictor that writes the NaNs, the function that calls "
            "<code>.fit()</code> — not a workspace-wide grep. Rows the agents "
-           "disagreed on come first; hover any answer for its "
-           "<code>file:line</code>.</p>",
+           "disagreed on come first. <b>Hover a dimension for what it asks and "
+           "why it matters, and any underlined answer for what that code "
+           "means</b>; the evidence marker after it carries the "
+           "<code>file:line</code> it was read from. Every code is also "
+           "listed in the glossary at the foot of this page.</p>",
            "<table><tr><th>dimension</th><th>the question it answers</th>"
            + "".join(f"<th>{html.escape(l)}</th>" for l in labels)
            + "<th>agreement</th></tr>"]
     for r in rows:
-        cells_html = "".join(
-            f'<td title="{html.escape(ev.get((l, r["dimension"]), "") or "no evidence")}">'
-            f'{html.escape(str(r.get(l, "-")))}</td>' for l in labels)
+        tds = []
+        for l in labels:
+            value = str(r.get(l, "-"))
+            # A replicate-disagreement suffix such as "(2/3)" is not a code.
+            core, _, suffix = value.partition(" (")
+            evidence = ev.get((l, r["dimension"]), "")
+            marker = (f'<sup class="small" title="{html.escape(evidence)}">[src]</sup>'
+                      if evidence else "")
+            tds.append(f'<td>{_describe(core)}'
+                       f'{(" (" + html.escape(suffix)) if suffix else ""}{marker}</td>')
         cls = {"all_differ": "bad", "mixed": "warn"}.get(r["agreement"], "ok")
-        out.append(f'<tr><td><b>{html.escape(r["dimension"])}</b></td>'
+        out.append(f'<tr><td title="{html.escape(dimension_help(r["dimension"]))}">'
+                   f'<abbr class="term" title="{html.escape(dimension_help(r["dimension"]))}">'
+                   f'<b>{html.escape(r["dimension"])}</b></abbr></td>'
                    f'<td class="small">{html.escape(r["question"])}</td>'
-                   f'{cells_html}<td class="{cls}">{r["agreement"]}</td></tr>')
+                   f'{"".join(tds)}<td class="{cls}">{r["agreement"]}</td></tr>')
     out.append("</table>")
     return "\n".join(out)
 
@@ -577,7 +605,80 @@ def _fmt(v, nd=4):
     return html.escape(str(v))
 
 
-def _render_kv(d: dict) -> str:
+def _term(token: str, scope: str | None = None) -> str:
+    """A canonical code, with its definition on hover."""
+    try:
+        from autotokamak.bench.glossary import define
+    except Exception:  # noqa: BLE001
+        return html.escape(token)
+    d = define(token, scope=scope)
+    if not d:
+        return html.escape(token)
+    return (f'<abbr class="term" title="{html.escape(d)}">'
+            f'{html.escape(token)}</abbr>')
+
+
+def _describe(value: str, scope: str | None = None) -> str:
+    """A composite value ("a+b") with every part defined on hover."""
+    try:
+        from autotokamak.bench.glossary import split_value
+    except Exception:  # noqa: BLE001
+        return html.escape(str(value))
+    tokens = split_value(str(value))
+    if not tokens:
+        return html.escape(str(value))
+    return "+".join(_term(t, scope) for t in tokens)
+
+
+# Codes that are ordinary English words too; annotated only because in these
+# blocks they are always the code. Everything else must carry an underscore,
+# so prose is left alone.
+_BARE_TERMS = {"agree", "partial", "mismatch", "undocumented", "continue",
+               "lhs", "sobol", "halton", "pca", "optuna", "gp"}
+_TERM_TOKEN = re.compile(r"\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+|[a-z]{2,12})\b")
+
+
+def _annotate_terms(escaped: str) -> str:
+    """Wrap every known code in already-escaped text with its definition."""
+    try:
+        from autotokamak.bench.glossary import define
+    except Exception:  # noqa: BLE001
+        return escaped
+
+    def repl(m):
+        token = m.group(1)
+        if "_" not in token and token not in _BARE_TERMS:
+            return token
+        d = define(token)
+        if not d:
+            return token
+        return (f'<abbr class="term" title="{html.escape(d)}">{token}</abbr>')
+
+    return _TERM_TOKEN.sub(repl, escaped)
+
+
+def _glossary_html() -> str:
+    """Every code this report can print, defined, in one collapsible block."""
+    try:
+        from autotokamak.bench.glossary import all_terms
+    except Exception:  # noqa: BLE001
+        return ""
+    out = ["<details class='glossary'><summary>Glossary — every code in this "
+           "report, defined</summary>",
+           "<p class='small'>These are the canonical codes the analysis emits. "
+           "Anywhere one appears above, hovering it shows the same "
+           "definition.</p>"]
+    for group, terms in all_terms().items():
+        out.append(f"<h3>{html.escape(group)}</h3><dl>")
+        for token, definition in terms.items():
+            out.append(f"<dt>{html.escape(token)}</dt>"
+                       f"<dd>{html.escape(definition)}</dd>")
+        out.append("</dl>")
+    out.append("</details>")
+    return "".join(out)
+
+
+def _render_kv(d: dict, *, annotate: bool = False) -> str:
     """Definition list for setup/choices dicts; nested dicts/lists inline."""
     items = []
     for k, v in d.items():
@@ -586,11 +687,16 @@ def _render_kv(d: dict) -> str:
         if isinstance(v, dict):
             vs = "; ".join(f"{ik}={_fmt(iv)}" for ik, iv in v.items())
         elif isinstance(v, list):
-            vs = "<br>".join(html.escape(str(x)[:220]) for x in v)
+            parts = [html.escape(str(x)[:220]) for x in v]
+            if annotate:
+                parts = [_annotate_terms(x) for x in parts]
+            vs = "<br>".join(parts)
             items.append(f"<li><b>{html.escape(str(k))}</b>:<br>{vs}</li>")
             continue
         else:
             vs = html.escape(str(v)[:400])
+            if annotate:
+                vs = _annotate_terms(vs)
         items.append(f"<li><b>{html.escape(str(k))}</b>: {vs}</li>")
     return "<ul>" + "".join(items) + "</ul>"
 
@@ -664,7 +770,11 @@ def build_html(tag: str, rows: list[dict], bars_b64: str, baseline_mean: float) 
                         + _render_kv(r["choices"]))
         if r.get("reasoning"):
             body.append("<h3>Reasoning — method chain, per-round logic, and what "
-                        "the code actually computes</h3>" + _render_kv(r["reasoning"]))
+                        "the code actually computes</h3>"
+                        + "<p class='small'>Hover any underlined code for its "
+                        "definition; all of them are listed in the glossary at "
+                        "the foot of this page.</p>"
+                        + _render_kv(r["reasoning"], annotate=True))
         if r.get("error"):
             body.append(f"<p class='bad'>harness error: {html.escape(str(r['error'])[:400])}</p>")
         gates = r.get("contract", {}).get("gates")
@@ -691,6 +801,7 @@ def build_html(tag: str, rows: list[dict], bars_b64: str, baseline_mean: float) 
             body.append(f'<img src="data:image/png;base64,{r["psi_b64"]}">')
         body.append("</div>")
 
+    body.append(_glossary_html())
     body.append("<p class='small'>Generated by tools/matrix_report.py</p>")
     return "\n".join(body)
 

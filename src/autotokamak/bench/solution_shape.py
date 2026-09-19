@@ -423,6 +423,195 @@ DIMENSION_QUESTIONS: dict[str, str] = {
 }
 
 
+# Every value the detectors above can emit, defined. A code in a report cell
+# that a reader has to guess at is not a measurement, it is a rumour — so the
+# definitions live next to the detector that emits them and are rendered as
+# hover text wherever the code appears.
+VALUE_GLOSSARY: dict[str, str] = {
+    # --- oft_env_strategy ---
+    "singleton_reused": (
+        "One OFT_env is built once and handed out on every call — a cached "
+        "module global, a class guarding construction, or an lru_cache. "
+        "Honours OFT's one-env-per-process limit in the simplest way, at the "
+        "cost of keeping every solve in one process: a solver crash takes the "
+        "campaign with it."),
+    "per_worker_process": (
+        "Each worker process builds its own OFT_env. The only arrangement "
+        "that lets the campaign use more than one core, since the limit is "
+        "per process — and it contains a crash to one worker. Costs a fresh "
+        "env (and mesh) per worker."),
+    "per_solve": (
+        "An OFT_env is constructed inside the per-solve function. Directly "
+        "against the documented limit if those solves share a process; "
+        "usually a latent crash rather than a design."),
+    "module_level_once": (
+        "OFT_env is constructed at import or in one top-level block, with no "
+        "guard. Works while the module is imported once, with nothing "
+        "stopping a second construction."),
+    # --- solve_isolation ---
+    "in_process_serial": (
+        "Solves run one after another inside the driving process. Simplest, "
+        "and the slowest: no parallelism, and one bad solve can poison the "
+        "shared solver state."),
+    "process_pool": (
+        "multiprocessing.Pool / ProcessPoolExecutor fans solves across "
+        "processes. Parallel, and each solve is insulated — a segfault kills "
+        "a worker, not the campaign."),
+    "subprocess_per_batch": (
+        "The driver shells out (usually to its own script) to run a batch. "
+        "Insulates solver state between batches and survives a hard crash; "
+        "pays process start-up and serialises through files."),
+    "forked_process": (
+        "Solves run in explicitly forked/spawned processes without a pool — "
+        "the isolation of a pool, managed by hand."),
+    # --- mesh_route ---
+    "oft_gs_domain": (
+        "Meshed through OFT's own API (gs_Domain / define_region / build_mesh) "
+        "as the worked examples do. What the task's meshing milestone asks "
+        "for, and what TokaMaker's topology checks accept."),
+    "hand_built_triangulation": (
+        "A mesh built outside OFT (e.g. scipy.spatial.Delaunay) and handed to "
+        "the solver. The task forbids this explicitly: TokaMaker validates "
+        "mesh topology and rejects hand-built triangulations."),
+    # --- grid_mapping ---
+    "solver_field_eval": (
+        "psi is read on the frozen 64x96 grid through the solver's own finite-"
+        "element interpolator (get_field_eval). Evaluates the FE basis "
+        "directly, so no second interpolation error is introduced."),
+    "scipy_interpolator": (
+        "The solver's nodal values are re-interpolated onto the grid with "
+        "scipy (RegularGridInterpolator / griddata / CloughTocher). Adds an "
+        "interpolation error on top of the solve, and depends on how the "
+        "nodes were sampled first."),
+    "manual_barycentric": (
+        "The grid point is located in the mesh by hand (find_simplex / "
+        "barycentric weights) and psi blended from the triangle's vertices."),
+    # --- mask_rule ---
+    "lcfs_polygon": (
+        "A grid point is inside the plasma iff it lies within the LCFS "
+        "polygon — point-in-polygon against the D-shape boundary, whatever "
+        "the helper is called (contains_points, _points_in_poly, "
+        "inside_lcfs_mask). Geometric, per sample, and independent of the "
+        "surrogate's own output."),
+    "psi_norm_threshold": (
+        "Inside/outside is decided by normalised flux (psi_n <= 1). Uses the "
+        "solve's own notion of the boundary rather than the requested shape; "
+        "sensitive to how psi_n is normalised."),
+    "solver_native_nan": (
+        "Whatever the solver itself leaves undefined outside the plasma is "
+        "kept as NaN. No separate mask to get wrong — and no mask at "
+        "prediction time either, unless one is reconstructed."),
+    "training_valid_mask": (
+        "The predictor masks with a valid-pixel mask derived from the "
+        "training data (e.g. pixels finite in training). Cheap and stable, "
+        "but the mask cannot adapt to a geometry unlike those seen in "
+        "training — the same family of defect as the run that passed 9/9 "
+        "gates while predicting plasma in vacuum."),
+    # --- storage ---
+    "npz_per_solve": "One compressed .npz per solved sample.",
+    "hdf5": (
+        "One HDF5 file holding many samples. Scales best and carries "
+        "attributes/provenance, at the price of concurrent-write care."),
+    "npy": "Raw .npy arrays, typically one per field per sample.",
+    "pickle": (
+        "Python-pickled objects (pickle/joblib/torch.save) — usually the "
+        "model artifact rather than the dataset."),
+    "index": (
+        "An index/manifest (CSV or JSONL) sits beside the arrays, listing "
+        "every sample and its status. What makes a campaign resumable and "
+        "auditable rather than a directory to be re-scanned."),
+    # --- storage_validation ---
+    "reload_and_check_finite": (
+        "A function both re-loads a written artifact and checks its finite "
+        "fraction — the task's storage-validation gate, actually implemented. "
+        "This is the check that catches an all-NaN grid stored as a success."),
+    "claimed_only": (
+        "The workspace talks about stored-file validation (finite_frac, "
+        "stored_ok) but no function both loads a file and checks finiteness. "
+        "The gate is reported, not performed."),
+    # --- pilot_gate ---
+    "enforced": (
+        "A pilot runs and its success rate is compared against a threshold "
+        "before the campaign proceeds — the task's 50% pilot gate."),
+    "run_without_threshold": (
+        "A pilot runs, but nothing compares its success rate to a threshold: "
+        "the campaign starts regardless of what the pilot found."),
+    # --- leakage_guard ---
+    "test_absent_from_fitting_functions": (
+        "No function that calls .fit()/backward()/optimizer.step() references "
+        "a test path or array. Necessary, not sufficient: the task also "
+        "forbids the test set influencing model SELECTION and ACQUISITION, "
+        "which this check cannot see."),
+    "test_referenced_in_fitting_function": (
+        "A function that fits the model also touches something named test. A "
+        "flag for review, not a verdict — read the cited line; it may be a "
+        "legitimate final-evaluation call sharing a function."),
+    # --- self_test ---
+    "subprocess_reruns_predict": (
+        "Something in the workspace invokes predict.py as a subprocess with "
+        "the contract CLI — the task's deliverable self-test, in a fresh "
+        "process, which is the only way to catch an import-order or "
+        "global-state dependency."),
+    "imported_not_subprocessed": (
+        "predict.py is referenced but only imported or described, never run "
+        "as the documented command. Code that works in the session's process "
+        "and fails in a clean one is exactly what this misses."),
+    # --- code_shape / entry_point ---
+    "single_script": "The whole pipeline is one or two files.",
+    "one_dominant_module": (
+        "One file holds most of the pipeline's lines, with small helpers "
+        "around it."),
+    "single_entry_script": "Exactly one file is runnable as a program.",
+}
+
+# Longer framing for each row of the cross comparison: what the dimension is,
+# and why a difference in it matters.
+DIMENSION_NOTES: dict[str, str] = {
+    "oft_env_strategy": (
+        "TokaMaker allows exactly one OFT_env per Python process, for the "
+        "life of that process. Everything about how a campaign is executed "
+        "follows from how the agent chose to live with that."),
+    "solve_isolation": (
+        "Whether solves share a process decides both throughput and blast "
+        "radius: in one process a single solver crash ends the campaign."),
+    "mesh_route": (
+        "The task mandates reproducing the OFT fixed-boundary example's "
+        "meshing workflow and forbids hand-built triangulations, which "
+        "TokaMaker's topology validation rejects."),
+    "grid_mapping": (
+        "Ground truth is defined on a frozen 64x96 R/Z grid; the solve is on "
+        "a triangular mesh. How that gap is crossed is a source of error "
+        "entirely separate from the surrogate."),
+    "mask_rule": (
+        "psi is undefined outside the plasma and the contract requires NaN "
+        "there. Getting this wrong produced the headline failure of this "
+        "benchmark: a run that passed every gate while emitting a "
+        "full-magnitude field in vacuum."),
+    "storage": (
+        "What a solved sample is on disk, and whether an index makes the "
+        "campaign resumable and auditable."),
+    "storage_validation": (
+        "The task counts a solve as successful only after its stored artifact "
+        "re-loads with finite values — added after an agent stored all-NaN "
+        "grids and reported them as successes."),
+    "pilot_gate": (
+        "The task requires a >=20-solve pilot and a stop below 50% success, "
+        "so that a broken solver is found before 300 solves are spent on it."),
+    "leakage_guard": (
+        "The held-out test set must never influence training, selection or "
+        "acquisition. Only the training half of that is visible in code."),
+    "self_test": (
+        "The task requires re-running each deliverable's documented command "
+        "in a fresh process before declaring done."),
+    "code_shape": (
+        "How the solution is organised at all — one script or a module tree. "
+        "Not a quality judgement on its own; read it next to the score."),
+    "entry_point": (
+        "How a stranger would run it, which the task requires to be one "
+        "documented command."),
+}
+
+
 def analyse_solution_shape(workspace: Path) -> dict[str, Any]:
     """Every dimension of the approach, each with its code evidence."""
     workspace = Path(workspace)
@@ -481,7 +670,9 @@ def cross_compare(records: dict[str, dict]) -> list[dict[str, Any]]:
 
 __all__ = [
     "DIMENSIONS",
+    "DIMENSION_NOTES",
     "DIMENSION_QUESTIONS",
+    "VALUE_GLOSSARY",
     "CodeIndex",
     "analyse_solution_shape",
     "cross_compare",

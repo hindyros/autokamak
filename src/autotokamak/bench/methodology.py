@@ -176,6 +176,180 @@ CHAIN_ORDER = ("initial_design", "representation", "model_family", "ensembling",
                "hpo", "acquisition", "stopping_rule")
 
 
+# Every canonical term this module can emit, defined. Rendered as hover text
+# wherever a code appears in a report: a reader should never have to open the
+# source to find out what "residual_ucb" or "stop_unexplained" means.
+TERM_GLOSSARY: dict[str, str] = {
+    # --- acquisition criteria (shared vocabulary with the L0/L1 typed space) ---
+    "uncertainty": (
+        "Points are ranked by the model's own predictive spread, without the "
+        "record saying where that spread comes from. The family term; the two "
+        "entries below are its specific forms."),
+    "uncertainty_ensemble": (
+        "Spread across an ENSEMBLE of models (deep ensemble, bootstrap, or "
+        "MC-dropout samples) — 'query by committee'. Needs no probabilistic "
+        "model, and its quality depends entirely on the members disagreeing "
+        "for real rather than sharing an initialisation."),
+    "uncertainty_gp": (
+        "Posterior variance of a Gaussian process (or an acquisition built on "
+        "it, e.g. expected improvement). Principled and calibrated where the "
+        "GP's kernel assumptions hold; costly as the dataset grows."),
+    "residual_ucb": (
+        "Points are targeted where the model is MEASURABLY wrong — an error "
+        "model fit on residuals or out-of-fold error, often with a UCB "
+        "trade-off between exploiting known weakness and exploring. Uses "
+        "measurement rather than the model's self-assessment, which can be "
+        "confidently wrong."),
+    "space_filling": (
+        "Purely geometric coverage of the input box: farthest-point/maximin, "
+        "distance to the existing training set, k-means. Needs no model at "
+        "all — which makes it robust, and makes it NOT adaptive in the sense "
+        "of reacting to what was learned."),
+    "gradient_sensitivity": (
+        "Points where the response is steep or curving — a sensitivity or "
+        "Jacobian-driven criterion."),
+    "feasibility": (
+        "Candidate choice weighted by whether solves there are expected to "
+        "converge, steering away from regions with failed solves."),
+    "random": (
+        "Points drawn uniformly at random. As the CANDIDATE POOL this is "
+        "normal and harmless; as the selection criterion it means the round "
+        "was adaptive in name only."),
+    # --- initial design ---
+    "lhs": "Latin hypercube: stratified in every dimension at once.",
+    "sobol": "A Sobol low-discrepancy sequence — quasi-random, extensible.",
+    "halton": "A Halton low-discrepancy sequence.",
+    "maximin": "Points chosen to maximise the minimum pairwise distance.",
+    "grid": "A full-factorial grid over the parameters.",
+    "uniform_random": "Independent uniform draws, with no stratification.",
+    # --- representation ---
+    "pca": (
+        "The psi field is compressed to a handful of principal components and "
+        "the model predicts the coefficients. The standard field-surrogate "
+        "move: it turns 6144 outputs into tens, and caps accuracy at whatever "
+        "the truncated basis can represent."),
+    "pod_svd": "An SVD/POD basis of the field — the same idea as PCA.",
+    "autoencoder": "A learned nonlinear latent space instead of a linear basis.",
+    "spline_basis": "The field is represented by spline or RBF basis functions.",
+    "per_pixel": (
+        "The model predicts grid points directly, with no reduction — simple, "
+        "and the most parameters to fit."),
+    # --- model families ---
+    "gp": "Gaussian-process regression: calibrated uncertainty, cubic scaling.",
+    "kernel_ridge": "Kernel ridge regression — a GP's mean without its variance.",
+    "poly_ridge": "Polynomial features into a ridge regressor.",
+    "ridge_linear": "Plain linear/ridge regression in the input parameters.",
+    "random_forest": "A forest of regression trees.",
+    "gradient_boosting": "Boosted trees (sklearn/XGBoost/LightGBM).",
+    "svr": "Support-vector regression.",
+    "knn": "k-nearest-neighbour regression.",
+    "mlp_sklearn": "sklearn's MLPRegressor.",
+    "mlp_torch": (
+        "A hand-written PyTorch MLP. The most common choice in this corpus, "
+        "usually mapping 5 parameters to PCA coefficients."),
+    "cnn_decoder": "A convolutional decoder emitting the field as an image.",
+    "rbf_interpolant": "Radial-basis-function interpolation through the samples.",
+    # --- ensembling ---
+    "deep_ensemble": "Several independently initialised models, averaged.",
+    "mc_dropout": (
+        "Dropout left active at inference and sampled repeatedly — an "
+        "ensemble's spread at one model's training cost."),
+    "bagging": "Models trained on bootstrap resamples of the data.",
+    # --- HPO ---
+    "optuna": "Optuna search over hyperparameters.",
+    "grid_search": "Exhaustive grid search.",
+    "random_search": "Randomised hyperparameter search.",
+    "cv_select": "Selection by cross-validation score.",
+    "manual_sweep": "Hyperparameters fixed or tuned by hand.",
+    "early_stopping": "Training halted on a validation criterion.",
+    # --- stopping rules ---
+    "val_threshold_70pct": (
+        "The task's own rule: stop once validation error is at most 0.30x the "
+        "mean-predictor baseline, i.e. a 70% reduction."),
+    "round_cap": "Stop because the 3-round cap was reached.",
+    "plateau": "Stop because improvement had flattened.",
+    "budget": "Stop because a solve or time budget was exhausted.",
+    # --- per-round decisions ---
+    "continue": "Another adaptive round followed this one.",
+    "stop_threshold_met": (
+        "The campaign ended with the task's 70% criterion satisfied — the "
+        "intended way to finish early."),
+    "stop_without_threshold": (
+        "The campaign ended although validation error had NOT reached 0.30x "
+        "baseline: the round cap, a budget, or a timeout ended it, not the "
+        "stopping rule."),
+    "stop_unexplained": (
+        "The campaign ended and no per-round validation error was recorded, "
+        "so why it stopped cannot be read from the artifacts at all."),
+    # --- stated vs implemented ---
+    "agree": "The criterion stated in the log/report is the one the code computes.",
+    "partial": (
+        "Stated and implemented criteria overlap but do not match: one side "
+        "names a component the other never does — see claimed-but-not-computed."),
+    "mismatch": (
+        "The stated criterion and the implemented one have nothing in common. "
+        "The strongest available signal that a run's account of itself is "
+        "wrong."),
+    "unverifiable_from_code": (
+        "No function that chooses points could be classified, so the stated "
+        "criterion can be neither confirmed nor contradicted."),
+    "undocumented": (
+        "The code implements a criterion that the log and report never name."),
+    # --- selection rules ---
+    "top_k": "The highest-scoring candidates are taken (argsort/topk).",
+    "random_draw": "The batch is drawn at random from the candidates.",
+    "threshold": "Candidates above a score threshold are taken.",
+    # --- derived measures ---
+    "model_informed": (
+        "The function that chooses points actually calls the surrogate. A "
+        "model-derived criterion that never does is not one, whatever it is "
+        "named."),
+    "criterion_switched": (
+        "The acquisition criterion CHANGED between rounds — logic reacting to "
+        "what it measured, rather than one fixed rule executed n times."),
+    "evidence_grounded": (
+        "The round's validation error against baseline was recorded, so its "
+        "choice can be checked against what was known at the time. An "
+        "ungrounded round's reasoning is unfalsifiable."),
+    "adaptive_in_name_only": (
+        "Every stated criterion names nothing but randomness: the round was "
+        "labelled adaptive and was not."),
+    "chain_agreement": (
+        "Share of a cell's replicates that chose the modal chain of methods — "
+        "method reproducibility, which is not the same as score "
+        "reproducibility."),
+    "prose_only": (
+        "A method named in the README or report.json that the code never "
+        "evidences."),
+    # --- L0/L1 typed meta-loop actions and outcomes ---
+    "regen_dataset": (
+        "Meta-loop action: regenerate the dataset with new sweep settings "
+        "(e.g. more samples, a different envelope) — a blind append, not a "
+        "targeted one."),
+    "enrich_active": (
+        "Meta-loop action: acquire new samples ON PURPOSE, by residual-driven "
+        "UCB where a trained winner exists and PCA-GP variance where it does "
+        "not. The typed equivalent of an L2/L3 agent's adaptive round."),
+    "extend_search": (
+        "Meta-loop action: spend more effort on model search (a nested "
+        "Phase-2 run with an emphasis or wider hyperparameters) rather than "
+        "on more data."),
+    "terminate": "Meta-loop action: stop, with a stated reason and confidence.",
+    "target_reached": (
+        "The meta-loop stopped because its accuracy target was met — the "
+        "intended early finish."),
+    "iterations_cap": (
+        "The meta-loop stopped because it ran out of iterations, not because "
+        "it had succeeded."),
+    "agent": (
+        "The meta-loop stopped because the decision policy chose to "
+        "terminate."),
+    "typed_decision": (
+        "The criterion came from the L0/L1 typed action schema rather than "
+        "from free-form agent prose — structurally present every iteration."),
+}
+
+
 def classify(text: Optional[str], stages: Iterable[str] = CHAIN_ORDER
              ) -> dict[str, list[str]]:
     """Canonical terms present in a piece of prose or code, by stage."""
@@ -657,7 +831,7 @@ def build_chain_signature(chain: dict[str, Any], n_rounds: Optional[int]) -> str
     if ens:
         model_part += f"[{'+'.join(ens)}]"
     acq = _fmt("acquisition", sep=",")
-    rounds = f"x{n_rounds}" if n_rounds else ""
+    rounds = f" x{n_rounds}" if n_rounds else ""
     stop = _fmt("stopping_rule", sep=",")
     return f"{design} -> {model_part} -> acq:{acq}{rounds} -> stop:{stop}"
 
@@ -1173,6 +1347,7 @@ def extract_meta_methodology(workspace: Path) -> dict[str, Any]:
 
 __all__ = [
     "ACQUISITION_PATTERNS",
+    "TERM_GLOSSARY",
     "analyse_code_logic",
     "compare_stated_to_implemented",
     "CHAIN_ORDER",
