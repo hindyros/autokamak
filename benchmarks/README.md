@@ -166,6 +166,62 @@ Per cell the matrix then carries `code_logic_modal`, `code_logic_agreement`
 `model_informed_k/n`, `stated_vs_code` verdict counts and
 `claimed_not_implemented`.
 
+### How the prompt was solved — the cross comparison
+
+The acquisition criterion is one paragraph of a task that also asks the agent
+to drive a finite-element solver under a one-`OFT_env`-per-process
+constraint, run and validate a data campaign, decide what "no plasma here"
+means when writing NaN, map a triangular mesh onto a frozen rectangle, and
+ship a CLI a stranger can run. Two agents can share an acquisition criterion
+and have solved almost none of those the same way.
+
+`src/autotokamak/bench/solution_shape.py` answers each of those demands from
+the code that plays that ROLE — the file that constructs `OFT_env`, the
+predictor that writes the NaNs, the function that calls `.fit()` — never a
+workspace-wide grep, which in this corpus is true of everything and
+therefore says nothing. Every answer carries `file:line`.
+
+| dimension | the question it answers |
+|---|---|
+| `oft_env_strategy` | OFT allows one `OFT_env` per process, ever. Who owns it? |
+| `solve_isolation` | What insulates one solve from the next? |
+| `mesh_route` | The OFT API, or a hand-built triangulation (which the task forbids)? |
+| `grid_mapping` | How does the mesh reach the frozen 64×96 grid? |
+| `mask_rule` | How is "no plasma here" decided when writing NaN? |
+| `storage` | What is a solved sample on disk, and is it indexed? |
+| `storage_validation` | Is a solve counted only after its file re-loads finite? |
+| `pilot_gate` | Was the mandated pilot run, and its 50% threshold enforced? |
+| `leakage_guard` | Does the test set stay out of the functions that fit the model? |
+| `self_test` | Was the documented `predict.py` CLI re-run in a fresh process? |
+| `code_shape` / `entry_point` | One script or a module tree; how would a stranger run it? |
+
+Two scoping rules do most of the work, and both were added after they went
+wrong on real runs:
+
+- **The production path is the default scope.** The task MANDATES a meshing
+  milestone, a pilot and a deliverable self-test, so every workspace contains
+  demo and verification scripts. Reading the campaign's execution model off a
+  `final_repro_check.py` is how a cross-comparison becomes fiction, so
+  `smoke|milestone|preflight|parity|repro|tests/` are excluded — except for
+  `self_test`, which is *supposed* to live in such a script.
+- **Function scope, not file scope.** "The file that trains also mentions
+  test" is true of any single-file pipeline; "the function that calls
+  `.fit()` touches a test path" is a specific thing to go and read.
+
+`cross_compare` transposes it — one row per dimension, one column per cell,
+rows the agents disagreed on first — which is what a comparison has to look
+like to be read as one. It prints in `tools/aggregate_matrix.py`, lands in
+`solution_shape.csv`, and heads the HTML report with `file:line` on hover.
+
+The v3 shakedown, four agents on an identical prompt: all four meshed through
+`gs_Domain`, evaluated ψ with the solver's own `get_field_eval`, enforced the
+pilot gate and re-loaded stored artifacts before counting them — and they
+disagreed on execution model (`in_process_serial` vs `subprocess_per_batch`
+vs `process_pool`), on who owns `OFT_env` (a cached singleton vs one per
+worker), on masking (LCFS polygon alone, polygon plus a training-derived
+valid mask, polygon plus the solver's native NaNs), and on size, from one
+dominant module to a 27-module tree.
+
 Prose, log and code are kept as three separate witnesses and never merged:
 `prose_only_terms` is what the README claims over the code, `stated_vs_code`
 is what the run's own log claims against it. `tools/judge_code.py` remains

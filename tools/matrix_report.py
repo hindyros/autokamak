@@ -458,6 +458,63 @@ def _meta_setup_and_choices(workspace: Path, manifest: dict) -> tuple[dict, dict
     return {k: v for k, v in given.items() if v is not None}, choices
 
 
+def _cross_comparison_table(rows: list[dict]) -> str:
+    """Rows = one demand of the task; columns = the agent cells.
+
+    Restricted to bench cells: an L0/L1 pipeline workspace has no
+    agent-authored solver or predictor to read, so including it would print
+    a column of dashes and imply the pipeline failed to answer questions it
+    was never asked.
+    """
+    try:
+        from autotokamak.bench.solution_shape import (
+            DIMENSION_QUESTIONS,
+            analyse_solution_shape,
+            cross_compare,
+        )
+    except Exception:  # noqa: BLE001
+        return ""
+    bench = [r for r in rows if r.get("_kind") == "bench" and r.get("_workspace")]
+    if not bench:
+        return ""
+    records, labels = {}, []
+    for c in bench:
+        label = f'{c.get("condition", "?")}'
+        if label in records:  # replicates of one cell
+            label = f'{label}#{sum(1 for k in records if k.startswith(label)) + 1}'
+        labels.append(label)
+        records[label] = analyse_solution_shape(c["_workspace"])
+    rows = cross_compare(records)
+    order = {"all_differ": 0, "mixed": 1, "all_same": 2}
+    rows.sort(key=lambda r: (order.get(r["agreement"], 3), r["dimension"]))
+
+    # Evidence as a tooltip: the file:line behind every cell of the table.
+    ev = {(lab, dim): "; ".join(
+              ((records[lab].get("dimensions") or {}).get(dim) or {}).get("evidence") or [])
+          for lab in labels for dim in DIMENSION_QUESTIONS}
+
+    out = ["<h2>How each agent solved the prompt — cross comparison</h2>",
+           "<p class='small'>One row per demand of the task, answered from the code "
+           "that plays that role — the file that builds <code>OFT_env</code>, the "
+           "predictor that writes the NaNs, the function that calls "
+           "<code>.fit()</code> — not a workspace-wide grep. Rows the agents "
+           "disagreed on come first; hover any answer for its "
+           "<code>file:line</code>.</p>",
+           "<table><tr><th>dimension</th><th>the question it answers</th>"
+           + "".join(f"<th>{html.escape(l)}</th>" for l in labels)
+           + "<th>agreement</th></tr>"]
+    for r in rows:
+        cells_html = "".join(
+            f'<td title="{html.escape(ev.get((l, r["dimension"]), "") or "no evidence")}">'
+            f'{html.escape(str(r.get(l, "-")))}</td>' for l in labels)
+        cls = {"all_differ": "bad", "mixed": "warn"}.get(r["agreement"], "ok")
+        out.append(f'<tr><td><b>{html.escape(r["dimension"])}</b></td>'
+                   f'<td class="small">{html.escape(r["question"])}</td>'
+                   f'{cells_html}<td class="{cls}">{r["agreement"]}</td></tr>')
+    out.append("</table>")
+    return "\n".join(out)
+
+
 def _meta_methodology_choices(workspace: Path) -> dict:
     """L0/L1 cells, in the same vocabulary as the agent cells."""
     try:
@@ -584,6 +641,9 @@ def build_html(tag: str, rows: list[dict], bars_b64: str, baseline_mean: float) 
         )
     tbl.append("</table>")
     body = head + tbl + [f'<img src="data:image/png;base64,{bars_b64}">']
+    cross = _cross_comparison_table(rows)
+    if cross:
+        body.append(cross)
 
     for r in rows:
         body.append(f'<div class="cell"><h2>{html.escape(r["condition"])}</h2>')
@@ -669,6 +729,8 @@ def main() -> int:
             "error": c.get("error"),
             "meta": c.get("meta"),
             "n_scored": len(frozen["records"]),
+            "_kind": c.get("_kind"),
+            "_workspace": c.get("_workspace"),
         }
         if c["_kind"] == "bench":
             ws = c["_workspace"]

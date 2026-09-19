@@ -182,7 +182,8 @@ def _methodology_fields(meth: Any) -> dict:
                 "iterations": [], "code_acq": [], "code_logic_signature": None,
                 "code_evidence_scope": None, "selection_rule": [],
                 "model_informed": None, "stated_vs_code": None,
-                "only_stated": [], "only_implemented": [], "chooser_where": ""}
+                "only_stated": [], "only_implemented": [], "chooser_where": "",
+                "shape_signature": None, "shape_dims": {}}
     chain = meth.get("method_chain") or {}
     logic = meth.get("decision_logic") or {}
     code = meth.get("code_logic") or {}
@@ -200,6 +201,11 @@ def _methodology_fields(meth: Any) -> dict:
         "only_implemented": svi.get("only_implemented") or [],
         "chooser_where": "; ".join(h.get("where", "")
                                    for h in (code.get("chooser_functions") or [])[:3]),
+        # How the whole prompt was solved, dimension by dimension.
+        "shape_signature": (meth.get("solution_shape") or {}).get("shape_signature"),
+        "shape_dims": {k: (v or {}).get("value")
+                       for k, v in ((meth.get("solution_shape") or {}).get("dimensions")
+                                    or {}).items()},
         "chain": meth.get("chain_signature"),
         "acq_classes": logic.get("criterion_classes") or [],
         "model_primary": chain.get("model_primary"),
@@ -265,6 +271,62 @@ def summarise_methodology(runs: list[dict]) -> dict:
     }
 
 
+def cross_compare_cells(by_cell: dict[str, list[dict]]) -> list[dict]:
+    """One row per solution dimension, one column per condition.
+
+    A cross-comparison is a transposition: the question is "how did each of
+    them answer THIS", and that only reads as a comparison when the answers
+    share a line. Within a cell the replicates' modal answer is shown, with
+    the count when they disagreed — a cell that solved the same prompt two
+    different ways is itself a result.
+    """
+    from autotokamak.bench.solution_shape import DIMENSION_QUESTIONS
+
+    dims: list[str] = []
+    for runs in by_cell.values():
+        for r in runs:
+            for d in r.get("shape_dims") or {}:
+                if d not in dims:
+                    dims.append(d)
+    rows = []
+    for dim in dims:
+        row = {"dimension": dim, "question": DIMENSION_QUESTIONS.get(dim, "")}
+        seen, unknown = [], False
+        for cond, runs in sorted(by_cell.items()):
+            vals = [(r.get("shape_dims") or {}).get(dim) for r in runs]
+            known = [v for v in vals if v]
+            if not known:
+                row[cond] = "-"
+                unknown = True
+                continue
+            counts = Counter(known)
+            modal, n = counts.most_common(1)[0]
+            row[cond] = modal if len(counts) == 1 else f"{modal} ({n}/{len(known)})"
+            seen.append(modal)
+        row["n_distinct"] = len(set(seen))
+        # A cell the dimension could not be read for is a difference too —
+        # never let an unknown column be averaged into "all_same".
+        row["agreement"] = ("mixed" if unknown and seen
+                            else ("all_same" if seen and len(set(seen)) == 1
+                                  else ("all_differ"
+                                        if seen and len(set(seen)) == len(seen)
+                                        else "mixed")))
+        rows.append(row)
+    # Rows where the agents disagreed are the ones worth reading first.
+    order = {"all_differ": 0, "mixed": 1, "all_same": 2}
+    return sorted(rows, key=lambda r: (order.get(r["agreement"], 3), r["dimension"]))
+
+
+def write_solution_shape_csv(rows: list[dict], conds: list[str], out_dir: Path) -> Path:
+    out = out_dir / "solution_shape.csv"
+    fields = ["dimension", "question", *conds, "n_distinct", "agreement"]
+    with out.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    return out
+
+
 def write_methodology_csvs(runs: list[dict], out_dir: Path) -> tuple[Path, Path]:
     """One row per run (the chain) and one row per round (the logic)."""
     per_run = out_dir / "methodology.csv"
@@ -273,7 +335,7 @@ def write_methodology_csvs(runs: list[dict], out_dir: Path) -> tuple[Path, Path]
               "evidence_grounded", "stop_decision", "adaptive_in_name_only",
               "prose_only", "code_acq", "code_logic_signature", "code_evidence_scope",
               "selection_rule", "model_informed", "stated_vs_code", "only_stated",
-              "only_implemented", "chooser_where",
+              "only_implemented", "chooser_where", "shape_signature",
               "rel_l2", "contract_passed", "physically_valid"]
     with per_run.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
@@ -477,6 +539,18 @@ def main() -> int:
     print("  claimed_not_implemented = criterion families named in the log or "
           "report that the chooser never computes.")
 
+    conds = sorted(by_cell)
+    shape_rows = cross_compare_cells(by_cell)
+    print_table(shape_rows, ["dimension", *conds, "agreement"],
+                "How each agent solved the prompt — cross comparison "
+                "(rows the cells disagreed on first)")
+    print("\n  Each row is one demand of the task, answered from the code that "
+          "plays that role (not a workspace-wide grep):")
+    for r in shape_rows:
+        print(f"    {r['dimension']:<20} {r['question']}")
+    print("  Per-run evidence (file:line for every answer) is in each "
+          "result.json under methodology.solution_shape.")
+
     print("\n  Modal chain per cell "
           "(design -> representation+model[ensembling] -> acquisition x rounds -> stop):")
     for row in meth_rows:
@@ -578,11 +652,13 @@ def main() -> int:
         w.writeheader()
         w.writerows(cells)
     per_run, per_round = write_methodology_csvs(runs, tag_dirs[0])
+    shape_csv = write_solution_shape_csv(shape_rows, conds, tag_dirs[0])
     total = sum(c["cost_usd_total"] or 0 for c in cells)
     print(f"\nTotal measured spend across these tags: ${total:.2f}")
     print(f"Wrote {out}")
     print(f"Wrote {per_run} (one row per run: the chain of methods)")
     print(f"Wrote {per_round} (one row per adaptive round: the decision logic)")
+    print(f"Wrote {shape_csv} (one row per solution dimension, one column per cell)")
     return 0
 
 

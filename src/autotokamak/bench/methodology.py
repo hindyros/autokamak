@@ -715,7 +715,7 @@ _MODEL_CALL = re.compile(
     r"|\bsurrogate\w*\(|\bensemble\w*\(|\binfer\w*\(|\.__call__\("
     r"|no_grad\(|\.eval\(\)", re.I)
 # Evaluation data reaching the chooser is a leakage smell, not a proof.
-_TEST_REF = re.compile(r"\btest\w*\b", re.I)
+_TEST_REF = re.compile(r"(?:^|[^a-zA-Z])test\w*")
 
 
 def _function_sources(workspace: Path) -> list[tuple[str, int, str, str]]:
@@ -944,6 +944,14 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
 
     code_hits, imports, code_files = _code_signals(workspace)
     code_logic = analyse_code_logic(workspace)
+    # How the whole prompt was solved, dimension by dimension. Imported
+    # locally: solution_shape builds on this module's file walkers.
+    try:
+        from autotokamak.bench.solution_shape import analyse_solution_shape
+
+        solution = analyse_solution_shape(workspace)
+    except Exception as exc:  # noqa: BLE001
+        solution = {"error": f"{type(exc).__name__}: {exc}", "dimensions": {}}
     prose = " \n".join(x for x in (strategy_text, readme_text) if x)
     prose_hits = classify(prose)
     # Prose and code are kept separable: a claim only the README makes is
@@ -1009,6 +1017,9 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
         "decision_logic": logic,
         # What the code computes, independent of what the run claims.
         "code_logic": code_logic,
+        # How the rest of the prompt was solved — solver plumbing, masking,
+        # storage, verification. See bench.solution_shape.
+        "solution_shape": solution,
         "stated_vs_implemented": stated_vs_code,
         "evidence": {
             "acquisition_log": log_used,
