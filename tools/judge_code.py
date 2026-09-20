@@ -27,8 +27,19 @@ Usage:
     python tools/judge_code.py score   --run experiments/<tag>/<cond>/<run_id>
     python tools/judge_code.py compare --tag matrix-v2-20260810
 
-Judge substrate: ``claude_agent_sdk.query()`` with all tools disabled
-(text-in/text-out), ``setting_sources=[]``. Env: ANTHROPIC_API_KEY / CLI login.
+Judge substrate: selectable with ``--judge-provider``.
+
+  claude  (default) ``claude_agent_sdk.query()`` with all tools disabled
+          (text-in/text-out), ``setting_sources=[]``. Env: ANTHROPIC_API_KEY /
+          CLI login. Cost comes from the SDK's own accounting.
+  openai  the Responses API, text-in/text-out, no tools. Env: OPENAI_API_KEY.
+          Cost is derived from reported token usage and the committed price
+          table ``benchmarks/assets/prices.json``.
+
+NOTE ON VALIDITY: a judge drawn from the same model family as the runs it
+grades cannot be assumed neutral. When the judged campaign and the judge share
+a family, say so wherever the scores are reported -- self-preference is a
+documented effect and this script does nothing to correct for it.
 Each call's dollar cost is recorded in the output.
 """
 from __future__ import annotations
@@ -43,6 +54,9 @@ import sys
 from pathlib import Path
 
 DEFAULT_JUDGE_MODEL = "claude-opus-4-8"
+DEFAULT_OPENAI_JUDGE_MODEL = "gpt-5.2"
+PRICE_TABLE = (Path(__file__).resolve().parent.parent
+               / "benchmarks" / "assets" / "prices.json")
 
 # Files worth judging, in presentation order. Data/artifacts excluded.
 CODE_SUFFIXES = {".py", ".md", ".yaml", ".yml", ".toml", ".cfg", ".sh"}
@@ -180,7 +194,35 @@ shape:
 {SCHEMA_SNIPPET}"""
 
 
-async def _query_judge(prompt: str, model: str) -> tuple[str, float | None]:
+def _openai_cost(model: str, usage) -> float | None:
+    """Price a Responses-API call from the committed table. None if unpriced."""
+    try:
+        prices = (json.loads(PRICE_TABLE.read_text()).get("prices") or {})
+    except (OSError, json.JSONDecodeError):
+        return None
+    entry = next((v for k, v in prices.items() if k in (model or "")), None)
+    if not entry or entry.get("in") is None:
+        return None
+    tin = getattr(usage, "input_tokens", 0) or 0
+    tout = getattr(usage, "output_tokens", 0) or 0
+    cached = getattr(getattr(usage, "input_tokens_details", None),
+                     "cached_tokens", 0) or 0
+    fresh = max(tin - cached, 0)
+    rate_cached = entry.get("cache_read", entry["in"])
+    return (fresh * entry["in"] + cached * rate_cached
+            + tout * entry["out"]) / 1_000_000
+
+
+def _query_judge_openai(prompt: str, model: str) -> tuple[str, float | None]:
+    """Text-in/text-out, no tools. Responses API so reasoning models work."""
+    from openai import OpenAI
+
+    client = OpenAI()
+    resp = client.responses.create(model=model, input=prompt)
+    return resp.output_text or "", _openai_cost(model, resp.usage)
+
+
+async def _query_judge_claude(prompt: str, model: str) -> tuple[str, float | None]:
     from claude_agent_sdk import ClaudeAgentOptions, query
 
     options = ClaudeAgentOptions(
@@ -200,6 +242,12 @@ async def _query_judge(prompt: str, model: str) -> tuple[str, float | None]:
     return "\n".join(text_parts), cost
 
 
+def _query_judge(prompt: str, model: str, provider: str) -> tuple[str, float | None]:
+    if provider == "openai":
+        return _query_judge_openai(prompt, model)
+    return asyncio.run(_query_judge_claude(prompt, model))
+
+
 def _parse_json(text: str) -> dict:
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
@@ -207,7 +255,8 @@ def _parse_json(text: str) -> dict:
     return json.loads(m.group(0))
 
 
-def judge_run(run_dir: Path, *, model: str, samples: int) -> dict:
+def judge_run(run_dir: Path, *, model: str, samples: int,
+              provider: str = "claude") -> dict:
     workspace = run_dir / "workspace"
     bundle, manifest = build_bundle(workspace)
     if not manifest["included"]:
@@ -216,7 +265,7 @@ def judge_run(run_dir: Path, *, model: str, samples: int) -> dict:
 
     attempts, total_cost = [], 0.0
     for _ in range(samples):
-        reply, cost = asyncio.run(_query_judge(judge_prompt(bundle, label), model))
+        reply, cost = _query_judge(judge_prompt(bundle, label), model, provider)
         total_cost += cost or 0.0
         try:
             attempts.append(_parse_json(reply))
@@ -226,6 +275,7 @@ def judge_run(run_dir: Path, *, model: str, samples: int) -> dict:
     good = [a for a in attempts if "scores" in a]
     out: dict = {
         "judge_model": model,
+        "judge_provider": provider,
         "samples_requested": samples,
         "samples_parsed": len(good),
         "judge_cost_usd": round(total_cost, 4),
@@ -251,8 +301,31 @@ def _find_runs(tag_dir: Path) -> list[Path]:
     return sorted(p.parent for p in tag_dir.glob("*/*/result.json"))
 
 
+def _take_per_cell(run_dirs: list[Path], n: int) -> list[Path]:
+    """First n judgeable replicates of each cell, in run order.
+
+    Deterministic and stated in the paper: replicate order is chronological
+    and carries no information about quality, so this is a sample, not a
+    selection. Runs with no workspace (killed before writing one) cannot be
+    judged and do not consume a slot.
+    """
+    kept: list[Path] = []
+    seen: dict[str, int] = {}
+    for d in run_dirs:
+        cell = d.parent.name
+        if not (d / "workspace").is_dir():
+            continue
+        if seen.get(cell, 0) >= n:
+            continue
+        seen[cell] = seen.get(cell, 0) + 1
+        kept.append(d)
+    return kept
+
+
 def cmd_score(args, exp_dir: Path) -> int:
     run_dirs = [Path(args.run)] if args.run else _find_runs(exp_dir / args.tag)
+    if getattr(args, "per_cell", None):
+        run_dirs = _take_per_cell(run_dirs, args.per_cell)
     if not run_dirs:
         print("No runs found.", file=sys.stderr)
         return 1
@@ -269,7 +342,9 @@ def cmd_score(args, exp_dir: Path) -> int:
         else:
             print(f"[judging] {condition}/{run_dir.name} (model={args.judge_model}, "
                   f"samples={args.samples}) ...")
-            result = judge_run(run_dir, model=args.judge_model, samples=args.samples)
+            result = judge_run(run_dir, model=args.judge_model,
+                               samples=args.samples,
+                               provider=args.judge_provider)
             out_path.parent.mkdir(exist_ok=True)
             out_path.write_text(json.dumps(result, indent=2))
             print(f"    composite={result.get('composite')} "
@@ -351,7 +426,7 @@ good but failed, or vice versa, and what that implies)
 Be terse and specific; cite candidates by cell name. Note explicitly that
 judge scores are from a blind review with brand tokens redacted."""
 
-    reply, cost = asyncio.run(_query_judge(prompt, args.judge_model))
+    reply, cost = _query_judge(prompt, args.judge_model, args.judge_provider)
     out = tag_dir / "judge_report.md"
     out.write_text(reply)
     print(f"Wrote {out} (synthesis cost ${cost or 0:.2f})")
@@ -371,10 +446,22 @@ def main() -> int:
             p.add_argument("--samples", type=int, default=1,
                            help="judge passes per run; median reported (use >=3 for papers)")
             p.add_argument("--force", action="store_true", help="re-judge cached runs")
-        p.add_argument("--judge-model", default=DEFAULT_JUDGE_MODEL)
+            p.add_argument("--per-cell", type=int, default=None,
+                           help="judge only the first N judgeable replicates "
+                                "of each cell (a sample, not a selection)")
+        p.add_argument("--judge-provider", choices=("claude", "openai"),
+                       default="claude",
+                       help="which family grades the code; note that a judge "
+                            "sharing a family with the judged runs is not neutral")
+        p.add_argument("--judge-model", default=None,
+                       help="default: claude-opus-4-8, or gpt-5.2 for --judge-provider openai")
         p.add_argument("--experiments-dir", default=None)
         p.set_defaults(fn=fn)
     args = ap.parse_args()
+    if not args.judge_model:
+        args.judge_model = (DEFAULT_OPENAI_JUDGE_MODEL
+                            if args.judge_provider == "openai"
+                            else DEFAULT_JUDGE_MODEL)
     repo_root = Path(__file__).resolve().parent.parent
     exp_dir = Path(args.experiments_dir) if args.experiments_dir else repo_root / "experiments"
     return args.fn(args, exp_dir)
