@@ -24,11 +24,11 @@ from autotokamak.bench.trace import RunTrace
 
 load_dotenv(REPO_ROOT / ".env")
 
-from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage
-
-from ursa.agents import ExecutionAgent, PlanningAgent
-
+# These must follow load_dotenv: LangChain and URSA read provider
+# configuration from the environment at import time.
+from langchain.chat_models import init_chat_model  # noqa: E402
+from langchain_core.messages import HumanMessage  # noqa: E402
+from ursa.agents import ExecutionAgent, PlanningAgent  # noqa: E402
 
 DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
 

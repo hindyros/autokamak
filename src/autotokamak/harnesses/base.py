@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Literal, Optional
+from typing import Any, ClassVar, Literal
 
 from autotokamak.bench.taskspec import TaskSpec
 
@@ -27,7 +27,7 @@ class HarnessTimeout(BaseException):
 
 
 @contextmanager
-def time_limit(seconds: Optional[int]):
+def time_limit(seconds: int | None):
     """Wall-clock cap for adapters whose engine is an in-process call.
 
     The subprocess-jailed adapters (claude_sdk/pi/cursor) get their cap from
@@ -78,10 +78,10 @@ class RunResult:
     harness: str
     model: str
     workspace: Path
-    trace_path: Optional[Path]
+    trace_path: Path | None
     wall_seconds: float
-    cost_usd: Optional[float] = None   # filled where the substrate reports it
-    error: Optional[str] = None
+    cost_usd: float | None = None   # filled where the substrate reports it
+    error: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -121,8 +121,8 @@ class Harness(ABC):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
         """Execute ``task`` in ``workspace``; artifacts/trace under ``run_dir``."""
 
@@ -131,7 +131,7 @@ class Harness(ABC):
     def condition_for(self, task: TaskSpec) -> str:
         return f"{task.access_level}-{self.name}"
 
-    def resolve_model(self, task: TaskSpec, model: Optional[str]) -> Optional[str]:
+    def resolve_model(self, task: TaskSpec, model: str | None) -> str | None:
         return model or task.model_for(self.name)
 
     def prepare_workspace(self, task: TaskSpec, workspace: Path) -> None:
@@ -152,7 +152,7 @@ class Harness(ABC):
         )
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         """What would run — subclasses override to expose exact argv/env keys."""
         return {
             "harness": self.name,

@@ -26,7 +26,7 @@ import tempfile
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -64,7 +64,7 @@ class ContractReport:
         return {"passed": self.passed, "gates": self.gates, "notes": self.notes}
 
 
-def load_grid(grid_json: Optional[Path] = None) -> dict:
+def load_grid(grid_json: Path | None = None) -> dict:
     if grid_json is not None and Path(grid_json).is_file():
         return json.loads(Path(grid_json).read_text())
     return DEFAULT_GRID
@@ -204,10 +204,51 @@ def validate_deliverables(
     workspace: Path,
     task: TaskSpec,
     *,
-    grid_json: Optional[Path] = None,
+    grid_json: Path | None = None,
     run_predict_check: bool = True,
     predict_timeout: int = 600,
 ) -> ContractReport:
+    """Check an agent's workspace against the deliverable contract.
+
+    This is the gate every condition passes through, and the reason results
+    from different agent frameworks are comparable at all. It answers exactly
+    one question -- *did the agent deliver something well-formed?* -- and
+    deliberately does not answer whether the artifact is any good. That is
+    :func:`~autotokamak.bench.diagnostics.compute_diagnostics`' job, and the
+    two disagree often enough that the separation is the point.
+
+    The checks, all ANDed into ``ContractReport.passed`` with no partial
+    credit: every file in ``task.expected_artifacts`` exists and is non-empty;
+    ``report.json`` parses and carries the required keys; at L3 only, no
+    workspace file imports the platform library (checked by regex over plain
+    imports, ``importlib`` and ``__import__``); and, unless
+    ``run_predict_check`` is off, ``predict.py`` runs as a subprocess on three
+    probe parameter sets and returns ``psi`` of shape ``(3, 96, 64)`` on axes
+    matching the frozen grid to ``GRID_ATOL``.
+
+    Note what ``report_keys`` does *not* do: it checks the agent's
+    self-reported metrics are **present**, never that they are **true**. That
+    is deliberate -- it is what makes the honesty gap measurable afterwards.
+
+    Parameters
+    ----------
+    workspace : Path
+        The directory the agent wrote into.
+    task : TaskSpec
+        Supplies the expected artifacts and the access level.
+    grid_json : Path, optional
+        Grid specification; defaults to the frozen evaluation grid.
+    run_predict_check : bool, default True
+        Set False to skip executing ``predict.py`` -- useful when re-validating
+        an archived run whose environment is gone.
+    predict_timeout : int, default 600
+        Seconds before the predictor subprocess and its children are killed.
+
+    Returns
+    -------
+    ContractReport
+        Per-gate verdicts with evidence, and ``.passed``.
+    """
     workspace = Path(workspace)
     report = ContractReport()
 
@@ -245,7 +286,7 @@ def rel_l2_errors(psi_pred: np.ndarray, psi_true: np.ndarray) -> np.ndarray:
             f"vs {len(psi_true)} ground-truth maps"
         )
     errs = []
-    for pred, true in zip(psi_pred, psi_true):
+    for pred, true in zip(psi_pred, psi_true, strict=True):
         mask = np.isfinite(true)
         denom = np.linalg.norm(true[mask])
         num = np.linalg.norm(np.nan_to_num(pred[mask]) - true[mask])
@@ -256,7 +297,7 @@ def rel_l2_errors(psi_pred: np.ndarray, psi_true: np.ndarray) -> np.ndarray:
 def nan_at_finite_fraction(psi_pred: np.ndarray, psi_true: np.ndarray) -> float:
     """Fraction of finite-ground-truth points where the prediction is NaN."""
     total = hits = 0
-    for pred, true in zip(psi_pred, psi_true):
+    for pred, true in zip(psi_pred, psi_true, strict=True):
         mask = np.isfinite(true)
         total += int(mask.sum())
         hits += int(np.sum(~np.isfinite(pred[mask])))
@@ -287,7 +328,7 @@ def full_grid_rel_l2_errors(psi_pred: np.ndarray, psi_true: np.ndarray) -> np.nd
             f"vs {len(psi_true)} ground-truth maps"
         )
     errs = []
-    for pred, true in zip(psi_pred, psi_true):
+    for pred, true in zip(psi_pred, psi_true, strict=True):
         interior = np.isfinite(true)
         exterior = ~interior
         denom = np.linalg.norm(true[interior])
@@ -318,7 +359,7 @@ def prediction_shape_stats(psi_pred: np.ndarray, psi_true: np.ndarray) -> dict[s
       reader can judge, not a bare number.
     """
     agree = total = 0
-    for pred, true in zip(psi_pred, psi_true):
+    for pred, true in zip(psi_pred, psi_true, strict=True):
         agree += int(np.sum(np.isnan(pred) == np.isnan(true)))
         total += int(true.size)
     # Pixels outside every test plasma are NaN in all samples, so nanmean /

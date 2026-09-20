@@ -72,7 +72,6 @@ def subsample(source: Path, n: int, seed: int, dest: Path) -> int:
 def score_on_frozen(workspace: Path) -> dict:
     """Same yardstick as every agent cell: relative-L2 on the frozen set."""
     import numpy as np
-
     from matrix_report import baseline_errors, load_frozen, predict_meta_cell, rel_l2
 
     frozen = load_frozen()

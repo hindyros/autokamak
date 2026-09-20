@@ -35,7 +35,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPERIMENTS = REPO_ROOT / "experiments"
@@ -108,7 +107,7 @@ def cmd_completed(args) -> int:
     return 1
 
 
-def measured_spend(tag: str, harness: Optional[str] = None
+def measured_spend(tag: str, harness: str | None = None
                    ) -> tuple[float, list[str]]:
     """Dollars spent under a tag, best-effort, with what could not be priced.
 
@@ -122,7 +121,7 @@ def measured_spend(tag: str, harness: Optional[str] = None
     if not tag_dir.is_dir():
         return 0.0, ["no such tag dir"]
 
-    def _match(condition: Optional[str]) -> bool:
+    def _match(condition: str | None) -> bool:
         # Conditions are "<level>-<harness>"; a per-harness ceiling spans
         # levels, because it is the SUBSTRATE that runs away, not the level.
         return harness is None or str(condition).partition("-")[2] == harness
@@ -284,7 +283,7 @@ def cmd_forecast(args) -> int:
     return 0
 
 
-def _ratelimit_headers(model: str) -> tuple[dict, Optional[str]]:
+def _ratelimit_headers(model: str) -> tuple[dict, str | None]:
     """One minimal completion, read for its rate-limit headers.
 
     Costs a fraction of a cent and is the only way to know this key's ACTUAL
@@ -314,7 +313,7 @@ def _ratelimit_headers(model: str) -> tuple[dict, Optional[str]]:
     return headers, None
 
 
-def _parse_limit(value: Optional[str]) -> Optional[float]:
+def _parse_limit(value: str | None) -> float | None:
     """OpenAI writes these as 10000, 30000000, or 1.5k / 2m."""
     if not value:
         return None
@@ -330,7 +329,7 @@ def _parse_limit(value: Optional[str]) -> Optional[float]:
         return None
 
 
-def observed_session_rates(tag: Optional[str]) -> list[tuple[str, float, float]]:
+def observed_session_rates(tag: str | None) -> list[tuple[str, float, float]]:
     """(condition, tokens-per-minute, requests-per-minute) per archived run.
 
     Measured, not assumed: a campaign's rate-limit risk is entirely about how
@@ -386,7 +385,7 @@ def _analyze_tokens(run_dir: Path) -> dict:
 
 
 def tokens_used(tag: str, *, on_key_only: bool = True,
-                since_hours: Optional[float] = None) -> tuple[float, dict]:
+                since_hours: float | None = None) -> tuple[float, dict]:
     """Tokens charged to THIS key under a tag, with a per-substrate split.
 
     Cached input is counted: whether it consumes quota is not documented on
@@ -407,7 +406,7 @@ def tokens_used(tag: str, *, on_key_only: bool = True,
 
     cutoff = None
     if since_hours:
-        cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=since_hours)
+        cutoff = _dt.datetime.now(_dt.UTC) - _dt.timedelta(hours=since_hours)
 
     total = 0.0
     for run_dir in sorted(tag_dir.glob("*/*")):
@@ -420,7 +419,7 @@ def tokens_used(tag: str, *, on_key_only: bool = True,
         if cutoff is not None:
             try:
                 stamp = _dt.datetime.fromtimestamp(run_dir.stat().st_mtime,
-                                                   _dt.timezone.utc)
+                                                   _dt.UTC)
                 if stamp < cutoff:
                     continue
             except OSError:

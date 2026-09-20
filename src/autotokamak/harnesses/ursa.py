@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -25,6 +24,14 @@ DEFAULT_MODEL = "openai:gpt-5.2"
 
 
 class UrsaHarness(Harness):
+    """URSA: a planner/executor agent pair built on LangGraph.
+
+    Runs in-process, so the deadline has to be imposed from inside with
+    :func:`~autotokamak.harnesses.base.time_limit` -- and see that function's
+    docstring for why ``HarnessTimeout`` must inherit ``BaseException``, which
+    this substrate is the reason for.
+    """
+
     name = "ursa"
 
     def run(
@@ -33,9 +40,17 @@ class UrsaHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or DEFAULT_MODEL

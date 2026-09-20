@@ -38,15 +38,15 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from autotokamak.surrogate.dataset import kfold, load_dataset
 from autotokamak.pipelines.discover import (
     find_eval_dataset,
     find_report,
     find_winner,
 )
+from autotokamak.surrogate.dataset import kfold, load_dataset
 from autotokamak.surrogate.metrics import baseline_mean_predictor_rmse, psi_rmse
-from autotokamak.surrogate.reduce import inverse_transform, transform
 from autotokamak.surrogate.optuna_search import predict_with_winner
+from autotokamak.surrogate.reduce import inverse_transform, transform
 
 
 def _find_study_db(workspace: Path) -> Path | None:
@@ -115,7 +115,7 @@ def plot_true_pred_residual(bundle, payload, splits, out_dir):
     n = len(idx)
     fig, axes = plt.subplots(n, 3, figsize=(11, 3.5 * n), squeeze=False)
     R, Z = bundle.R, bundle.Z
-    for row, (i_ds, sample_true, sample_pred) in enumerate(zip(idx, true, pred)):
+    for row, (i_ds, sample_true, sample_pred) in enumerate(zip(idx, true, pred, strict=True)):
         residual = sample_pred - sample_true
         vt = _symmetric_vlim(sample_true, sample_pred)
         vr = _symmetric_vlim(residual)
@@ -125,9 +125,9 @@ def plot_true_pred_residual(bundle, payload, splits, out_dir):
             / max(np.sqrt(np.nansum(sample_true ** 2)), 1e-12)
         )
         for col, (data, title, vlim) in enumerate([
-            (sample_true, f"true ψ", vt),
-            (sample_pred, f"predicted ψ", vt),
-            (residual, f"residual (pred − true)", vr),
+            (sample_true, "true ψ", vt),
+            (sample_pred, "predicted ψ", vt),
+            (residual, "residual (pred − true)", vr),
         ]):
             im = axes[row, col].pcolormesh(R, Z, data, cmap="RdBu_r", vmin=vlim[0], vmax=vlim[1], shading="auto")
             axes[row, col].set_aspect("equal")

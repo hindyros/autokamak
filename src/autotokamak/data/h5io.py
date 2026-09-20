@@ -24,7 +24,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -37,7 +37,7 @@ class DatasetArrays:
 
     R: np.ndarray
     Z: np.ndarray
-    inputs: Dict[str, np.ndarray]
+    inputs: dict[str, np.ndarray]
     psi: np.ndarray
     success: np.ndarray
     isoflux_used: np.ndarray
@@ -46,7 +46,7 @@ class DatasetArrays:
     def n_rows(self) -> int:
         return int(self.psi.shape[0])
 
-    def take(self, idx: np.ndarray) -> "DatasetArrays":
+    def take(self, idx: np.ndarray) -> DatasetArrays:
         """Row-subset (grid arrays are shared, row arrays are copied views)."""
         idx = np.asarray(idx, dtype=int)
         return DatasetArrays(
@@ -109,7 +109,7 @@ def write_h5_arrays(path: Path | str, arrays: DatasetArrays) -> None:
                 pass
 
 
-def merge_h5(old_path: Path | str, new_path: Path | str, merged_path: Path | str) -> Dict[str, int]:
+def merge_h5(old_path: Path | str, new_path: Path | str, merged_path: Path | str) -> dict[str, int]:
     """Concatenate old + new datasets into ``merged_path``.
 
     Requires matching ``grid/R`` and ``grid/Z``. Only the canonical fields
@@ -151,7 +151,7 @@ def split_h5(
     min_test: int = 2,
     min_train_success: int = 6,
     seed: int = 0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Carve a FROZEN held-out test shard from ``src_path``.
 
     The test shard is sampled from ``success == True`` rows only (a test

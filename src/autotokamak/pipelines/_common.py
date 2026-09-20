@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+
 # Walk up from this file to find the repo root (contains pyproject.toml with name=autotokamak)
 def _find_repo_root() -> Path:
     here = Path(__file__).resolve()
@@ -56,7 +57,7 @@ def write_manifest(out_dir: Path, *, pipeline: str, level: str, **kwargs: Any) -
         "pipeline": pipeline,
         "level": level,
         "condition": CONDITION.get(level, level),
-        "run_id": _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "run_id": _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ"),
         "output_dir": str(out_dir),
         **kwargs,
     }

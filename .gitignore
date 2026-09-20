@@ -76,5 +76,8 @@ notebooks/scaling_runs/
 benchmarks/assets/*.h5
 benchmarks/reference_runs/*/workspace/
 
-# Archived example run dirs (heavy artifacts; `examples/*/L0|L1/` misses these)
-examples/*/L?_archive*/
+# Archived example run dirs (heavy artifacts, and their JSON carries absolute
+# paths from whichever machine produced them). The old `L?_archive*` pattern
+# never matched `fast_archive_*`, so those 45 files were tracked for months.
+examples/*/*_archive*/
+examples/*/ursa_metrics/

@@ -10,7 +10,7 @@ they both import from here. The OFT API used here:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -58,7 +58,7 @@ def build_mesh(
     mesh_dx: float,
     region_name: str = "plasma",
     region_tag: str = "plasma",
-) -> Tuple[Any, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[Any, np.ndarray, np.ndarray, np.ndarray]:
     """Triangulate the inside of an LCFS polygon at the given target spacing.
 
     Parameters
@@ -87,7 +87,7 @@ def build_mesh(
     return gs_mesh, mesh_pts, mesh_lc, mesh_reg
 
 
-def build_mesh_from_config(cfg: Dict[str, Any]) -> Tuple[np.ndarray, Any, np.ndarray, np.ndarray, np.ndarray]:
+def build_mesh_from_config(cfg: dict[str, Any]) -> tuple[np.ndarray, Any, np.ndarray, np.ndarray, np.ndarray]:
     """Convenience wrapper: read a config dict (the schema used by both runners)
     and return ``(lcfs, gs_mesh, mesh_pts, mesh_lc, mesh_reg)``.
 

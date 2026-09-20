@@ -13,7 +13,7 @@ learning-curve/edge-hit bottleneck signals from ``surrogate.diagnostics``).
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.surrogate.schema import ModelSpec, RoundDecision
 
@@ -39,7 +39,7 @@ _PARAM_CAPS: dict[tuple[str, str], tuple[float, float]] = {
 }
 
 
-def _overall_best(summary: dict) -> Optional[float]:
+def _overall_best(summary: dict) -> float | None:
     val = (summary or {}).get("overall_best", {}).get("value")
     return float(val) if val is not None else None
 

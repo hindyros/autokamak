@@ -16,12 +16,10 @@ real outside-LCFS regions, and Optuna SQLite write path issues.
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "dataset.h5"
@@ -32,8 +30,8 @@ REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "data
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
 )
 def test_phase2_pipeline_against_real_dataset(tmp_path: Path):
-    from autotokamak.surrogate.dataset import kfold, load_dataset
     from autotokamak.surrogate import optuna_search as automl
+    from autotokamak.surrogate.dataset import kfold, load_dataset
     from autotokamak.surrogate.schema import SearchSpec, SurrogateReport
     from autotokamak.surrogate.zoo import DEFAULT_SEARCH_SPACES
 
@@ -93,9 +91,9 @@ def test_phase2_pipeline_against_real_dataset(tmp_path: Path):
     )
 
     # 3. Write the report the agent would write.
-    from autotokamak.surrogate.metrics import psi_rmse
-
     import joblib
+
+    from autotokamak.surrogate.metrics import psi_rmse
 
     payload = joblib.load(ws / "outputs" / "winner.pkl")
     test_pred = automl.predict_with_winner(payload, bundle.inputs[splits.test_idx])

@@ -19,11 +19,11 @@ import argparse
 import csv
 import difflib
 import re
+import sys
 from pathlib import Path
 
 import yaml
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from autotokamak.bench import glossary  # noqa: E402
 

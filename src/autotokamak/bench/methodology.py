@@ -55,7 +55,7 @@ import json
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Bounds. Acquisition logs are agent-authored and occasionally enormous;
 # extraction must stay cheap enough to run over a whole campaign.
@@ -350,7 +350,7 @@ TERM_GLOSSARY: dict[str, str] = {
 }
 
 
-def classify(text: Optional[str], stages: Iterable[str] = CHAIN_ORDER
+def classify(text: str | None, stages: Iterable[str] = CHAIN_ORDER
              ) -> dict[str, list[str]]:
     """Canonical terms present in a piece of prose or code, by stage."""
     if not text:
@@ -367,7 +367,7 @@ def classify(text: Optional[str], stages: Iterable[str] = CHAIN_ORDER
 # Artifact readers
 # ---------------------------------------------------------------------------
 
-def _load_json(path: Path) -> Optional[dict]:
+def _load_json(path: Path) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
         return data if isinstance(data, dict) else None
@@ -409,7 +409,7 @@ def _rel(path: Path, workspace: Path) -> str:
     return str(path)
 
 
-def _log_candidates(workspace: Path, report: Optional[dict]) -> list[Path]:
+def _log_candidates(workspace: Path, report: dict | None) -> list[Path]:
     """The declared acquisition log first, then anything that looks like one.
 
     Agents declare the path in ``report.json`` (the v3 task requires it) but
@@ -503,7 +503,7 @@ _ACQUIRE_EVENTS = re.compile(r"acquire|acquisition|select|propose|candidate", re
 _POINT_KEYS = ("params", "sample_id", "point", "candidate")
 
 
-def _extract_val_baseline(rec: dict) -> tuple[Optional[float], Optional[float]]:
+def _extract_val_baseline(rec: dict) -> tuple[float | None, float | None]:
     """The round's measured validation error and its baseline, if logged."""
     val = base = None
     for key, raw in rec.items():
@@ -543,7 +543,7 @@ def _extract_val_baseline(rec: dict) -> tuple[Optional[float], Optional[float]]:
     return val, base
 
 
-def _mean_of(value: Any) -> Optional[float]:
+def _mean_of(value: Any) -> float | None:
     """A metric written as a scalar, or as a dict carrying a mean."""
     if isinstance(value, bool):
         return None
@@ -564,7 +564,7 @@ def _first_key(rec: dict, keys: Iterable[str]) -> Any:
     return None
 
 
-def _round_of(rec: dict) -> Optional[int]:
+def _round_of(rec: dict) -> int | None:
     v = _first_key(rec, _ROUND_KEYS)
     if isinstance(v, bool):
         return None
@@ -575,7 +575,7 @@ def _round_of(rec: dict) -> Optional[int]:
     return None
 
 
-def _reason_text(rec: dict) -> Optional[str]:
+def _reason_text(rec: dict) -> str | None:
     parts = []
     for k in _REASON_KEYS:
         v = rec.get(k)
@@ -623,7 +623,7 @@ def _iterations_from_records(records: list[dict]) -> list[dict]:
     return [rounds[k] for k in sorted(rounds)]
 
 
-def _round_metrics_from_csv(path: Path) -> dict[int, tuple[Optional[float], Optional[float]]]:
+def _round_metrics_from_csv(path: Path) -> dict[int, tuple[float | None, float | None]]:
     """Round -> (val, baseline) from a round-metrics CSV.
 
     Several agents log per-point decisions as JSONL but per-round errors as
@@ -632,7 +632,7 @@ def _round_metrics_from_csv(path: Path) -> dict[int, tuple[Optional[float], Opti
     """
     import csv as _csv
 
-    out: dict[int, tuple[Optional[float], Optional[float]]] = {}
+    out: dict[int, tuple[float | None, float | None]] = {}
     text = _read_capped(path)
     if not text.strip():
         return out
@@ -659,7 +659,7 @@ def _round_metrics_from_csv(path: Path) -> dict[int, tuple[Optional[float], Opti
 
 
 def _merge_round_evidence(rounds: list[dict],
-                          evidence: dict[int, tuple[Optional[float], Optional[float]]]
+                          evidence: dict[int, tuple[float | None, float | None]]
                           ) -> None:
     """Fill in missing per-round val/baseline from a secondary source."""
     for r in rounds:
@@ -670,7 +670,7 @@ def _merge_round_evidence(rounds: list[dict],
             r["baseline_rel_l2"] = base
 
 
-def _iterations_from_report(report: Optional[dict]) -> list[dict]:
+def _iterations_from_report(report: dict | None) -> list[dict]:
     """Fallback: some agents log rounds into report.json instead of the log."""
     if not report:
         return []
@@ -698,7 +698,7 @@ def _iterations_from_report(report: Optional[dict]) -> list[dict]:
     return out
 
 
-def _finalise_iterations(raw: list[dict], fallback_criterion: Optional[str]
+def _finalise_iterations(raw: list[dict], fallback_criterion: str | None
                          ) -> list[dict]:
     """Attach the classified criterion, the evidence, and the decision taken."""
     out = []
@@ -785,7 +785,7 @@ def _merge_stage(*sources: dict[str, list[str]]) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in merged.items()}
 
 
-def _primary_model(models: list[str]) -> Optional[str]:
+def _primary_model(models: list[str]) -> str | None:
     """One headline family when several are evidenced.
 
     Code that trains an MLP but merely imports Ridge for a baseline hits
@@ -803,7 +803,7 @@ def _primary_model(models: list[str]) -> Optional[str]:
     return sorted(models)[0]
 
 
-def _primary(hits: list[str], priority: list[str]) -> Optional[str]:
+def _primary(hits: list[str], priority: list[str]) -> str | None:
     """The term that characterises a stage when several are evidenced."""
     for name in priority:
         if name in hits:
@@ -815,7 +815,7 @@ DESIGN_PRIORITY = ["sobol", "halton", "lhs", "maximin", "grid", "uniform_random"
 REPRESENTATION_PRIORITY = ["autoencoder", "pca", "pod_svd", "spline_basis", "per_pixel"]
 
 
-def build_chain_signature(chain: dict[str, Any], n_rounds: Optional[int]) -> str:
+def build_chain_signature(chain: dict[str, Any], n_rounds: int | None) -> str:
     """One compact line per run — the column a matrix row can actually hold."""
     def _fmt(stage: str, sep: str = "+") -> str:
         v = chain.get(stage)
@@ -1076,7 +1076,7 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
 
     logs = _log_candidates(workspace, report)
     records: list[dict] = []
-    log_used: Optional[str] = None
+    log_used: str | None = None
     for lp in logs:
         recs = _read_log_records(lp)
         if recs:
@@ -1215,7 +1215,7 @@ def extract_methodology(workspace: Path) -> dict[str, Any]:
     }
 
 
-def _self_claimed_helped(report: Optional[dict]) -> Optional[bool]:
+def _self_claimed_helped(report: dict | None) -> bool | None:
     if not report:
         return None
     block = report.get("adaptive_vs_initial")

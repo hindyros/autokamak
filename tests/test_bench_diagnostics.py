@@ -25,7 +25,6 @@ from autotokamak.bench.contract import (
 from autotokamak.bench.diagnostics import compute_diagnostics
 from autotokamak.harnesses.base import HarnessTimeout, time_limit
 
-
 # ------------------------------ time_limit -------------------------------- #
 
 @pytest.mark.skipif(not hasattr(__import__("signal"), "SIGALRM"),

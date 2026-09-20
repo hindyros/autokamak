@@ -13,7 +13,6 @@ import datetime as _dt
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -26,8 +25,8 @@ def solve_testset(
     records: list[dict],
     out_h5: Path,
     *,
-    grid_json: Optional[Path] = None,
-    sweep_config: Optional[Path] = None,
+    grid_json: Path | None = None,
+    sweep_config: Path | None = None,
 ) -> int:
     """Solve ``records`` (list of param dicts) and write ``out_h5``.
 
@@ -59,14 +58,14 @@ def solve_testset(
     return int(result.n_succeeded)
 
 
-def _sha256(path: Path) -> Optional[str]:
+def _sha256(path: Path) -> str | None:
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
     except OSError:
         return None
 
 
-def stamp_provenance(out_h5: Path, *, n_params: Optional[int] = None) -> dict:
+def stamp_provenance(out_h5: Path, *, n_params: int | None = None) -> dict:
     """Write provenance attrs onto the frozen test set, in place.
 
     The .h5 is gitignored, so the only way a published score can be tied to
@@ -79,7 +78,7 @@ def stamp_provenance(out_h5: Path, *, n_params: Optional[int] = None) -> dict:
 
     assets = REPO_ROOT / "benchmarks" / "assets"
     meta: dict[str, object] = {
-        "stamped_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+        "stamped_utc": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
         "test_params_sha256": _sha256(assets / "test_params.json") or "",
         "eval_grid_sha256": _sha256(assets / "eval_grid.json") or "",
         "sweep_config": str(CANONICAL_SWEEP_CONFIG.relative_to(REPO_ROOT)),

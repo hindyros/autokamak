@@ -13,7 +13,6 @@ Agent-written Phase-2 code is an L2/L3 benchmark condition — see
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.pipelines._common import (
     REPO_ROOT,
@@ -26,9 +25,9 @@ from autotokamak.pipelines._common import (
 def run_phase2(
     *,
     level: str,
-    dataset: Optional[str] = None,
+    dataset: str | None = None,
     time_budget: int = 600,
-    model: Optional[str] = None,
+    model: str | None = None,
     max_rounds: int = 4,
     seed: int = 0,
 ) -> dict:

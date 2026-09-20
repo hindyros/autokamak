@@ -28,8 +28,8 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from autotokamak.surrogate.dataset import PARAM_ORDER, load_dataset
 from autotokamak.pipelines.discover import find_training_dataset
+from autotokamak.surrogate.dataset import PARAM_ORDER, load_dataset
 
 
 def _find_dataset(workspace: Path) -> Path | None:

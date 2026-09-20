@@ -18,12 +18,10 @@ to inject a pre-computed winner.pkl + report.json.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "dataset.h5"
@@ -297,14 +295,13 @@ def test_meta_loop_shard_untouched_by_regen(meta_config_yaml: Path):
 def test_refit_winner_on_pool_gives_regen_immediate_credit(tmp_path: Path):
     """After a regen grows the pool, the winner refit must compete on the
     shard — without it, rmse_after can never reflect a regen's value."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
     from autotokamak.surrogate.dataset import load_dataset
     from autotokamak.surrogate.metrics import psi_rmse
-    from autotokamak.surrogate.reduce import fit_pca, transform
     from autotokamak.surrogate.optuna_search import predict_with_winner
+    from autotokamak.surrogate.reduce import fit_pca, transform
     from autotokamak.surrogate.zoo import make_model
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
     shard = make_synthetic_h5(tmp_path / "shard.h5", n=4, seed=9)
@@ -350,9 +347,8 @@ def test_refit_winner_on_pool_gives_regen_immediate_credit(tmp_path: Path):
 
 
 def test_refit_winner_on_pool_none_without_winner(tmp_path: Path):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
+    from tests.conftest import make_synthetic_h5
 
     state = MetaState(
         workspace=tmp_path / "ws",
@@ -425,7 +421,6 @@ def test_extend_search_structured_dispatch(meta_config_yaml: Path, monkeypatch):
     finally:
         sys.path.pop(0)
 
-    from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.schema import MetaConfig
 
     mc = MetaConfig.from_yaml(meta_config_yaml)
@@ -513,8 +508,8 @@ def test_target_rmse_stops_loop_early(tmp_path: Path, monkeypatch):
         return {"winner": {"winner_model_name": "poly_ridge"}, "terminated_by": "agent",
                 "n_rounds": 1, "val_psi_rmse": 0.5}
 
-    import autotokamak.surrogate.automl_loop as loop_mod
     import autotokamak.agent.dspy.module as dspy_mod
+    import autotokamak.surrogate.automl_loop as loop_mod
 
     monkeypatch.setattr(loop_mod, "run_automl_loop", fake_run_automl_loop)
     monkeypatch.setattr(dspy_mod, "make_search_decision_fn", lambda model: (lambda ctx: None))
@@ -573,8 +568,8 @@ def test_target_accuracy_pct_stops_loop_early(tmp_path: Path, monkeypatch):
         return {"winner": {"winner_model_name": "poly_ridge"}, "terminated_by": "agent",
                 "n_rounds": 1, "val_psi_rmse": 0.5}
 
-    import autotokamak.surrogate.automl_loop as loop_mod
     import autotokamak.agent.dspy.module as dspy_mod
+    import autotokamak.surrogate.automl_loop as loop_mod
 
     monkeypatch.setattr(loop_mod, "run_automl_loop", fake_run_automl_loop)
     monkeypatch.setattr(dspy_mod, "make_search_decision_fn", lambda model: (lambda ctx: None))

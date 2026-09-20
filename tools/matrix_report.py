@@ -520,15 +520,15 @@ def _cross_comparison_table(rows: list[dict]) -> str:
            "<code>file:line</code> it was read from. Every code is also "
            "listed in the glossary at the foot of this page.</p>",
            "<table><tr><th>dimension</th><th>the question it answers</th>"
-           + "".join(f"<th>{html.escape(l)}</th>" for l in labels)
+           + "".join(f"<th>{html.escape(lab)}</th>" for lab in labels)
            + "<th>agreement</th></tr>"]
     for r in rows:
         tds = []
-        for l in labels:
-            value = str(r.get(l, "-"))
+        for lab in labels:
+            value = str(r.get(lab, "-"))
             # A replicate-disagreement suffix such as "(2/3)" is not a code.
             core, _, suffix = value.partition(" (")
-            evidence = ev.get((l, r["dimension"]), "")
+            evidence = ev.get((lab, r["dimension"]), "")
             marker = (f'<sup class="small" title="{html.escape(evidence)}">[src]</sup>'
                       if evidence else "")
             tds.append(f'<td>{_describe(core)}'

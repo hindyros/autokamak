@@ -21,7 +21,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -31,7 +31,7 @@ PI_BIN = "pi"
 PI_TOOLS = "read,bash,edit,write,grep,find,ls"
 
 
-def _argv(prompt: str, model: Optional[str]) -> list[str]:
+def _argv(prompt: str, model: str | None) -> list[str]:
     argv = [PI_BIN, "--mode", "json", "-p", "--no-session", "--tools", PI_TOOLS]
     if model:
         # our convention "anthropic:claude-x" → --provider anthropic --model claude-x
@@ -45,10 +45,19 @@ def _argv(prompt: str, model: Optional[str]) -> list[str]:
 
 
 class PiHarness(Harness):
+    """The ``pi`` command-line coding agent, as a subprocess.
+
+    ``cwd=workspace`` is load-bearing -- the agent resolves paths relative to
+    where it was started. The process gets its own session so a timeout can
+    reap the solver grandchildren it spawns, which a plain
+    ``subprocess.run(timeout=...)`` cannot: those children inherit the pipes
+    and hold them open, and the timeout path blocks forever waiting on them.
+    """
+
     name = "pi"
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         info = super().dry_run_info(task, workspace, model)
         resolved = self.resolve_model(task, model)
         info.update({
@@ -64,9 +73,17 @@ class PiHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or "(pi default)"
@@ -159,7 +176,7 @@ class PiHarness(Harness):
         )
 
 
-def _usage_from_events(stdout: str) -> tuple[Optional[float], Optional[dict]]:
+def _usage_from_events(stdout: str) -> tuple[float | None, dict | None]:
     """Sum pi's per-message usage/cost (``message_end`` events only —
     ``turn_end`` repeats the same message and would double-count)."""
     cost_total = 0.0

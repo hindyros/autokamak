@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.pipelines._common import (
     REPO_ROOT,
@@ -23,11 +22,10 @@ from autotokamak.pipelines._common import (
     write_manifest,
 )
 
-
 PROMPT_PATH = REPO_ROOT / "src/autotokamak/agent/prompts/surrogate_meta.yaml"
 
 
-def _effective_config(dataset: Optional[str], seed: int, out_dir: Path) -> Path:
+def _effective_config(dataset: str | None, seed: int, out_dir: Path) -> Path:
     """The meta config, with --dataset and --seed actually applied.
 
     Both flags were accepted by the CLI and then dropped on the floor:
@@ -66,15 +64,15 @@ def run_meta(
     *,
     level: str,
     max_iterations: int = 3,
-    n_samples: Optional[int] = None,
-    enrich_n_new: Optional[int] = None,
+    n_samples: int | None = None,
+    enrich_n_new: int | None = None,
     time_budget: int = 600,
-    model: Optional[str] = None,
-    dataset: Optional[str] = None,
+    model: str | None = None,
+    dataset: str | None = None,
     seed: int = 0,
-    target_rmse: Optional[float] = None,
-    target_accuracy_pct: Optional[float] = None,
-    target_worst_cell_accuracy_pct: Optional[float] = None,
+    target_rmse: float | None = None,
+    target_accuracy_pct: float | None = None,
+    target_worst_cell_accuracy_pct: float | None = None,
 ) -> dict:
     """Dispatch the meta-loop at the given access level."""
     from autotokamak.agent.runners.meta_loop import run as meta_run

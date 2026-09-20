@@ -6,12 +6,10 @@ provider by name and stay otherwise identical across levels.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 DEFAULT_PICKER_MODEL = "openai:gpt-5-mini"
 
 
-def make_llm_search_policy(model: Optional[str] = None):
+def make_llm_search_policy(model: str | None = None):
     """DSPy ``SearchRoundPicker`` as a ``DecisionFn`` for ``run_automl_loop``."""
     from autotokamak.agent.dspy.module import make_search_decision_fn
 

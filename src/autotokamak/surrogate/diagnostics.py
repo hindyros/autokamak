@@ -14,12 +14,13 @@ interpret the resulting bundle.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
 from autotokamak.surrogate.dataset import DatasetBundle, kfold
-from autotokamak.surrogate.metrics import baseline_mean_predictor_rmse, psi_rmse
+from autotokamak.surrogate.metrics import psi_rmse
 from autotokamak.surrogate.reduce import fit_pca, inverse_transform, transform
 
 
@@ -42,7 +43,7 @@ def learning_curve(
     """
     sub_sizes = tuple(s for s in sub_sizes if s <= bundle.n_samples and s >= max(k_folds + 1, 4))
     if not sub_sizes:
-        return {"curve": {}, "slope_log_log": None, "plateau_detected": None, "note": "no usable sub_sizes for bundle.n_samples=%d" % bundle.n_samples}
+        return {"curve": {}, "slope_log_log": None, "plateau_detected": None, "note": f"no usable sub_sizes for bundle.n_samples={bundle.n_samples}"}
 
     curve: dict[int, float] = {}
     for n in sub_sizes:

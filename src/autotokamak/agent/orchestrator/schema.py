@@ -9,14 +9,12 @@ typed, and validated before dispatch.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal, get_args
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
-from typing import get_args
 
 from autotokamak.data.envelope import EnvelopeConfig
-
 
 ActionKind = Literal["regen_dataset", "enrich_active", "extend_search", "terminate"]
 # Single source of truth for the action vocabulary — the dispatcher table,
@@ -38,7 +36,7 @@ class RegenDatasetOverrides(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
-    overrides: Dict[str, Any] = Field(default_factory=dict)
+    overrides: dict[str, Any] = Field(default_factory=dict)
     rationale: str = ""
 
 
@@ -96,15 +94,15 @@ class ExtendSearchFocus(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    models_to_emphasize: List[Literal["gp", "kernel_ridge", "poly_ridge", "mlp"]] = Field(
+    models_to_emphasize: list[Literal["gp", "kernel_ridge", "poly_ridge", "mlp"]] = Field(
         default_factory=list,
         description="Subset of the zoo to focus on; empty = let Phase-2 pick.",
     )
-    widen_params: List[str] = Field(
+    widen_params: list[str] = Field(
         default_factory=list,
         description="Specific hyperparameters to widen (e.g. 'gp.length_scale').",
     )
-    n_trials_hint: Optional[int] = Field(
+    n_trials_hint: int | None = Field(
         default=None,
         ge=1,
         le=200,
@@ -128,10 +126,10 @@ class ActionDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     action: ActionKind
-    regen: Optional[RegenDatasetOverrides] = None
-    enrich: Optional[EnrichActivePayload] = None
-    extend: Optional[ExtendSearchFocus] = None
-    terminate: Optional[TerminateReason] = None
+    regen: RegenDatasetOverrides | None = None
+    enrich: EnrichActivePayload | None = None
+    extend: ExtendSearchFocus | None = None
+    terminate: TerminateReason | None = None
     diagnosis: str = Field(
         default="",
         description="Free-text statement of what the agent thinks the bottleneck is.",
@@ -154,7 +152,7 @@ class MetaConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
     max_iterations: int = Field(default=3, ge=1, le=20)
     initial_dataset_h5: str = Field(description="Path to the starting dataset.")
-    base_sweep_config: Optional[str] = Field(
+    base_sweep_config: str | None = Field(
         default=None,
         description="Path to a SweepConfig YAML the regen_dataset action overrides.",
     )
@@ -169,7 +167,7 @@ class MetaConfig(BaseModel):
         "legacy nested plan_execute_feedback agent.",
     )
     phase2_max_rounds: int = Field(default=3, ge=1, le=10)
-    enrich_n_new: Optional[int] = Field(
+    enrich_n_new: int | None = Field(
         default=None,
         ge=1,
         le=2000,
@@ -192,7 +190,7 @@ class MetaConfig(BaseModel):
     # sweep box) instead of being carved from the seed dataset — required
     # for honest measurement once enrich_active samples new geometries.
     # Acquisition bounds for enrich_active follow the envelope too.
-    eval_envelope: Optional["EnvelopeConfig"] = Field(
+    eval_envelope: EnvelopeConfig | None = Field(
         default=None,
         description="Envelope eval-set spec: either {'h5': path} for a "
         "pre-solved set, or generation knobs (n_eval, parameters, seed). "
@@ -201,19 +199,19 @@ class MetaConfig(BaseModel):
     # Early-stopping quality bar (both optional; loop stops when EITHER is
     # met by the frozen-shard RMSE; max_iterations remains the safety net
     # for unreachable targets):
-    target_rmse: Optional[float] = Field(
+    target_rmse: float | None = Field(
         default=None,
         gt=0.0,
         description="Absolute shard-RMSE target in the dataset's psi units.",
     )
-    target_rmse_ratio: Optional[float] = Field(
+    target_rmse_ratio: float | None = Field(
         default=None,
         gt=0.0,
         le=1.0,
         description="Relative target: stop when shard RMSE <= ratio * baseline "
         "(mean-predictor) RMSE. Scale-free, so it survives dataset changes.",
     )
-    target_accuracy_pct: Optional[float] = Field(
+    target_accuracy_pct: float | None = Field(
         default=None,
         ge=0.0,
         lt=100.0,
@@ -225,7 +223,7 @@ class MetaConfig(BaseModel):
         "targets are set the STRICTEST (lowest-RMSE) one wins; max_iterations "
         "remains the safety cap for unreachable targets.",
     )
-    target_worst_cell_accuracy_pct: Optional[float] = Field(
+    target_worst_cell_accuracy_pct: float | None = Field(
         default=None,
         ge=0.0,
         lt=100.0,
@@ -243,8 +241,8 @@ class MetaConfig(BaseModel):
     model: str = "openai:gpt-5.2"
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "MetaConfig":
-        with open(path, "r", encoding="utf-8") as f:
+    def from_yaml(cls, path: str | Path) -> MetaConfig:
+        with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         if not isinstance(raw, dict):
             raise ValueError("Top-level YAML must be a mapping/object.")
@@ -258,11 +256,11 @@ class MetaIterationRecord(BaseModel):
     iteration: int
     started_utc: str
     finished_utc: str = ""
-    diagnostics: Dict[str, Any] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
     decision: ActionDecision
-    result: Dict[str, Any] = Field(default_factory=dict)
-    rmse_after: Optional[float] = None
-    parent_run_id: Optional[str] = None  # for extend_search actions only
+    result: dict[str, Any] = Field(default_factory=dict)
+    rmse_after: float | None = None
+    parent_run_id: str | None = None  # for extend_search actions only
 
 
 class MetaReport(BaseModel):
@@ -272,31 +270,31 @@ class MetaReport(BaseModel):
     n_iterations: int
     terminated_by: Literal["agent", "iterations_cap", "target_reached"]
     # The resolved absolute target the run stopped against (None = no target).
-    target_rmse: Optional[float] = None
-    initial_rmse: Optional[float] = None
+    target_rmse: float | None = None
+    initial_rmse: float | None = None
     # None = no winner was ever produced. All RMSEs (final, baseline, and the
     # per-iteration rmse_history) are measured on the SAME frozen test shard.
-    final_rmse: Optional[float] = Field(default=None, ge=0.0)
+    final_rmse: float | None = Field(default=None, ge=0.0)
     baseline_rmse: float = Field(ge=0.0)
     # Performance stop, phrased as accuracy (error reduction vs baseline
     # mean-predictor). target_accuracy_pct is the requested bar (None if
     # unset); final_accuracy_pct is what the winner actually achieved.
-    target_accuracy_pct: Optional[float] = None
-    final_accuracy_pct: Optional[float] = None
+    target_accuracy_pct: float | None = None
+    final_accuracy_pct: float | None = None
     # Same, but for the WEAKEST geometry cell (envelope mode only).
-    target_worst_cell_accuracy_pct: Optional[float] = None
-    final_worst_cell_accuracy_pct: Optional[float] = None
+    target_worst_cell_accuracy_pct: float | None = None
+    final_worst_cell_accuracy_pct: float | None = None
     # Which eval-set mode the run used, and (envelope mode) the winner's
     # per-geometry-cell breakdown from surrogate.metrics.per_cell_errors.
-    eval_mode: Optional[Literal["envelope", "seed_shard"]] = None
-    eval_per_cell: Optional[Dict[str, Any]] = None
-    test_shard_path: Optional[str] = None
-    n_test_samples: Optional[int] = None
-    n_train_pool_samples: Optional[int] = None
+    eval_mode: Literal["envelope", "seed_shard"] | None = None
+    eval_per_cell: dict[str, Any] | None = None
+    test_shard_path: str | None = None
+    n_test_samples: int | None = None
+    n_train_pool_samples: int | None = None
     winner_model_name: str
-    winner_hyperparams: Dict[str, Any]
-    rmse_history: List[float] = Field(default_factory=list)
-    actions_taken: List[ActionKind] = Field(default_factory=list)
+    winner_hyperparams: dict[str, Any]
+    rmse_history: list[float] = Field(default_factory=list)
+    actions_taken: list[ActionKind] = Field(default_factory=list)
 
 
 __all__ = [

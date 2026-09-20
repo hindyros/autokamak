@@ -26,6 +26,7 @@ import json
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 matplotlib.rcParams.update({
     "pdf.fonttype": 42, "ps.fonttype": 42,          # embed, never Type 3

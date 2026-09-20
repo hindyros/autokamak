@@ -17,16 +17,17 @@ import pytest
 
 from tests.conftest import (
     fake_run_sweep_factory as _fake_run_sweep_factory,
+)
+from tests.conftest import (
     make_sweep_config as _make_sweep_config,
 )
 
 
 def test_enrich_active_dispatch(tmp_path: Path, monkeypatch):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.actions import MetaState, dispatch
     from autotokamak.agent.orchestrator.schema import ActionDecision
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
     calls: dict = {}
@@ -68,10 +69,9 @@ def test_enrich_active_dispatch(tmp_path: Path, monkeypatch):
 
 
 def test_enrich_active_requires_base_sweep_config(tmp_path: Path):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator.actions import MetaState, enrich_active
     from autotokamak.agent.orchestrator.schema import EnrichActivePayload
+    from tests.conftest import make_synthetic_h5
 
     state = MetaState(
         workspace=tmp_path / "ws",
@@ -83,12 +83,11 @@ def test_enrich_active_requires_base_sweep_config(tmp_path: Path):
 
 def test_enrich_active_refits_winner(tmp_path: Path, monkeypatch):
     """With a prior winner, enrichment must trigger the immediate-credit refit."""
-    from tests.conftest import make_synthetic_h5, train_winner
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.actions import MetaState, enrich_active
     from autotokamak.agent.orchestrator.schema import EnrichActivePayload
     from autotokamak.surrogate.dataset import load_dataset
+    from tests.conftest import make_synthetic_h5, train_winner
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
     shard = make_synthetic_h5(tmp_path / "shard.h5", n=4, seed=9)

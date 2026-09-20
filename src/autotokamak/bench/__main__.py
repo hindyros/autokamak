@@ -33,7 +33,7 @@ TEST_PARAMS_JSON = BENCHMARKS_DIR / "assets" / "test_params.json"
 
 
 def _utc_run_id() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def cmd_run(args) -> int:
@@ -43,7 +43,7 @@ def cmd_run(args) -> int:
     task = TaskSpec.from_yaml(args.task)
     harness = get_harness(args.harness)
     condition = harness.condition_for(task)
-    tag = args.tag or _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d")
+    tag = args.tag or _dt.datetime.now(_dt.UTC).strftime("%Y%m%d")
 
     run_id = _utc_run_id()
     run_dir = EXPERIMENTS_DIR / tag / condition / run_id

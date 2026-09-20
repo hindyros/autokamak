@@ -20,7 +20,6 @@ eval distribution and the acquisition distribution agree.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,13 +36,13 @@ class EnvelopeConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
-    h5: Optional[str] = Field(
+    h5: str | None = Field(
         default=None,
         description="Path to an existing envelope eval HDF5 (canonical layout). "
         "When set, no generation happens.",
     )
     n_eval: int = Field(default=256, ge=8, le=10_000)
-    parameters: Optional[Dict[str, ParamBounds]] = Field(
+    parameters: dict[str, ParamBounds] | None = Field(
         default=None,
         description="Envelope bounds per parameter; missing keys (or None) fall "
         "back to the base sweep config's bounds.",
@@ -112,7 +111,7 @@ def generate_envelope_eval(
             "sampling": SamplingConfig(method="lhs", n_samples=env.n_eval, seed=env.seed),
             "parameters": {
                 p: ParamBounds(low=float(lo), high=float(hi))
-                for p, lo, hi in zip(PARAM_ORDER, lows, highs)
+                for p, lo, hi in zip(PARAM_ORDER, lows, highs, strict=True)
             },
             "output_path": filename,
         }

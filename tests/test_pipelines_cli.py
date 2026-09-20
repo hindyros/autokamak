@@ -20,7 +20,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # ---------------------------------------------------------------------------
 
 def test_resolve_output_dir_creates_path():
-    from autotokamak.pipelines._common import REPO_ROOT as PR, resolve_output_dir
+    from autotokamak.pipelines._common import REPO_ROOT as PR
+    from autotokamak.pipelines._common import resolve_output_dir
     d = resolve_output_dir("phase1", "L0")
     assert d == PR / "examples" / "dataset_generation" / "L0"
     assert d.is_dir()
@@ -54,7 +55,8 @@ def test_write_manifest(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_help_exits_cleanly():
-    import subprocess, sys
+    import subprocess
+    import sys
     r = subprocess.run(
         [sys.executable, "-m", "autotokamak.pipelines", "--help"],
         capture_output=True,
@@ -67,7 +69,8 @@ def test_help_exits_cleanly():
 
 
 def test_phase2_help():
-    import subprocess, sys
+    import subprocess
+    import sys
     r = subprocess.run(
         [sys.executable, "-m", "autotokamak.pipelines", "phase2", "--help"],
         capture_output=True,
@@ -78,7 +81,8 @@ def test_phase2_help():
 
 
 def test_meta_help():
-    import subprocess, sys
+    import subprocess
+    import sys
     r = subprocess.run(
         [sys.executable, "-m", "autotokamak.pipelines", "meta", "--help"],
         capture_output=True,
@@ -89,7 +93,8 @@ def test_meta_help():
 
 
 def test_removed_mode_flag_errors_with_pointer():
-    import subprocess, sys
+    import subprocess
+    import sys
     r = subprocess.run(
         [sys.executable, "-m", "autotokamak.pipelines", "phase1", "--mode", "ursa"],
         capture_output=True,
@@ -192,6 +197,7 @@ def test_meta_l1_uses_llm_pickers(tmp_path):
 
 def test_meta_loop_run_accepts_policy_kwargs():
     import inspect
+
     from autotokamak.agent.runners.meta_loop import run
     sig = inspect.signature(run)
     assert "phase2_mode_override" in sig.parameters

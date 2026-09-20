@@ -23,7 +23,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -32,7 +32,7 @@ from autotokamak.harnesses.base import Harness, RunResult
 CURSOR_BIN = "cursor-agent"
 
 
-def _argv(prompt: str, model: Optional[str]) -> list[str]:
+def _argv(prompt: str, model: str | None) -> list[str]:
     argv = [CURSOR_BIN, "-p", prompt, "--output-format", "stream-json",
             "--trust", "--force"]
     if model:
@@ -41,10 +41,21 @@ def _argv(prompt: str, model: Optional[str]) -> list[str]:
 
 
 class CursorHarness(Harness):
+    """The ``cursor-agent`` command-line coding agent, as a subprocess.
+
+    Takes bare model identifiers (``gpt-5.2``) rather than the provider-prefixed
+    form the other adapters expect, which is why the campaign pins models per
+    adapter in the task file instead of passing one override.
+
+    Consumes its vendor's own quota rather than a provider API key, so its
+    dollar figures throughout this project are estimates derived from token
+    counts and are labelled as such.
+    """
+
     name = "cursor"
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         info = super().dry_run_info(task, workspace, model)
         info.update({
             "argv": _argv("<prompt>", self.resolve_model(task, model)),
@@ -59,9 +70,17 @@ class CursorHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or "(cursor default)"
@@ -165,7 +184,7 @@ class CursorHarness(Harness):
         )
 
 
-def _final_result(stdout: str) -> tuple[Optional[dict], Optional[dict]]:
+def _final_result(stdout: str) -> tuple[dict | None, dict | None]:
     """Token usage + the final ``type=="result"`` event from the stream."""
     usage, result_evt = None, None
     for ln in stdout.splitlines():

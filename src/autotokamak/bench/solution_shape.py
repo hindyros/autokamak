@@ -32,7 +32,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.methodology import (
     _iter_workspace_files,
@@ -82,14 +82,14 @@ class CodeIndex:
         self.production = [rel for rel in self.files
                            if not NON_PRODUCTION.search(rel)] or list(self.files)
 
-    def enclosing(self, rel: str, line: int) -> Optional[str]:
+    def enclosing(self, rel: str, line: int) -> str | None:
         best = None
         for start, end, name in self._funcs.get(rel, []):
             if start <= line <= end:
                 best = name  # later spans are nested deeper
         return best
 
-    def search(self, pattern: str, files: Optional[list[str]] = None,
+    def search(self, pattern: str, files: list[str] | None = None,
                *, everywhere: bool = False) -> list[dict[str, Any]]:
         """Matching lines. Defaults to the production path, not every file."""
         rx = re.compile(pattern, re.I)
@@ -126,7 +126,7 @@ class CodeIndex:
         return ""
 
 
-def _dim(value: Optional[str], hits: list[dict], note: str = "") -> dict[str, Any]:
+def _dim(value: str | None, hits: list[dict], note: str = "") -> dict[str, Any]:
     return {
         "value": value,
         "evidence": [h["where"] for h in hits[:MAX_EVIDENCE]],
@@ -288,8 +288,8 @@ def _storage(idx: CodeIndex) -> dict[str, Any]:
 def _storage_validation(idx: CodeIndex) -> dict[str, Any]:
     """Task-mandated: a solve counts only after its stored file re-loads finite."""
     hits = []
-    for rel, src in idx.files.items():
-        for start, end, name in idx._funcs.get(rel, []):
+    for rel in idx.files:
+        for start, _end, name in idx._funcs.get(rel, []):
             body = idx.function_source(rel, name)
             if not body:
                 continue

@@ -27,8 +27,7 @@ this adapter grows a per-predictor branch.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Optional
+from typing import Any
 
 import dspy
 
@@ -55,9 +54,9 @@ def _diagnosis_feedback(gold_diagnosis: str, pred_diagnosis: str) -> str:
 def gepa_metric(
     gold: dspy.Example,
     pred: dspy.Prediction,
-    trace: Optional[Any] = None,
-    pred_name: Optional[str] = None,
-    pred_trace: Optional[Any] = None,
+    trace: Any | None = None,
+    pred_name: str | None = None,
+    pred_trace: Any | None = None,
 ) -> dspy.Prediction:
     """Cached/offline GEPA metric.
 

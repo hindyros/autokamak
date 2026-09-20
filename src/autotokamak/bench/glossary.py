@@ -14,7 +14,6 @@ Composite and counted values are handled here too: ``a+b`` is two tokens, and
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from autotokamak.bench.methodology import TERM_GLOSSARY
 from autotokamak.bench.solution_shape import (
@@ -35,7 +34,7 @@ COUNTED_VALUES: list[tuple[str, str]] = [
 ]
 
 
-def define(token: str, *, scope: Optional[str] = None) -> Optional[str]:
+def define(token: str, *, scope: str | None = None) -> str | None:
     """Definition of one canonical token.
 
     ``scope`` picks which vocabulary wins when a token exists in both — the
@@ -64,7 +63,7 @@ def split_value(value: str) -> list[str]:
     return [t for t in re.split(r"\+", str(value).strip()) if t]
 
 
-def describe_value(value: str, *, scope: Optional[str] = None) -> str:
+def describe_value(value: str, *, scope: str | None = None) -> str:
     """Full prose for a (possibly composite) value, ready for hover text."""
     parts = []
     for token in split_value(value):

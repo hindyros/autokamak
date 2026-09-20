@@ -81,7 +81,7 @@ TRACE_FILENAME = "trace.json"
 
 
 def _now_iso() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+    return _dt.datetime.now(_dt.UTC).isoformat()
 
 
 def _truncate(text: Any, *, max_chars: int = EXCERPT_MAX) -> str:
@@ -106,7 +106,7 @@ def _sha256_file(path: Path) -> str | None:
 
 def utc_run_id() -> str:
     """Sortable run id, ``20260616T120000Z``."""
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 @dataclass
@@ -165,7 +165,7 @@ class RunTrace:
         model: str,
         feedback_rounds: int,
         workspace: str,
-    ) -> "RunTrace":
+    ) -> RunTrace:
         """Create a fresh run dir and initial trace, then write it to disk."""
         run_id = utc_run_id()
         run_dir = experiments_dir / run_id
@@ -197,7 +197,7 @@ class RunTrace:
         harness: str | None = None,
         run_id: str | None = None,
         feedback_rounds: int = 1,
-    ) -> "RunTrace":
+    ) -> RunTrace:
         """Like ``open`` but writes ``trace.json`` directly into ``run_dir``.
 
         Used by the bench harnesses, which own their run-dir layout

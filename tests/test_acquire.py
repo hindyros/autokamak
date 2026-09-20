@@ -15,13 +15,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from tests.conftest import smooth_psi as _smooth_psi
-
 from autotokamak.data.acquire import (
     MIN_SUCCESS_FOR_GP,
     select_acquisition_points,
     select_from_dataset,
 )
+from tests.conftest import smooth_psi as _smooth_psi
 
 BOUNDS_LOW = np.zeros(5)
 BOUNDS_HIGH = np.ones(5)

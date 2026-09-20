@@ -25,7 +25,6 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from autotokamak.core.geometry import build_lcfs, build_mesh
 from autotokamak.core.solver import get_last_solve_info, solve_equilibrium
 
-
 BOXES = {
     "A_original":   dict(r0=(0.35, 0.55), a=(0.10, 0.20), kappa=(1.0, 1.6), delta=(0.0, 0.40)),
     "B_medium":     dict(r0=(0.40, 0.55), a=(0.12, 0.20), kappa=(1.0, 1.4), delta=(0.0, 0.25)),

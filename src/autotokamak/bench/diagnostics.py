@@ -30,7 +30,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # A prediction worse than this is not a surrogate in any useful sense; the
 # trivial mean-map baseline scores ~0.5 on this task, so 0.8 is deliberately
@@ -65,7 +65,7 @@ CAMPAIGN_SOLVE_BOUND_V3 = 450
 SELF_REPORT_PLAUSIBLE_MAX = 5.0
 
 
-def _load_json(path: Path) -> Optional[dict]:
+def _load_json(path: Path) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
         return data if isinstance(data, dict) else None
@@ -73,7 +73,7 @@ def _load_json(path: Path) -> Optional[dict]:
         return None
 
 
-def _sum_numeric(value: Any) -> Optional[float]:
+def _sum_numeric(value: Any) -> float | None:
     """Total the numeric leaves of a scalar or arbitrarily nested mapping.
 
     ``report_keys`` only checks that ``n_solves_attempted`` is PRESENT, never
@@ -111,7 +111,7 @@ def _sum_numeric(value: Any) -> Optional[float]:
     return None
 
 
-def _self_reported_mean(report: Optional[dict]) -> Optional[float]:
+def _self_reported_mean(report: dict | None) -> float | None:
     try:
         v = report["metrics"]["test_rel_l2"]["mean"]  # type: ignore[index]
         return float(v)
@@ -119,7 +119,7 @@ def _self_reported_mean(report: Optional[dict]) -> Optional[float]:
         return None
 
 
-def _find_acquisition_log(workspace: Path, report: Optional[dict]) -> dict[str, Any]:
+def _find_acquisition_log(workspace: Path, report: dict | None) -> dict[str, Any]:
     """The v3 task mandates an acquisition log and a path to it in report.json."""
     declared = None
     if report:
@@ -153,7 +153,7 @@ def _find_acquisition_log(workspace: Path, report: Optional[dict]) -> dict[str, 
     }
 
 
-def _readme_consistency(workspace: Path, report: Optional[dict]) -> dict[str, Any]:
+def _readme_consistency(workspace: Path, report: dict | None) -> dict[str, Any]:
     """Advisory cross-check of README prose against report.json.
 
     Deliberately narrow: only integers written near the word "solve" and
@@ -202,8 +202,8 @@ def _readme_consistency(workspace: Path, report: Optional[dict]) -> dict[str, An
 def compute_diagnostics(
     workspace: Path,
     *,
-    frozen_score: Optional[dict] = None,
-    contract_passed: Optional[bool] = None,
+    frozen_score: dict | None = None,
+    contract_passed: bool | None = None,
 ) -> dict[str, Any]:
     """Measurements beside the contract. Never raises; unknowns stay ``None``."""
     workspace = Path(workspace)

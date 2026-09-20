@@ -19,10 +19,9 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Optional
 
 
-def _first_existing(paths) -> Optional[Path]:
+def _first_existing(paths) -> Path | None:
     for p in paths:
         if p is not None and Path(p).exists():
             return Path(p)
@@ -39,7 +38,7 @@ def _split_info(workspace: Path) -> dict:
     return {}
 
 
-def _latest_iter_dataset(datasets_dir: Path) -> Optional[Path]:
+def _latest_iter_dataset(datasets_dir: Path) -> Path | None:
     """The grown pool from the highest meta iteration (largest, best coverage)."""
     if not datasets_dir.is_dir():
         return None
@@ -52,7 +51,7 @@ def _latest_iter_dataset(datasets_dir: Path) -> Optional[Path]:
     return best
 
 
-def find_training_dataset(workspace: Path | str) -> Optional[Path]:
+def find_training_dataset(workspace: Path | str) -> Path | None:
     """Dataset to visualize physics from — the largest / most representative pool."""
     workspace = Path(workspace)
     # Meta: prefer the latest grown pool, else the initial train pool.
@@ -80,7 +79,7 @@ def find_training_dataset(workspace: Path | str) -> Optional[Path]:
     return None
 
 
-def find_eval_dataset(workspace: Path | str) -> Optional[Path]:
+def find_eval_dataset(workspace: Path | str) -> Path | None:
     """Held-out set the winner is scored on — for honest true-vs-predicted plots.
 
     Falls back to the training dataset for direct phase workspaces, which have no
@@ -99,7 +98,7 @@ def find_eval_dataset(workspace: Path | str) -> Optional[Path]:
     return got or find_training_dataset(workspace)
 
 
-def find_winner(workspace: Path | str) -> Optional[Path]:
+def find_winner(workspace: Path | str) -> Path | None:
     """The trained surrogate payload (``winner.pkl``)."""
     workspace = Path(workspace)
     got = _first_existing(
@@ -116,7 +115,7 @@ def find_winner(workspace: Path | str) -> Optional[Path]:
     return None
 
 
-def find_report(workspace: Path | str) -> Optional[Path]:
+def find_report(workspace: Path | str) -> Path | None:
     """The run's ``report.json`` (meta root or direct ``outputs/``)."""
     workspace = Path(workspace)
     return _first_existing(

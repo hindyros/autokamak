@@ -22,11 +22,10 @@ Usage::
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 # ----------------------------- equation ----------------------------- #
 
@@ -58,13 +57,13 @@ class MeshRegion(BaseModel):
     name: str = "plasma"
     type: Literal["plasma"] = "plasma"
     dx: float = Field(gt=0, description="Target triangle edge length (m).")
-    tag: Optional[str] = None  # passed through unused; some runners include it
+    tag: str | None = None  # passed through unused; some runners include it
 
 
 class MeshConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    method: Optional[Literal["gs_domain"]] = "gs_domain"
-    regions: List[MeshRegion] = Field(min_length=1)
+    method: Literal["gs_domain"] | None = "gs_domain"
+    regions: list[MeshRegion] = Field(min_length=1)
 
 
 # ----------------------------- solver ----------------------------- #
@@ -74,7 +73,7 @@ class SolverConfig(BaseModel):
     order: int = Field(ge=1, le=3, description="FE polynomial order (1=linear, 2=quadratic).")
     F0: float = Field(description="Toroidal field constant F0 (Tm).")
     full_domain: bool = False
-    maxits: Optional[int] = Field(default=None, ge=1, description="Nonlinear iteration cap.")
+    maxits: int | None = Field(default=None, ge=1, description="Nonlinear iteration cap.")
     free_boundary: bool = False
 
 
@@ -82,15 +81,15 @@ class SolverConfig(BaseModel):
 
 class TargetsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    Ip: Optional[float] = Field(default=None, description="Total plasma current (A).")
-    Ip_ratio: Optional[float] = None
-    pax: Optional[float] = None
-    estore: Optional[float] = None
-    R0: Optional[float] = None
-    V0: Optional[float] = None
+    Ip: float | None = Field(default=None, description="Total plasma current (A).")
+    Ip_ratio: float | None = None
+    pax: float | None = None
+    estore: float | None = None
+    R0: float | None = None
+    V0: float | None = None
 
     @model_validator(mode="after")
-    def _at_least_one(self) -> "TargetsConfig":
+    def _at_least_one(self) -> TargetsConfig:
         if not any(
             v is not None
             for v in (self.Ip, self.Ip_ratio, self.pax, self.estore, self.R0, self.V0)
@@ -133,8 +132,8 @@ class EquilibriumConfig(BaseModel):
     outputs: OutputsConfig = Field(default_factory=OutputsConfig)
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "EquilibriumConfig":
-        with open(path, "r", encoding="utf-8") as f:
+    def from_yaml(cls, path: str | Path) -> EquilibriumConfig:
+        with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         if not isinstance(raw, dict):
             raise ValueError("Top-level YAML must be a mapping/object.")

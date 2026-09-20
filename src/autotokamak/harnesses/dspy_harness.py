@@ -23,7 +23,6 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.agent.runners.config import REPO_ROOT
 from autotokamak.bench.taskspec import TaskSpec
@@ -43,7 +42,7 @@ MAX_SHELL_TIMEOUT = 4 * 3600  # a full campaign may run in one command
 # runs for hours past its budget. Observed: five L2-dspy cells at 4-5 hours
 # against a 90-minute budget, with the outer SIGALRM apparently absorbed
 # somewhere inside the agent loop.
-_RUN_DEADLINE: Optional[float] = None
+_RUN_DEADLINE: float | None = None
 DEFAULT_MODEL = "openai/gpt-5.2"
 DEFAULT_MAX_ITERS_PER_STEP = 40
 
@@ -300,6 +299,13 @@ def _build_campaign(workspace: Path, tool_log: list[dict],
 
 
 class DspyHarness(Harness):
+    """DSPy: plan, then per-step ReAct, then review, then fix.
+
+    In-process. Shell commands it issues are clamped to the remaining run
+    budget rather than to their own timeout, so a long-running command near
+    the end of a run cannot outlive the run.
+    """
+
     name = "dspy"
 
     def run(
@@ -308,9 +314,17 @@ class DspyHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         # litellm convention: "openai/gpt-5.2"; accept our "openai:..." form too.

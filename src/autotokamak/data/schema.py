@@ -10,11 +10,10 @@ runner expects so the two stay in sync.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 PARAM_ORDER = ("r0", "a", "kappa", "delta", "Ip")
 
@@ -32,7 +31,7 @@ class ParamBounds(BaseModel):
     high: float
 
     @model_validator(mode="after")
-    def _ordered(self) -> "ParamBounds":
+    def _ordered(self) -> ParamBounds:
         if not (self.low < self.high):
             raise ValueError(f"low ({self.low}) must be < high ({self.high})")
         return self
@@ -58,7 +57,7 @@ class GridAxis(BaseModel):
     n: int = Field(ge=2, le=4096)
 
     @model_validator(mode="after")
-    def _ordered(self) -> "GridAxis":
+    def _ordered(self) -> GridAxis:
         if not (self.min < self.max):
             raise ValueError(f"grid axis: min ({self.min}) must be < max ({self.max})")
         return self
@@ -79,13 +78,13 @@ class SweepConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
     sampling: SamplingConfig
-    parameters: Dict[str, ParamBounds]
+    parameters: dict[str, ParamBounds]
     fixed: FixedKnobs = Field(default_factory=FixedKnobs)
     output_grid: OutputGrid
     output_path: str = "dataset.h5"
 
     @model_validator(mode="after")
-    def _param_keys_match(self) -> "SweepConfig":
+    def _param_keys_match(self) -> SweepConfig:
         missing = set(PARAM_ORDER) - set(self.parameters)
         extra = set(self.parameters) - set(PARAM_ORDER)
         if missing:
@@ -95,8 +94,8 @@ class SweepConfig(BaseModel):
         return self
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "SweepConfig":
-        with open(path, "r", encoding="utf-8") as f:
+    def from_yaml(cls, path: str | Path) -> SweepConfig:
+        with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
         if not isinstance(raw, dict):
             raise ValueError("Top-level YAML must be a mapping/object.")

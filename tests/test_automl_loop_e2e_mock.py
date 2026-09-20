@@ -16,7 +16,6 @@ import pytest
 from autotokamak.surrogate.automl_loop import run_automl_loop
 from autotokamak.surrogate.schema import RoundDecision, SurrogateReport
 from autotokamak.surrogate.zoo import DEFAULT_SEARCH_SPACES
-
 from tests.conftest import make_synthetic_h5
 
 
@@ -86,8 +85,8 @@ def test_automl_loop_run_then_terminate(tmp_path: Path):
     # Winner predicts shard-shaped output.
     import joblib
 
-    from autotokamak.surrogate.optuna_search import predict_with_winner
     from autotokamak.surrogate.dataset import load_dataset
+    from autotokamak.surrogate.optuna_search import predict_with_winner
 
     payload = joblib.load(outputs / "winner.pkl")
     shard_bundle = load_dataset(shard)

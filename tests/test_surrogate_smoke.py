@@ -27,7 +27,6 @@ from autotokamak.surrogate.metrics import (
 )
 from autotokamak.surrogate.reduce import fit_pca, inverse_transform, transform
 
-
 # ---------------- fixtures ----------------
 
 def _synthetic_bundle(n: int = 16, nz: int = 8, nr: int = 6, seed: int = 0) -> DatasetBundle:

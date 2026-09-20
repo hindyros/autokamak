@@ -64,7 +64,6 @@ def _cv_objective(
     """
 
     def objective(trial) -> float:
-        from autotokamak.surrogate.zoo import DEFAULT_SEARCH_SPACES
 
         hp = {}
         # The trial's "search space" lives in the per-model spec the agent

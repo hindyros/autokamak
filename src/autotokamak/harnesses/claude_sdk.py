@@ -20,7 +20,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -33,10 +33,20 @@ MAX_TURNS = 300
 
 
 class ClaudeSdkHarness(Harness):
+    """Anthropic's Claude Agent SDK, driven through ``query()``.
+
+    ``setting_sources=[]`` is load-bearing: without it the SDK would pick up
+    this repository's own ``.claude/`` configuration and the agent under test
+    would inherit instructions written for the agent doing the testing.
+
+    Excluded from the published campaign, because that study pinned one model
+    across every substrate and this adapter cannot run it.
+    """
+
     name = "claude_sdk"
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         info = super().dry_run_info(task, workspace, model)
         info.update({
             "model": self.resolve_model(task, model) or DEFAULT_MODEL,
@@ -59,9 +69,17 @@ class ClaudeSdkHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or DEFAULT_MODEL
@@ -81,7 +99,7 @@ class ClaudeSdkHarness(Harness):
 
         events_path = run_dir / "claude_events.jsonl"
         status, error, cost_usd, num_turns = "completed", None, None, None
-        usage: Optional[dict] = None
+        usage: dict | None = None
 
         async def _session() -> None:
             nonlocal cost_usd, num_turns, error, status, usage
@@ -125,7 +143,7 @@ class ClaudeSdkHarness(Harness):
 
         try:
             asyncio.run(asyncio.wait_for(_session(), timeout=timeout))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             status, error = "timeout", f"exceeded {timeout}s"
         except KeyboardInterrupt:
             status, error = "interrupted", "KeyboardInterrupt"

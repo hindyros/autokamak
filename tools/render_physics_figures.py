@@ -324,7 +324,7 @@ def fig_error_calibration(frozen, cache: dict[str, Path], out: Path) -> None:
 
     fig, axes = plt.subplots(1, len(panels), figsize=(1.02 * len(panels), 1.65),
                              gridspec_kw={"wspace": 0.08})
-    for ax, (label, field) in zip(axes, panels):
+    for ax, (label, field) in zip(axes, panels, strict=True):
         _psi_panel(ax, frozen["R"], frozen["Z"], field, vmin=vmin, vmax=vmax, lcfs=lcfs)
         if label == "truth":
             ax.set_title("truth", fontsize=7)
@@ -361,7 +361,7 @@ def fig_task_character(report: Path, out: Path) -> None:
     ax.plot(ns, ratios, "-", color="0.55", lw=0.9, zorder=1)
     seen = set()
     palette = {"poly_ridge": "#B8860B", "kernel_ridge": "#1F4E79"}
-    for n, r, fam in zip(ns, ratios, fams):
+    for n, r, fam in zip(ns, ratios, fams, strict=True):
         ax.scatter(n, r, s=16, color=palette.get(fam, "0.4"), zorder=3,
                    label=fam.replace("_", " ") if fam not in seen else None)
         seen.add(fam)

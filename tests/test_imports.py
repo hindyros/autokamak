@@ -3,7 +3,6 @@
 
 import importlib
 
-
 SUBMODULES = [
     "autotokamak",
     "autotokamak.core",

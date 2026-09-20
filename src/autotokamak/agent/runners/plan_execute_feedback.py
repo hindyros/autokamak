@@ -39,11 +39,11 @@ from autotokamak.bench.trace import RunTrace
 
 load_dotenv(REPO_ROOT / ".env")
 
-from langchain.chat_models import init_chat_model
-from langchain_core.messages import HumanMessage
-
-from ursa.agents import ExecutionAgent, PlanningAgent
-
+# These must follow load_dotenv: LangChain and URSA read provider
+# configuration from the environment at import time.
+from langchain.chat_models import init_chat_model  # noqa: E402
+from langchain_core.messages import HumanMessage  # noqa: E402
+from ursa.agents import ExecutionAgent, PlanningAgent  # noqa: E402
 
 DEFAULT_EXPERIMENTS_DIR = REPO_ROOT / "experiments"
 
@@ -149,14 +149,14 @@ def run_feedback_loop(
             if round_no == 1:
                 planning_output = planner.invoke(problem)
             else:
-                print("\n=== GLOBAL FEEDBACK: RE-PLAN (round {}) ===".format(round_no))
+                print(f"\n=== GLOBAL FEEDBACK: RE-PLAN (round {round_no}) ===")
                 replan_prompt = (
                     f"Original problem:\n{problem}\n\n"
                     f"Execution history so far:\n"
                     + "\n---\n".join(execution_history)
                     + "\n\n"
-                    f"Based on the above, suggest follow-up steps to fix failures or complete the task. "
-                    f"If nothing more is needed, return a plan with a single step: 'Confirm completion'."
+                    "Based on the above, suggest follow-up steps to fix failures or complete the task. "
+                    "If nothing more is needed, return a plan with a single step: 'Confirm completion'."
                 )
                 planning_output = planner.invoke(replan_prompt)
 
@@ -168,13 +168,13 @@ def run_feedback_loop(
                 print("No steps in plan; stopping.")
                 break
 
-            print("\n=== PLAN (round {}) ===".format(round_no))
+            print(f"\n=== PLAN (round {round_no}) ===")
             for i, s in enumerate(steps, 1):
                 name = getattr(s, "name", f"Step {i}")
                 desc = getattr(s, "description", str(s))
                 print(f"  {i}. {name}\n     {desc}\n")
 
-            print("\n=== EXECUTION (round {}) ===".format(round_no))
+            print(f"\n=== EXECUTION (round {round_no}) ===")
             last_summary = "No previous step."
 
             for i, step in enumerate(steps, 1):
