@@ -596,9 +596,28 @@ def cmd_reconcile(args) -> int:
         if trace_path.is_file():
             try:
                 trace = json.loads(trace_path.read_text(encoding="utf-8"))
-                for key in ("model", "replicate", "started_utc", "task"):
+                for key in ("model", "replicate", "started_utc"):
                     if key in trace:
                         payload[key] = trace[key]
+                # The task block matters more than it looks: every reporting
+                # path refuses to pool prompt versions, so a stub without one
+                # makes the whole tag unanalysable until someone passes
+                # --allow-mixed-prompt and pools versions for real.
+                prompt = trace.get("prompt") or {}
+                task_path = prompt.get("path")
+                task_block = {"path": task_path}
+                if task_path:
+                    try:
+                        from autotokamak.bench.taskspec import TaskSpec
+
+                        spec = TaskSpec.from_yaml(Path(task_path))
+                        task_block["task_id"] = spec.task_id
+                        task_block["prompt_version"] = spec.prompt_version
+                    except Exception:  # noqa: BLE001
+                        pass
+                    payload["task"] = task_block
+                if prompt.get("model") and "model" not in payload:
+                    payload["model"] = prompt["model"]
             except Exception:  # noqa: BLE001
                 pass
         if args.dry_run:
