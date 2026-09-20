@@ -1,0 +1,19 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+On this task, giving an agent a proven library made it worse: from-scratch
+agents beat library-assisted ones in all four substrates, pooled median relative
+$L_2$ $0.137$ against $0.229$, and the deterministic analysis says why---given a
+library, four independent substrates reproduced its default model and its named
+acquisition strategies; given nothing, all four converged on a different method
+family and two beat the library's own score. Holding the model fixed, the
+harness mattered more than the access level, and the pipeline with no language
+model at all still beat five of the eight agent cells. The durable point is
+independent of how those numbers land. A benchmark that checks only whether an
+agent produced the required files will silently certify work that is physically
+wrong and self-reported dishonestly: here 31\% of scored runs passed every gate
+while being physically invalid, and the runs that misreported their own error
+were largely \emph{not} the same runs. Separating \emph{did it deliver},
+\emph{is it valid} and \emph{did it tell the truth} costs three diagnostics
+computed from predictions the benchmark already holds; asking \emph{did it do
+what it said} costs a parser.

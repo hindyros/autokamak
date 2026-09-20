@@ -1,0 +1,95 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% macros.tex -- notation shortcuts and the open-slot ("FILL") machinery
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% open slots %%%%%
+%
+% Every number that depends on the running campaign is marked with \FILL or
+% \FILLBOX. Both are listed, with page numbers, by \listoffills at the end of
+% the document.
+%
+% Set \showfillfalse (below) to make every marker vanish from the PDF --
+% useful for checking page count against the venue limit, since the markers
+% themselves consume space.
+
+\newif\ifshowfill
+\showfilltrue          % <-- flip to \showfillfalse for a clean, marker-free PDF
+
+\definecolor{fillbg}{HTML}{FFF3CD}
+\definecolor{fillrule}{HTML}{D39E00}
+\definecolor{filltext}{HTML}{7A5C00}
+
+% Record every slot into the .fil auxiliary file so \listoffills can print it.
+\newcommand{\recordfill}[1]{%
+  \addcontentsline{fil}{figure}{\protect\numberline{}\small #1}%
+}
+
+% --- inline slot: \FILL{what is missing} ------------------------------------
+% The tag is boxed (short, never needs to break); the text is plain coloured
+% prose so it wraps normally. Do not put the text inside \colorbox -- an
+% unbreakable box produces enormous overfull lines.
+\newcommand{\FILL}[1]{%
+  \recordfill{#1}%
+  \ifshowfill
+    \colorbox{fillbg}{\textcolor{filltext}{\scriptsize\textsf{\bfseries FILL}}}%
+    \,\textcolor{filltext}{\small #1}%
+  \fi
+}
+
+% --- paragraph-level slot: \begin{FILLBOX} ... \end{FILLBOX} ----------------
+\newenvironment{FILLBOX}[1][open slot]{%
+  \recordfill{#1}%
+  \ifshowfill
+    \begin{tcolorbox}[
+      breakable, enhanced, sharp corners,
+      colback=fillbg, colframe=fillrule, boxrule=0.4pt,
+      left=5pt, right=5pt, top=4pt, bottom=4pt,
+      before skip=6pt, after skip=6pt,
+      fontupper=\small\color{filltext}]%
+    \textsf{\bfseries [FILL]}\ \ignorespaces
+  \else
+    \setbox0\vbox\bgroup
+  \fi
+}{%
+  \ifshowfill
+    \end{tcolorbox}%
+  \else
+    \egroup
+  \fi
+}
+
+% --- the index of open slots -------------------------------------------------
+\makeatletter
+\newcommand{\listoffills}{%
+  \section*{Open slots in this draft}%
+  \small
+  \@starttoc{fil}%
+}
+\makeatother
+
+% Placeholder for a number not yet measured, inside tables and running text.
+\newcommand{\tbd}{\textcolor{fillrule}{\textbf{--}}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% notation %%%%
+
+\newcommand{\psifield}{\psi}
+\newcommand{\Rgrid}{R}
+\newcommand{\Zgrid}{Z}
+\newcommand{\relltwo}{\mathrm{relL2}}
+\newcommand{\Ip}{I_{\mathrm{p}}}
+\newcommand{\rzero}{r_{0}}
+\newcommand{\gs}{Grad--Shafranov}
+\newcommand{\GS}{Grad--Shafranov}
+
+% levels and harnesses, so they are typeset consistently everywhere
+\newcommand{\Lzero}{\textsf{L0}}
+\newcommand{\Lone}{\textsf{L1}}
+\newcommand{\Ltwo}{\textsf{L2}}
+\newcommand{\Lthree}{\textsf{L3}}
+\newcommand{\hn}[1]{\textsf{#1}}
+
+% code-ish inline
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\newcommand{\eg}{e.g.\xspace}
+\newcommand{\ie}{i.e.\xspace}

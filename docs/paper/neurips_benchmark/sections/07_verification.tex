@@ -1,0 +1,104 @@
+\section{Verification: delivery, validity, and honesty}
+\label{sec:verification}
+
+The benchmark separates three questions the literature usually collapses into
+one. Plotting two of them against each other (Figure~\ref{fig:verif},
+Appendix~\ref{app:verif}) makes the point: every run in that plot passed every
+contract gate, and the physically invalid ones are scattered across the whole
+range of self-reported honesty.
+\subsection{Passing the gates is not being right}
+\label{sec:validity}
+\vspace{-2pt}
+\code{contract.passed} certifies \emph{delivery}, not that the artifact is
+physically meaningful. We record structural diagnostics beside the contract,
+never as gates---adding a gate would change \code{contract.passed} and silently
+make every archived run incomparable. Validity is judged on \emph{magnitude}, as
+the conjunction of four checks: \textbf{sanity}, relative $L_2 < 0.8$, a
+surrogate at all against a baseline of $0.49$; \textbf{full-grid error}, the same
+metric recomputed with the plasma's exterior in the numerator and the interior
+norm still in the denominator, so a spurious field written where flux is
+undefined is charged rather than masked away; \textbf{exterior inflation}, the
+ratio of the two ($1.0$ clean, $1.2$ a NaN-convention slip, $17$ a fabricated
+plasma); and \textbf{prediction spread}, at least a tenth of ground truth's,
+since a constant predictor is finite, correctly shaped and ignores its input.
+NaN-mask agreement is recorded but \textbf{demoted out of the rule}: pixel
+counting cannot tell a convention slip from an invented plasma---both can land
+at $0.195$ agreement while differing by an order of magnitude in how wrong the
+field is---whereas magnitude can.
+
+\paragraph{The campaign-wide rate.}
+\textbf{15 of 49 scored runs (31\%) passed every contract gate while being
+physically invalid.} The rate is strongly substrate-specific and almost
+completely level-independent: \hn{cursor} $0/10$ and \hn{pi} $0/10$ against
+\hn{dspy} $\mathbf{11/20}$ and \hn{ursa} $\mathbf{4/9}$, while by access level it
+is $7/24$ at \Ltwo{} and $8/25$ at \Lthree{}. Two substrates produce none of it and two all of it, while the axis the
+benchmark was built to vary makes no difference; an evaluation reporting only
+\code{contract.passed} would have scored this campaign $49/49$ delivered.
+
+The same failure recurs across campaigns: a predictor emitting zeros instead of
+NaN outside the boundary once passed \textbf{9/9 gates} at relative $L_2$
+\textbf{0.9596}, twice as bad as predicting the mean field; here one
+\Lthree{}-\hn{dspy} replicate emitted \emph{no NaN at all} against ground truth
+that is $80.5\%$ NaN, and an \Ltwo{}-\hn{ursa} replicate reached a prediction
+spread $16.2\times$ ground truth's (Appendix~\ref{app:invalid}). All of it is
+invisible to the contract and caught by three numbers computed from predictions
+the benchmark already has.
+
+\paragraph{The honesty gap.}
+\label{sec:honesty}
+Because the contract checks that self-reported metrics are \emph{present} but
+never \emph{true}, the difference between an agent's reported error and its
+independently scored error is directly measurable:
+$\mathrm{gap} = \overline{\mathrm{relL2}}^{\,\text{self}} -
+\overline{\mathrm{relL2}}^{\,\text{scored}}$, negative meaning the agent claimed
+to be better than it was. Across the 48 scored runs reporting a comparable
+number the median gap is $-0.0012$: \textbf{most agents report their own error
+accurately}. The tail is what matters: ten runs exceed $|{\rm gap}| = 0.1$, the worst being a
+\Ltwo{}-\hn{ursa} run reporting $0.0515$ against a scored $0.9857$---a claim of
+roughly nineteenfold better accuracy than it achieved---and, in the other
+direction, one reporting $4.2557$ against $2.4941$. A plausibility filter that
+rejects self-reports outside $[0,5]$ admits both extremes, so it separates
+nothing here.
+
+\paragraph{The two pathologies are different runs.}
+Of the 15 invalid artifacts only 4 have $|{\rm gap}| > 0.1$; of the 10 large-gap
+runs only 4 are invalid. An agent can be wrong and honest about it, or
+approximately right and still misreport: \emph{neither measurement substitutes
+for the other}. Both cluster in the same two substrates, but on different
+replicates.
+
+\paragraph{Failure taxonomy, and a control arm.}
+\label{sec:taxonomy}
+None of the ten unscored runs is a model capability failure: five were killed
+by the driver watchdog before writing a deliverable, three died on a single
+transient connection error, one timed out, one produced nothing usable
+(Appendix~\ref{app:taxonomy}). Among runs that
+\emph{did} score, the substantive failures are the 15 invalid artifacts, and
+they split by mechanism in a way a single scalar could not: \emph{masking}
+failures, NaN convention wrong and exterior inflation $2$--$4\times$---the
+\hn{dspy} pattern, whose modal masking rule is a training-derived validity mask
+rather than the plasma boundary polygon---and \emph{scale} failures, mask
+near-perfect but magnitude wrong, the \hn{ursa} pattern.
+
+A blind, outcome-blind rubric review over three replicates per cell (7
+dimensions, 1--5, median of three passes, 23 judgeable runs, \$2.53) ranks the
+\Lthree{} substrates \hn{pi} $3.71$, \hn{cursor} $3.57$, \hn{dspy} $3.14$,
+\hn{ursa} $2.71$---the frozen-score ordering up to the \hn{pi}/\hn{cursor}
+swap---and rates \Lthree{} above \Ltwo{} ($3.07$ vs $2.86$). Where it
+\emph{disagrees} is instructive: it judged the adaptive sampling ``genuine'' in
+21 of 23 runs, while the code analysis of Section~\ref{sec:agentlogic} finds the
+criterion actually reacting to what was measured in 2 of 37. A reviewer reading
+code accepts nominal adaptivity that a parser does not. The reviewer is also the
+model that produced every run it grades, so its scores only corroborate the
+deterministic analysis (Section~\ref{sec:limitations}).
+
+Finally, the benchmark asks agents to sample adaptively, so it should say
+whether that is worth asking for. Forcing the pipeline's own meta-loop to use
+residual-UCB acquisition against a blind space-filling append---four paired
+replicates, identical solve budgets, no LLM calls---gives a clean negative:
+aggregate accuracy improves by $+1.47$ points on average while
+\textbf{worst-cell} accuracy, pre-registered as the headline because an adaptive
+method should pay off where the surrogate is weakest, moves by $-0.23$ and wins
+in $2/4$ (Appendix~\ref{app:controlarm}). The two summaries point in opposite
+directions, exactly the failure mode the pre-registration was written to
+expose.

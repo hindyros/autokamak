@@ -2,13 +2,27 @@
 
 ## Submission source: `neurips_benchmark/`
 
-The LaTeX build of the benchmark paper, targeting the **NeurIPS Datasets &
-Benchmarks Track**, plus `neurips_benchmark.zip` for direct Overleaf import
-(New Project → Upload Project; compiler pdfLaTeX, main document `main.tex`).
-Every number still awaiting the campaign is marked with a `\FILL` macro, and
-the last page of the PDF is an auto-generated index of every open slot with its
-page number. See `neurips_benchmark/README.md` for the fill-in workflow and for
-how to retarget another venue.
+The LaTeX build of the benchmark paper, targeting the **NeurIPS 2026
+Evaluations & Datasets track**, plus `neurips_benchmark.zip` for direct
+Overleaf import (New Project → Upload Project; compiler pdfLaTeX, main document
+`main.tex`). **The draft is complete**: every number is measured from
+`experiments/matrix-v4-20260919`, no `\FILL` slots remain, the Paper Checklist
+is answered, and `check_compliance.sh` passes every check. 9 pages of body, 30
+total. See `neurips_benchmark/README.md` for the two things to verify before
+submitting.
+
+## `results_v4.md` — the numbers ledger
+
+Every figure the paper quotes, with the artifact and the line of code it came
+from. If a number is not in this file it does not belong in the paper; check
+the .tex against it rather than against a draft.
+
+## `references_verification.md` — the citation log
+
+Each bibliography entry, the query that checked it, the URL that confirmed it,
+and what was corrected. Four entries previously flagged `% VERIFY` are
+resolved; six new entries were added, all verified. Two candidate citations
+were deliberately dropped because their metadata could not be confirmed.
 
 ## Prose original: `benchmark_paper.md`
 

@@ -1,0 +1,47 @@
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Agentic coding, ML-engineering and scientific-agent benchmarks.}
+The dominant evaluation shape gives the agent a repository or a dataset and
+scores the artifact it produces---SWE-bench \citep{jimenez2024swebench},
+AgentBench \citep{liu2024agentbench}, and, closest to us, the ML-engineering
+suites: MLE-bench \citep{chan2024mlebench} on Kaggle competitions graded against
+the private leaderboard, MLAgentBench \citep{huang2024mlagentbench} on iterative
+experimentation over fixed datasets, DSBench \citep{jing2024dsbench} on
+data-science competitions. A second line targets science: ScienceAgentBench
+\citep{chen2025scienceagentbench}, DiscoveryBench
+\citep{majumder2025discoverybench} and BixBench \citep{mitchener2025bixbench}
+over provided datasets, CORE-Bench \citep{siegel2024corebench} on computational
+reproducibility, PaperBench \citep{starace2025paperbench} on replicating ML
+papers, RE-Bench \citep{wijk2024rebench} against human experts on open-ended
+research engineering. In all of them the training data is supplied in advance
+and is identical for every agent---exactly what makes them clean comparisons,
+and what removes acquisition from the decisions being measured.
+
+\paragraph{What we add.}
+The gap is not that no one acquires data---active learning
+\citep{settles2009active}, Bayesian experimental design
+\citep{chaloner1995bayesian} and space-filling designs \citep{mckay1979lhs}
+supply the strategies a competent agent might reach for, and the baseline it
+must beat. It is that \emph{agentic coding benchmarks do not make the
+acquisition policy part of what is scored}. To our knowledge, as of mid-2026, no
+existing agent benchmark requires the agent to (i) drive an expensive,
+failure-prone numerical solver it has not been handed a working harness for,
+(ii) allocate a hard budget across adaptive rounds, and (iii) be scored on a
+frozen set it never sees, with a zero-LLM scripted policy running inside the
+identical contract as the reference point. Two recent works come closest:
+AstaBench \citep{bragg2025astabench} assembles a large scientific-agent suite,
+motivated by the same complaint about confounders that motivates our model
+control, but supplies the tools and data rather than scoring acquisition; and a
+position paper argues that the execution harness, not the model it wraps, is
+often the binding constraint on agent performance \citep{zhang2026harness},
+of which our campaign is a direct empirical test
+(Section~\ref{sec:harness-effect}).
+
+\paragraph{Agent substrates.}
+The harnesses we compare are existing systems, not contributions of this paper:
+URSA \citep{ursa2025}, a planner/executor pair built on LangGraph, part of the
+LangChain project \citep{langchain2022}; DSPy \citep{khattab2024dspy}, whose
+typed modules we also use for the \Lone{} decision layer and whose GEPA
+optimiser \citep{agrawal2025gepa} we use for prompt optimisation; and two
+commercial CLI coding agents, evaluated as we found them.
