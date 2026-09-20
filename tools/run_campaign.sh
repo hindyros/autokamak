@@ -209,10 +209,14 @@ run_cell() {
   fi
 
   # A substrate known not to terminate gets a shorter leash than the rest.
-  local cap="$CELL_HARD_TIMEOUT"
+  local cap="${CELL_HARD_TIMEOUT:-6600}"
   local hto
   hto="$(harness_cap "${HARNESS_TIMEOUT:-}" "$harness")"
   [[ -n "$hto" ]] && cap=$(( hto + 1200 ))
+  # A cap that is empty or non-numeric would make the arithmetic test below
+  # fail silently on every iteration — i.e. no watchdog at all, which is
+  # indistinguishable from a working one until the day it is needed.
+  [[ "$cap" =~ ^[0-9]+$ ]] || cap=6600
 
   echo "[$(date +%H:%M:%S)] START $name"
 
@@ -232,9 +236,14 @@ run_cell() {
   # campaign then LOOKS hung for up to two hours after its last cell
   # finished, with one stray process per cell (observed: 80-cell campaign,
   # 80 sleeps). Polling costs a wakeup every 5s and leaves nothing behind.
-  local waited=0
+  # Absolute deadline, not an accumulated counter: a counter that misses
+  # iterations (a stalled sleep, a slow loop under load) silently extends the
+  # cap, and the failure mode is a cell running for hours past its budget.
+  local deadline=$(( $(date +%s) + cap ))
+  echo "[watchdog] $name cap=${cap}s deadline=$(date -r "$deadline" +%H:%M:%S 2>/dev/null || echo "$deadline")" \
+    >>"$LOGS/$name.log"
   while kill -0 "$pid" 2>/dev/null; do
-    if (( waited >= cap )); then
+    if (( $(date +%s) >= deadline )); then
       echo "[watchdog] hard-killing $name: exceeded ${cap}s" \
         | tee -a "$LOGS/$name.log"
       kill -TERM -- "-$pid" 2>/dev/null
@@ -243,7 +252,6 @@ run_cell() {
       break
     fi
     sleep 5
-    waited=$((waited + 5))
   done
 
   wait "$pid"

@@ -37,6 +37,13 @@ from autotokamak.harnesses.base import (
 
 MAX_TOOL_OUTPUT_CHARS = 8_000
 MAX_SHELL_TIMEOUT = 4 * 3600  # a full campaign may run in one command
+# Absolute wall-clock deadline for the whole run, set when a run starts.
+# A single jailed shell call is clamped to the time REMAINING against it:
+# without this an agent can ask for 14400s inside a 5400s task and the cell
+# runs for hours past its budget. Observed: five L2-dspy cells at 4-5 hours
+# against a 90-minute budget, with the outer SIGALRM apparently absorbed
+# somewhere inside the agent loop.
+_RUN_DEADLINE: Optional[float] = None
 DEFAULT_MODEL = "openai/gpt-5.2"
 DEFAULT_MAX_ITERS_PER_STEP = 40
 
@@ -190,6 +197,13 @@ def make_tools(workspace: Path, tool_log: list[dict]):
         on timeout.
         """
         timeout_seconds = min(int(timeout_seconds), MAX_SHELL_TIMEOUT)
+        if _RUN_DEADLINE is not None:
+            remaining = int(_RUN_DEADLINE - time.time())
+            if remaining <= 0:
+                return _record("run_shell", {"command": command},
+                               "ERROR: the run's time budget is exhausted; "
+                               "no further shell commands will be executed.")
+            timeout_seconds = min(timeout_seconds, remaining)
         env = os.environ.copy()
         env["PATH"] = f"{REPO_ROOT / 'venv' / 'bin'}:{env.get('PATH', '')}"
         env["PYTHONUNBUFFERED"] = "1"
@@ -344,6 +358,10 @@ class DspyHarness(Harness):
         # shell call may still hold MAX_SHELL_TIMEOUT internally; the outer
         # alarm is what actually bounds the run.
         effective_timeout = timeout_seconds or task.timeout_seconds
+        # The deadline every jailed shell call is measured against, so the
+        # in-adapter cap holds even if the outer signal never lands.
+        global _RUN_DEADLINE
+        _RUN_DEADLINE = time.time() + effective_timeout
 
         try:
             with time_limit(effective_timeout):
