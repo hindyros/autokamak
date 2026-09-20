@@ -236,15 +236,28 @@ run_cell() {
   # campaign then LOOKS hung for up to two hours after its last cell
   # finished, with one stray process per cell (observed: 80-cell campaign,
   # 80 sleeps). Polling costs a wakeup every 5s and leaves nothing behind.
-  # Absolute deadline, not an accumulated counter: a counter that misses
-  # iterations (a stalled sleep, a slow loop under load) silently extends the
-  # cap, and the failure mode is a cell running for hours past its budget.
-  local deadline=$(( $(date +%s) + cap ))
-  echo "[watchdog] $name cap=${cap}s deadline=$(date -r "$deadline" +%H:%M:%S 2>/dev/null || echo "$deadline")" \
+  # TWO clocks, because they answer different questions.
+  #
+  # EXECUTED time (the polling counter) is what the cap is really about: it
+  # bounds the work and the spend a cell can consume. Wall-clock is the wrong
+  # measure for that on a laptop — this machine suspended for four hours
+  # mid-campaign, and a wall-clock deadline would have killed five healthy
+  # cells for time they never used (it very nearly did: I killed them by hand
+  # on exactly that misreading).
+  #
+  # A WALL-CLOCK backstop at 3x the cap still exists, for the case the
+  # counter cannot see: a loop that stops advancing at all. It is deliberately
+  # generous, so a normal suspend does not trip it.
+  local waited=0
+  local started_wall; started_wall=$(date +%s)
+  local wall_cap=$(( cap * 3 ))
+  echo "[watchdog] $name cap=${cap}s executed (wall backstop ${wall_cap}s)" \
     >>"$LOGS/$name.log"
   while kill -0 "$pid" 2>/dev/null; do
-    if (( $(date +%s) >= deadline )); then
-      echo "[watchdog] hard-killing $name: exceeded ${cap}s" \
+    local wall=$(( $(date +%s) - started_wall ))
+    if (( waited >= cap )) || (( wall >= wall_cap )); then
+      echo "[watchdog] hard-killing $name: executed ${waited}s of ${cap}s, "\
+           "wall ${wall}s of ${wall_cap}s" \
         | tee -a "$LOGS/$name.log"
       kill -TERM -- "-$pid" 2>/dev/null
       sleep 15
@@ -252,6 +265,7 @@ run_cell() {
       break
     fi
     sleep 5
+    waited=$((waited + 5))
   done
 
   wait "$pid"
