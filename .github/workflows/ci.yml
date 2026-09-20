@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # The base dependency set pulls URSA and LangChain, which the linter and
+      # the offline tests do not need. Installing only what the checks use
+      # keeps CI fast and stops a provider SDK's release breaking the build.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pydantic pyyaml numpy scipy h5py
+          pip install -e . --no-deps
+
+      - name: Lint
+        run: ruff check src tools tests
+
+      # -m 'not slow' is the default in pyproject; the slow marker covers the
+      # tests that need a real Grad-Shafranov solve, which needs the Open
+      # FUSION Toolkit and is not worth installing on every push.
+      - name: Test
+        run: pytest tests/ -q
+
+      - name: No absolute paths from a developer machine
+        run: |
+          if git grep -nI "/Users/\|/home/[a-z]" -- . ':!*.ipynb'; then
+            echo "::error::an absolute developer path is tracked"
+            exit 1
+          fi

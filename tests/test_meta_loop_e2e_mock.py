@@ -24,6 +24,9 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Marked so `pytest -m needs_dataset` and the summary make the skip
+# visible: this dataset is gitignored, so on a fresh clone these tests
+# silently vanish and the suite looks greener than it is. See tests/README.md.
 REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "dataset.h5"
 PHASE2_PROMPT = REPO_ROOT / "src" / "autotokamak" / "agent" / "prompts" / "surrogate_automl.yaml"
 
@@ -59,6 +62,7 @@ def _make_picker(decisions: list[dict]):
     return picker
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -91,6 +95,7 @@ def test_meta_loop_terminate_path(meta_config_yaml: Path, tmp_path: Path):
     assert report.n_iterations == 1
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -181,6 +186,7 @@ def _file_hash(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -235,6 +241,7 @@ def test_meta_loop_creates_frozen_shard_and_honest_report(meta_config_yaml: Path
     assert shard_rows.isdisjoint(pool_rows)
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -408,6 +415,7 @@ def _stub_winner_workspace(sub_ws: Path, shard_h5: Path) -> None:
     )
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -478,6 +486,7 @@ def test_extend_search_structured_dispatch(meta_config_yaml: Path, monkeypatch):
     assert report.final_rmse == pytest.approx(result["shard_rmse"])
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -538,6 +547,7 @@ def test_target_rmse_stops_loop_early(tmp_path: Path, monkeypatch):
     assert '"target_rmse"' in meta_trace["iterations"][0]["picker_inputs"]["state_summary"]
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -595,6 +605,7 @@ def test_target_accuracy_pct_stops_loop_early(tmp_path: Path, monkeypatch):
     assert extras["final_accuracy_pct"] >= 10.0
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",

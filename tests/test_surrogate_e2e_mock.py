@@ -22,9 +22,13 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Marked so `pytest -m needs_dataset` and the summary make the skip
+# visible: this dataset is gitignored, so on a fresh clone these tests
+# silently vanish and the suite looks greener than it is. See tests/README.md.
 REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "dataset.h5"
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
