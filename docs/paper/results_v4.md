@@ -176,11 +176,13 @@ additional and uncapped, so this is indicative): L2-dspy +1464 (1914 attempted),
 
 From `aggregate.csv` and `solution_shape.csv`.
 
-**Model family splits on access level, not harness.** Primary model is
-`kernel_ridge` in every L2 cell (17 of 20 replicates with a classifiable
-primary; also the winner in all six library-baseline runs) and `mlp_torch` in
-every L3 cell (25 of 26). L2 agents inherit the library's zoo default; L3
-agents independently converge on a hand-written PyTorch MLP.
+**Model family splits on access level, not harness.** Recomputed directly from
+`methodology.csv` (59 rows, 50 with a classifiable primary): at **L2, 19 of 25**
+are `kernel_ridge` (modal in L2-cursor 5/5, L2-dspy 7/10, L2-pi 5/5; tied first
+in L2-ursa at 2 of 5 against `ridge_linear` 2), which is also the winner in all
+six library-baseline runs. At **L3, 25 of 25** are `mlp_torch`, without
+exception. Do **not** quote "17 of 20" or "25 of 26" — earlier summaries had
+both wrong; the counts above are the CSV's.
 
 **Acquisition splits the same way.** L2 gravitates to `residual_ucb` and
 `uncertainty_gp` — the two strategies the L2 prompt names as available in
@@ -203,8 +205,11 @@ L3-cursor (4/5) and L3-pi (3/5).
 **Library access removes auditability.** L2-cursor and L2-pi are
 `unverifiable_from_code` in 10/10 runs and `model_informed` is unknown for all
 ten: point selection happens inside the library, so no workspace function
-chooses points. Conversely, every L3 cell with a classifiable chooser is
-`model_informed: yes` (cursor 5/5, pi 5/5, dspy 8/10, ursa 4/5).
+chooses points. Where a chooser is classifiable at all it usually calls the surrogate:
+**22 of 25** such runs at L3 and **12 of 15** at L2 (per-cell k/n in
+`aggregate.csv`: L2-dspy 10/10, L2-ursa 2/5, L3-cursor 5/5, L3-dspy 8/10,
+L3-pi 5/5, L3-ursa 4/5). Do not write "every L3 run with a chooser is
+model-informed" — three are not.
 
 **Evidence grounding collapses on ursa**: median `evidence_grounded` 0.33 (L2)
 and 0.17 (L3) against 1.0 in the six other cells — its rounds largely did not
@@ -216,11 +221,21 @@ evidence): L2-dspy 3, L2-pi 2, L2-ursa 2, and **zero in every L3 cell**.
 `adaptive_in_name_only` is 0 in every cell — no run's stated criterion was pure
 randomness; the weaker failure is what bites.
 
-**Solution shape** (12 dimensions, `solution_shape.csv`). Three are identical
-across all eight cells: `leakage_guard = test_absent_from_fitting_functions`,
-`pilot_gate = enforced`, `storage_validation = reload_and_check_finite` (the v2
-gate worked). No L3 run hand-built a mesh — `mesh_route = oft_gs_domain` in
-26/26, so the explicit anti-Delaunay constraint held. The `self_test` dimension
+**Solution shape** (12 dimensions). `solution_shape.csv` reports the **modal**
+value per cell, which makes three dimensions look unanimous. The per-run counts
+(51 runs carry `methodology.solution_shape.dimensions`) say otherwise and are
+what the paper quotes:
+
+| dimension | counts over runs |
+|---|---|
+| `pilot_gate` | enforced 50, `run_without_threshold` 1 |
+| `storage_validation` | `reload_and_check_finite` 46, `claimed_only` **3**, unreadable 2 |
+| `leakage_guard` | `test_absent_from_fitting_functions` 42, **`test_referenced_in_fitting_function` 1**, unreadable 8 |
+| `self_test` | `imported_not_subprocessed` **24**, `subprocess_reruns_predict` 22, unreadable 5 |
+| `mesh_route` (L3) | `oft_gs_domain` **26/26** — the only genuinely unanimous one |
+
+Do **not** write "held in 59/59 runs": only 51 runs have a readable workspace,
+and two of the three gates have real exceptions. The `self_test` dimension
 splits: roughly half the corpus satisfies the mandatory DELIVERABLE SELF-TEST by
 *importing* `predict.py` rather than running it in a fresh process
 (`imported_not_subprocessed`: L2-pi 4/5, L3-cursor 3/4, all L3-dspy). Storage

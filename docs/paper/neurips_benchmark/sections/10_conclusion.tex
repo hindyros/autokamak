@@ -4,9 +4,9 @@
 On this task, giving an agent a proven library made it worse: from-scratch
 agents beat library-assisted ones in all four substrates, pooled median relative
 $L_2$ $0.137$ against $0.229$, and the deterministic analysis says why---given a
-library, four independent substrates reproduced its default model and its named
-acquisition strategies; given nothing, all four converged on a different method
-family and two beat the library's own score. Holding the model fixed, the
+library, the model and acquisition strategies the library itself supplies
+dominate (kernel ridge in 19 of 25 runs); given nothing, all 25 classifiable
+runs chose a different family, and two cells beat the library's own score. Holding the model fixed, the
 harness mattered more than the access level, and the pipeline with no language
 model at all still beat five of the eight agent cells. The durable point is
 independent of how those numbers land. A benchmark that checks only whether an

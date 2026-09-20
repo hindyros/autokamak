@@ -41,8 +41,8 @@ measurement of Section~\ref{sec:honesty} possible.
 
 \paragraph{Independent scoring.}
 Predictions are scored against a frozen test set of 60 parameter vectors (seed
-\code{20260809}, all 60 converged) solved once and stamped with provenance---
-solver version, the SHA-256 of both the parameter file and the grid, and a
+\code{20260809}, all 60 converged) solved once and stamped with
+provenance---solver version, the SHA-256 of both the parameter file and the grid, and a
 scoring epoch---so a score is only ever pooled with scores computed the same
 way. The archive is never regenerated. The metric is per-sample relative $L_2$
 over the finite ground-truth points, and \textbf{a NaN prediction at a finite

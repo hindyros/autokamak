@@ -137,9 +137,11 @@ The entire campaign ran on a single workstation (Apple silicon, macOS): 59 agent
 runs consuming 19.1 hours of wall clock with several cells concurrent, plus the
 solver time inside each run, which is CPU-bound and is the dominant cost of a
 cell in seconds if not in dollars. Model spend was \$197.78 in total. The two
-supporting arms (Section~\ref{sec:vs-baseline} and Appendix~\ref{app:controlarm}) make
-no model calls at all and cost \$0.00; they take roughly 5 and 2 CPU-hours
-respectively. No GPUs or clusters were used, and reproducing the non-agentic
+supporting arms (Section~\ref{sec:vs-baseline} and
+Appendix~\ref{app:controlarm}) make no model calls at all and cost \$0.00: the
+budget-matched \Lzero{} arm takes 282\,s of wall clock for its three seeds
+(1.8\,h for the unlimited-data variant) and the control arm 2.0\,h for its
+eight runs. No GPUs or clusters were used, and reproducing the non-agentic
 parts of this paper requires neither.
 
 \paragraph{Ethical considerations and broader impact.}
@@ -362,20 +364,24 @@ ten runs, and whether their selection is model-informed is simply unknown:
 selection happens inside the library, so no workspace function chooses points.
 This is a structural consequence of giving an agent a library, not evasion---but
 it means the more scaffolding an evaluation provides, the less of the agent's
-reasoning stays inspectable. Every \Lthree{} cell with a classifiable chooser is
-model-informed. Relatedly, \hn{ursa} rounds largely did not record validation
+reasoning stays inspectable. Where a chooser can be classified at all, it usually does call the surrogate:
+22 of the 25 such runs at \Lthree{} and 12 of 15 at \Ltwo{}. Relatedly, \hn{ursa} rounds largely did not record validation
 error against baseline at the moment of choosing (median evidence-grounding
 $0.33$ at \Ltwo{} and $0.17$ at \Lthree{}, against $1.0$ elsewhere), so its
 stopping decisions cannot be falsified from its own artifacts at all.
 
 \paragraph{The whole solution shape.}
 Twelve further dimensions ask how each run solved the rest of the task
-(Appendix~\ref{app:shape}). Three are identical across all eight cells: the test
-set stays out of every model-fitting function, the pilot gate is enforced, and
-every run counts a solve only after re-reading its stored artifact and confirming
-finite values---the two process gates added after an earlier campaign held in
-59/59 runs, and no \Lthree{} run hand-built a mesh, so that prohibition held
-26/26. The interesting failure is the \emph{deliverable self-test}: the task
+(Appendix~\ref{app:shape}). Three are identical across all eight cells at the level of the
+\emph{modal} value---the test set stays out of every model-fitting function,
+the pilot gate is enforced, and a solve is counted only after its stored
+artifact is re-read and confirmed finite. A modal value hides the minority,
+though, and the per-run counts do not: of the 51 runs whose workspace can be
+read, 50 enforce the pilot gate, 46 validate storage (three claim it without
+evidence, two are unreadable), and 42 of the 43 with a readable answer keep the
+test set out of the fitting functions---\emph{one references it inside one}.
+The anti-Delaunay prohibition, by contrast, held outright: 26 of 26 \Lthree{}
+runs meshed through the solver's own API. The interesting failure is the \emph{deliverable self-test}: the task
 requires re-running the documented \code{predict.py} command in a fresh process
 before declaring done, and roughly half the corpus satisfies it by
 \emph{importing} the module instead. Code that has not been re-run the way it is

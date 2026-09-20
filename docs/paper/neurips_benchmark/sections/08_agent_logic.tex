@@ -48,11 +48,12 @@ the one its code computes.}
 \end{table}
 
 \paragraph{Method choice tracks the access level, not the substrate.}
-Table~\ref{tab:logic} shows a split no outcome metric reveals. \textbf{Every
-\Ltwo{} cell's primary model is kernel ridge} (17 of the 20 replicates with a
-classifiable primary)---the model the library's own zoo also selects in all six
-\Lzero{} runs---and \textbf{every \Lthree{} cell's is a hand-written PyTorch
-MLP} (25 of 26). Acquisition splits the same way: \Ltwo{} agents gravitate to
+Table~\ref{tab:logic} shows a split no outcome metric reveals. At \Ltwo{} the
+primary model is \textbf{kernel ridge in 19 of the 25 replicates with a
+classifiable primary}---modal in three of the four cells and tied first in the
+fourth, and the model the library's own zoo selects in all six \Lzero{} runs.
+At \Lthree{} it is \textbf{a hand-written PyTorch MLP in all 25}, without
+exception. Acquisition splits the same way: \Ltwo{} agents gravitate to
 residual-UCB and GP variance, the two strategies the \Ltwo{} prompt names as
 available in the library, while \Lthree{} agents converge on ensemble
 disagreement, which no prompt mentions. Four independent substrates, given a
@@ -74,8 +75,8 @@ twice.
 The task mandates up to three adaptive rounds whose points are chosen from the
 current model or data. The criterion actually changed between rounds in
 \textbf{2 of the 37} runs where it could be classified; the rest ran one rule
-three times. The crude failure---a stated criterion that is pure randomness---
-occurs in no cell; the subtler one, non-reactive adaptivity, is near-universal,
+three times. The crude failure---a stated criterion that is pure
+randomness---occurs in no cell; the subtler one, non-reactive adaptivity, is near-universal,
 which is consistent with the control arm finding little for a reactive
 criterion to earn at this budget.
 
@@ -92,9 +93,12 @@ happens inside the library, so no workspace function chooses points---a
 structural consequence of scaffolding, not evasion, but it means \textbf{the
 more scaffolding an evaluation provides, the less of the agent's reasoning stays
 inspectable}. Twelve further dimensions
-(Appendix~\ref{app:logicdetail}) show where the rest of the solution agrees---
-the test set stays out of every fitting function, the pilot and
-storage-validation gates hold in 59/59 runs, no \Lthree{} run hand-built a
-mesh---and the one mandatory constraint quietly violated: roughly half the
-corpus satisfies the deliverable self-test by \emph{importing}
-\code{predict.py} rather than re-running it in a fresh process.
+(Appendix~\ref{app:logicdetail}) show where the rest of the solution agrees and
+where it only nearly does. No \Lthree{} run hand-built a mesh (26/26, an
+explicit prohibition that held); the pilot gate is enforced in 50 of the 51 runs
+where it can be read, storage validation in 46 (three runs claim it without
+evidence), and the test set stays out of every model-fitting function in 42 of
+43---\emph{one run references it inside one}. The mandatory constraint most
+widely sidestepped is the deliverable self-test: 24 runs satisfy ``re-run the
+documented command in a fresh process'' by \emph{importing} \code{predict.py}
+instead, against 22 that actually subprocess it.
