@@ -1,7 +1,7 @@
 \section{The benchmark loop}
 \label{app:loop}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \resizebox{0.70\textwidth}{!}{%
 \begin{tikzpicture}[
@@ -208,7 +208,7 @@ Error is reported as a ratio to the mean-predictor baseline, so $1.0$ is ``no
 better than predicting the average field''. Summarised in
 Section~\ref{sec:characterisation}.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Scaling of surrogate error with training-set size. ``Best ratio'' is
 relative $L_2$ divided by the mean-predictor baseline, minimised over the model
@@ -226,7 +226,7 @@ $R^2$      & 0.804 & 0.840 & 0.865 & 0.876 & 0.922 & 0.948 & 0.956 & 0.959 \\
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Error ratio by sampling design at matched budget.}
 \label{tab:design}
@@ -242,7 +242,7 @@ $N$ & space-filling & random & clustered \\
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Out-of-distribution generalisation. Rows in bold are the transfer
 directions; both collapse to the mean predictor or worse.}
@@ -430,7 +430,7 @@ already has.
 \section{The verification plane}
 \label{app:verif}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.52\textwidth]{figures/fig_verification}
 \caption{The verification plane. Every point passed every contract gate.
@@ -442,7 +442,7 @@ baseline. Large honesty gaps and invalid artifacts are largely different runs.}
 \section{Cost against accuracy}
 \label{app:costfig}
 
-\begin{figure}[h]
+\begin{figure}[htbp]
 \centering
 \includegraphics[width=0.52\textwidth]{figures/fig_cost}
 \caption{What each cell's accuracy cost, at one model. A $13\times$ spread in

@@ -21,6 +21,10 @@
 
 % -------------------------------------------------------------- packages ---
 \usepackage[utf8]{inputenc}
+% T1: real braces in typewriter font (OT1 cmtt has none, so a brace in
+% \code{...} silently fell back to the math-symbol font), plus correct
+% hyphenation and copy-pasteable text in the PDF.
+\usepackage[T1]{fontenc}
 \usepackage[english]{babel}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{booktabs}
