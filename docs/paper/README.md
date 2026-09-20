@@ -1,6 +1,6 @@
 # Papers
 
-## Current paper: `mlst/`
+## Current paper: `mlst/` — and `mlst.zip` for Overleaf
 
 The full-length version, targeting **Machine Learning: Science and Technology**
 (IOP). This is the one to read and the one to submit. It exists because the

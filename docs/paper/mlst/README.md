@@ -11,7 +11,22 @@ appendix, the Grad–Shafranov equation arrived on page one with no explanation 
 what a tokamak or ψ is, and there was not a single physics figure. With no page
 limit, all of that comes back.
 
-## Build
+## Import into Overleaf
+
+Upload `../mlst.zip` via **New Project → Upload Project**. Its files sit at the
+zip root, so Overleaf picks up `main.tex` as the main document with nothing to
+configure. Compiler: pdfLaTeX (the default).
+
+`iopart.cls` travels in the zip, so the build does not depend on what Overleaf
+has installed.
+
+Rebuild the zip after editing:
+
+```bash
+cd docs/paper/mlst && latexmk -c && zip -qr ../mlst.zip . -x ".DS_Store" ".gitignore"
+```
+
+## Build locally
 
 ```bash
 latexmk -pdf main.tex
