@@ -1,15 +1,21 @@
 # Papers
 
-## Submission source: `neurips_benchmark/`
+## Current paper: `mlst/`
 
-The LaTeX build of the benchmark paper, targeting the **NeurIPS 2026
-Evaluations & Datasets track**, plus `neurips_benchmark.zip` for direct
-Overleaf import (New Project → Upload Project; compiler pdfLaTeX, main document
-`main.tex`). **The draft is complete**: every number is measured from
-`experiments/matrix-v4-20260919`, no `\FILL` slots remain, the Paper Checklist
-is answered, and `check_compliance.sh` passes every check. 9 pages of body, 30
-total. See `neurips_benchmark/README.md` for the two things to verify before
-submitting.
+The full-length version, targeting **Machine Learning: Science and Technology**
+(IOP). This is the one to read and the one to submit. It exists because the
+9-page conference draft was opaque to anyone without context; with no page
+limit the explanation and the physics figures go back in. 41 pages, builds
+clean. See `mlst/README.md`.
+
+## Frozen conference draft: `neurips_benchmark/`
+
+The 9-page NeurIPS Evaluations & Datasets version, complete and compliant as of
+commit `f6b0df8`: every number measured, the Paper Checklist answered,
+`check_compliance.sh` passing. **It is no longer maintained** — `mlst/` is. It
+is kept because the 9-page form is genuinely hard to reconstruct, and because
+the conference route may still be wanted. If you revive it, note that the
+physics figures added later are not wired into it.
 
 ## `results_v4.md` — the numbers ledger
 

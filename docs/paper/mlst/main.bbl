@@ -1,0 +1,250 @@
+\begin{thebibliography}{28}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Hansen et~al.(2024)Hansen, Stewart, Burgess, Pharr, Guizzo, Logak,
+  Nelson, and Paz-Soldan]{hansen2024tokamaker}
+C.~Hansen, I.~G. Stewart, D.~Burgess, M.~Pharr, S.~Guizzo, F.~Logak, A.~O.
+  Nelson, and C.~Paz-Soldan.
+\newblock {TokaMaker}: An open-source time-dependent {Grad-Shafranov} tool for
+  the design and modeling of axisymmetric fusion devices.
+\newblock \emph{Computer Physics Communications}, 298:\penalty0 109111, 2024.
+\newblock \doi{10.1016/j.cpc.2024.109111}.
+\newblock arXiv:2311.07719.
+
+\bibitem[Grad and Rubin(1958)]{grad1958hydromagnetic}
+H.~Grad and H.~Rubin.
+\newblock Hydromagnetic equilibria and force-free fields.
+\newblock In \emph{Proceedings of the Second United Nations International
+  Conference on the Peaceful Uses of Atomic Energy}, volume~31, pages 190--197.
+  United Nations, Geneva, 1958.
+
+\bibitem[Shafranov(1958)]{shafranov1958magnetohydrodynamical}
+V.~D. Shafranov.
+\newblock On magnetohydrodynamical equilibrium configurations.
+\newblock \emph{Soviet Physics JETP}, 6:\penalty0 545--554, 1958.
+
+\bibitem[Krastev(2026)]{krastev2026millisecond}
+Plamen~G. Krastev.
+\newblock Millisecond-scale neural operator surrogates for double-null
+  free-boundary {Grad-Shafranov} equilibria.
+\newblock \emph{arXiv preprint arXiv:2608.05555}, 2026.
+\newblock Harvard University; submitted 6 August 2026.
+
+\bibitem[Grandin et~al.(2026)Grandin, Mele, Galperti, Gonzales~Castineiras,
+  Hei{\ss}, and Cenedese]{grandin2026experimental}
+M.~Grandin, A.~Mele, C.~Galperti, D.~Gonzales~Castineiras, C.~Hei{\ss}, and
+  A.~Cenedese.
+\newblock Experimental validation of a fast control-oriented, physics-informed
+  surrogate model for plasma equilibrium reconstruction in the {TCV} tokamak.
+\newblock \emph{arXiv preprint arXiv:2606.09487}, 2026.
+\newblock with the TCV team and the EUROfusion Tokamak Exploitation team;
+  submitted 8 June 2026.
+
+\bibitem[Jimenez et~al.(2024)Jimenez, Yang, Wettig, Yao, Pei, Press, and
+  Narasimhan]{jimenez2024swebench}
+Carlos~E. Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir
+  Press, and Karthik Narasimhan.
+\newblock {SWE-bench}: Can language models resolve real-world {GitHub} issues?
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2024.
+
+\bibitem[Liu et~al.(2024)Liu, Yu, Zhang, Xu, Lei, Lai, Gu, Ding, Men, Yang,
+  Zhang, Deng, Zeng, Du, Zhang, Shen, Zhang, Su, Sun, Huang, Dong, and
+  Tang]{liu2024agentbench}
+Xiao Liu, Hao Yu, Hanchen Zhang, Yifan Xu, Xuanyu Lei, Hanyu Lai, Yu~Gu,
+  Hangliang Ding, Kaiwen Men, Kejuan Yang, Shudan Zhang, Xiang Deng, Aohan
+  Zeng, Zhengxiao Du, Chenhui Zhang, Sheng Shen, Tianjun Zhang, Yu~Su, Huan
+  Sun, Minlie Huang, Yuxiao Dong, and Jie Tang.
+\newblock {AgentBench}: Evaluating {LLMs} as agents.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2024.
+
+\bibitem[Chan et~al.(2025)Chan, Chowdhury, Jaffe, Aung, Sherburn, Mays,
+  Starace, Liu, Maksin, Patwardhan, Weng, and Madry]{chan2024mlebench}
+Jun~Shern Chan, Neil Chowdhury, Oliver Jaffe, James Aung, Dane Sherburn, Evan
+  Mays, Giulio Starace, Kevin Liu, Leon Maksin, Tejal Patwardhan, Lilian Weng,
+  and Aleksander Madry.
+\newblock {MLE-bench}: Evaluating machine learning agents on machine learning
+  engineering.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2025.
+
+\bibitem[Huang et~al.(2024)Huang, Vora, Liang, and
+  Leskovec]{huang2024mlagentbench}
+Qian Huang, Jian Vora, Percy Liang, and Jure Leskovec.
+\newblock {MLAgentBench}: Evaluating language agents on machine learning
+  experimentation.
+\newblock In \emph{Proceedings of the 41st International Conference on Machine
+  Learning (ICML)}, volume 235 of \emph{PMLR}, pages 20271--20309, 2024.
+
+\bibitem[Jing et~al.(2025)Jing, Huang, Wang, Yao, Yu, Ma, Zhang, Du, and
+  Yu]{jing2024dsbench}
+Liqiang Jing, Zhehui Huang, Xiaoyang Wang, Wenlin Yao, Wenhao Yu, Kaixin Ma,
+  Hongming Zhang, Xinya Du, and Dong Yu.
+\newblock {DSBench}: How far are data science agents from becoming data science
+  experts?
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2025.
+
+\bibitem[Chen et~al.(2025)Chen, Chen, Ning, Zhang, Wang, Yu, Li, Liao, Wei, Lu,
+  Dey, Xue, Baker, Burns, Adu-Ampratwum, Huang, Ning, Gao, Su, and
+  Sun]{chen2025scienceagentbench}
+Ziru Chen, Shijie Chen, Yuting Ning, Qianheng Zhang, Boshi Wang, Botao Yu,
+  Yifei Li, Zeyi Liao, Chen Wei, Zitong Lu, Vishal Dey, Mingyi Xue, Frazier~N.
+  Baker, Benjamin Burns, Daniel Adu-Ampratwum, Xuhui Huang, Xia Ning, Song Gao,
+  Yu~Su, and Huan Sun.
+\newblock {ScienceAgentBench}: Toward rigorous assessment of language agents
+  for data-driven scientific discovery.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, pages 12138--12194, 2025.
+
+\bibitem[Majumder et~al.(2025)Majumder, Surana, Agarwal, Mishra, Meena,
+  Prakhar, Vora, Khot, Sabharwal, and Clark]{majumder2025discoverybench}
+Bodhisattwa~Prasad Majumder, Harshit Surana, Dhruv Agarwal, Bhavana~Dalvi
+  Mishra, Abhijeetsingh Meena, Aryan Prakhar, Tirth Vora, Tushar Khot, Ashish
+  Sabharwal, and Peter Clark.
+\newblock {DiscoveryBench}: Towards data-driven discovery with large language
+  models.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2025.
+\newblock Allen Institute for AI.
+
+\bibitem[Mitchener et~al.(2025)Mitchener, Laurent, Andonian, Tenmann,
+  Narayanan, Wellawatte, White, Sani, and Rodriques]{mitchener2025bixbench}
+Ludovico Mitchener, Jon~M. Laurent, Alex Andonian, Benjamin Tenmann, Siddharth
+  Narayanan, Geemi~P. Wellawatte, Andrew White, Lorenzo Sani, and Samuel~G.
+  Rodriques.
+\newblock {BixBench}: A comprehensive benchmark for {LLM}-based agents in
+  computational biology.
+\newblock \emph{arXiv preprint arXiv:2503.00096}, 2025.
+\newblock FutureHouse.
+
+\bibitem[Siegel et~al.(2025)Siegel, Kapoor, Nadgir, Stroebl, and
+  Narayanan]{siegel2024corebench}
+Zachary~S. Siegel, Sayash Kapoor, Nitya Nadgir, Benedikt Stroebl, and Arvind
+  Narayanan.
+\newblock {CORE-Bench}: Fostering the credibility of published research through
+  a computational reproducibility agent benchmark.
+\newblock \emph{Transactions on Machine Learning Research (TMLR)}, 2025.
+
+\bibitem[Starace et~al.(2025)Starace, Jaffe, Sherburn, Aung, Chan, Maksin,
+  Dias, Mays, Kinsella, Thompson, Heidecke, Glaese, and
+  Patwardhan]{starace2025paperbench}
+Giulio Starace, Oliver Jaffe, Dane Sherburn, James Aung, Jun~Shern Chan, Leon
+  Maksin, Rachel Dias, Evan Mays, Benjamin Kinsella, Wyatt Thompson, Johannes
+  Heidecke, Amelia Glaese, and Tejal Patwardhan.
+\newblock {PaperBench}: Evaluating {AI}'s ability to replicate {AI} research.
+\newblock \emph{arXiv preprint arXiv:2504.01848}, 2025.
+
+\bibitem[Wijk et~al.(2024)Wijk, Lin, Becker, Jawhar, Parikh, Broadley, Chan,
+  Chen, Clymer, Dhyani, Ericheva, Garcia, Goodrich, Jurkovic, Karnofsky,
+  Kinniment, Lajko, Nix, Sato, Saunders, Taran, West, and
+  Barnes]{wijk2024rebench}
+Hjalmar Wijk, Tao Lin, Joel Becker, Sami Jawhar, Neev Parikh, Thomas Broadley,
+  Lawrence Chan, Michael Chen, Josh Clymer, Jai Dhyani, Elena Ericheva,
+  Katharyn Garcia, Brian Goodrich, Nikola Jurkovic, Holden Karnofsky, Megan
+  Kinniment, Aron Lajko, Seraphina Nix, Lucas Sato, William Saunders, Maksym
+  Taran, Ben West, and Elizabeth Barnes.
+\newblock {RE-Bench}: Evaluating frontier {AI} {R\&D} capabilities of language
+  model agents against human experts.
+\newblock \emph{arXiv preprint arXiv:2411.15114}, 2024.
+\newblock METR.
+
+\bibitem[Settles(2009)]{settles2009active}
+Burr Settles.
+\newblock Active learning literature survey.
+\newblock Computer Sciences Technical Report 1648, University of
+  Wisconsin--Madison, 2009.
+
+\bibitem[Chaloner and Verdinelli(1995)]{chaloner1995bayesian}
+Kathryn Chaloner and Isabella Verdinelli.
+\newblock Bayesian experimental design: A review.
+\newblock \emph{Statistical Science}, 10\penalty0 (3):\penalty0 273--304, 1995.
+\newblock \doi{10.1214/ss/1177009939}.
+
+\bibitem[McKay et~al.(1979)McKay, Beckman, and Conover]{mckay1979lhs}
+M.~D. McKay, R.~J. Beckman, and W.~J. Conover.
+\newblock A comparison of three methods for selecting values of input variables
+  in the analysis of output from a computer code.
+\newblock \emph{Technometrics}, 21\penalty0 (2):\penalty0 239--245, 1979.
+
+\bibitem[Bragg et~al.(2025)Bragg, D'Arcy, et~al.]{bragg2025astabench}
+Jonathan Bragg, Mike D'Arcy, et~al.
+\newblock {AstaBench}: Rigorous benchmarking of {AI} agents with a scientific
+  research suite.
+\newblock \emph{arXiv preprint arXiv:2510.21652}, 2025.
+\newblock Allen Institute for AI.
+
+\bibitem[Zhang et~al.(2026)Zhang, Wang, Ge, Xu, Hamm, and
+  Reddy]{zhang2026harness}
+Yunbei Zhang, Janet Wang, Yingqiang Ge, Weijie Xu, Jihun Hamm, and Chandan~K.
+  Reddy.
+\newblock Stop comparing {LLM} agents without disclosing the harness.
+\newblock \emph{arXiv preprint arXiv:2605.23950}, 2026.
+
+\bibitem[Grosskopf et~al.(2025)Grosskopf, Debardeleben, Bent, Somasundaram,
+  Michaud, Lui, Wadell, Graham, Wimmer, Shivakumar, Vendrell~Gallart,
+  Nagarajan, and Lawrence]{ursa2025}
+Michael Grosskopf, Nathan Debardeleben, Russell Bent, Rahul Somasundaram, Isaac
+  Michaud, Arthur Lui, Alexius Wadell, Warren~D. Graham, Golo~A. Wimmer, Sachin
+  Shivakumar, Joan Vendrell~Gallart, Harsha Nagarajan, and Earl Lawrence.
+\newblock {URSA}: The universal research and scientific agent, 2025.
+\newblock Los Alamos National Laboratory. Software:
+  \url{https://github.com/lanl/ursa}.
+
+\bibitem[Chase(2022)]{langchain2022}
+Harrison Chase.
+\newblock {LangChain}.
+\newblock \url{https://github.com/langchain-ai/langchain}, 2022.
+\newblock Software; citation metadata from the repository's
+  \texttt{CITATION.cff}, dated 2022-10-17.
+
+\bibitem[Khattab et~al.(2024)Khattab, Singhvi, Maheshwari, Zhang, Santhanam,
+  Vardhamanan, Haq, Sharma, Joshi, Moazam, Miller, Zaharia, and
+  Potts]{khattab2024dspy}
+Omar Khattab, Arnav Singhvi, Paridhi Maheshwari, Zhiyuan Zhang, Keshav
+  Santhanam, Sri Vardhamanan, Saiful Haq, Ashutosh Sharma, Thomas~T. Joshi,
+  Hanna Moazam, Heather Miller, Matei Zaharia, and Christopher Potts.
+\newblock {DSPy}: Compiling declarative language model calls into
+  self-improving pipelines.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2024.
+
+\bibitem[Agrawal et~al.(2026)Agrawal, Tan, Soylu, Ziems, Khare, Opsahl-Ong,
+  Singhvi, Shandilya, Ryan, Jiang, Potts, Sen, Dimakis, Stoica, Klein, Zaharia,
+  and Khattab]{agrawal2025gepa}
+Lakshya~A. Agrawal, Shangyin Tan, Dilara Soylu, Noah Ziems, Rishi Khare, Krista
+  Opsahl-Ong, Arnav Singhvi, Herumb Shandilya, Michael~J. Ryan, Meng Jiang,
+  Christopher Potts, Koushik Sen, Alexandros~G. Dimakis, Ion Stoica, Dan Klein,
+  Matei Zaharia, and Omar Khattab.
+\newblock {GEPA}: Reflective prompt evolution can outperform reinforcement
+  learning.
+\newblock In \emph{International Conference on Learning Representations
+  (ICLR)}, 2026.
+\newblock Oral. arXiv:2507.19457.
+
+\bibitem[Wilson(1927)]{wilson1927probable}
+Edwin~B. Wilson.
+\newblock Probable inference, the law of succession, and statistical inference.
+\newblock \emph{Journal of the American Statistical Association}, 22\penalty0
+  (158):\penalty0 209--212, 1927.
+\newblock \doi{10.1080/01621459.1927.10502953}.
+
+\bibitem[Efron(1979)]{efron1979bootstrap}
+B.~Efron.
+\newblock Bootstrap methods: Another look at the jackknife.
+\newblock \emph{The Annals of Statistics}, 7\penalty0 (1):\penalty0 1--26,
+  1979.
+\newblock \doi{10.1214/aos/1176344552}.
+
+\bibitem[van Elteren(1960)]{vanelteren1960combination}
+P.~H. van Elteren.
+\newblock On the combination of independent two-sample tests of wilcoxon.
+\newblock \emph{Bulletin of the International Statistical Institute},
+  37:\penalty0 351--361, 1960.
+
+\end{thebibliography}

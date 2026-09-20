@@ -1,0 +1,63 @@
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\small,
+  box/.style={draw=black!55, rounded corners=2pt, align=center, inner sep=4pt,
+              minimum height=9mm, text width=30mm},
+  ag/.style={box, fill=blue!6,   draw=blue!60},
+  sv/.style={box, fill=orange!8, draw=orange!70},
+  ev/.style={box, fill=green!8,  draw=green!45!black},
+  dl/.style={box, fill=black!4},
+  fl/.style={-{Stealth[length=2mm]}, draw=black!70, thick},
+  lb/.style={font=\scriptsize\itshape, text=black!60},
+  hd/.style={font=\scriptsize\bfseries, text=black!70},
+]
+
+% ---- left: inside the evaluated cell ----
+\node[dl] (task)  at (0,0)      {frozen task spec\\[1pt]{\scriptsize 5 parameters $\cdot$ solve budget\\ process gates}};
+\node[ag] (agent) at (0,-2.1)   {agent harness\\[1pt]{\scriptsize \Ltwo{} library-assisted\\ \Lthree{} from scratch}};
+\node[sv] (solv)  at (5.4,-2.1) {TokaMaker\\[1pt]{\scriptsize \GS{} FE solver}};
+\node[dl] (deliv) at (0,-4.6)   {deliverable\\[1pt]{\scriptsize \code{report.json}\\ \code{predict.py}}};
+
+\draw[fl] (task) -- (agent);
+\draw[fl] ([yshift=3.5mm]agent.east) -- ([yshift=3.5mm]solv.west)
+      node[midway,above,lb]{params};
+\draw[fl] ([yshift=-3.5mm]solv.west) -- ([yshift=-3.5mm]agent.east)
+      node[midway,below,lb]{$\psi$ or failure};
+\draw[fl] (agent) -- (deliv);
+
+\node[lb, text width=36mm, align=center] at (5.4,-3.2)
+     {$\le 450$ solves, 3 adaptive rounds};
+
+% ---- separator ----
+\draw[dashed, black!45] (7.7,1.0) -- (7.7,-5.5);
+\node[hd, anchor=south] at (2.7,0.85) {inside the evaluated cell};
+\node[hd, anchor=south] at (10.9,0.85) {independent evaluation};
+
+% ---- right: evaluation the agent never sees ----
+\node[ev] (gates) at (10.9,-0.4) {contract gates\\[1pt]{\scriptsize did it deliver?}};
+\node[ev] (score) at (10.9,-2.5) {frozen test set\\[1pt]{\scriptsize 60 held-out solves\\ relative $L_2$}};
+\node[ev] (diag)  at (10.9,-4.6) {diagnostics\\[1pt]{\scriptsize valid? honest?}};
+
+\coordinate (bus) at (8.6,-4.6);
+\draw[fl] (deliv.east) -- (bus);
+\draw[fl] (bus) -- (diag.west);
+\draw[fl] (bus) |- (score.west);
+\draw[fl] (bus) |- (gates.west);
+
+\end{tikzpicture}%
+}
+\caption{The benchmark loop. Everything inside the dashed line is the agent's
+own business: it is handed a frozen task specification and a solver, and it must
+decide which equilibria to compute, spending a fixed budget across an initial
+design and up to three adaptive rounds. What it hands over is a small set of
+files. Everything to the right of the dashed line happens outside the agent's
+reach --- the files are checked mechanically, the predictor is run on sixty
+held-out cases the agent never sees, and the result is put through diagnostics
+that ask whether the field is physically meaningful and whether the agent's own
+report of its performance was true. Every condition in this paper, including
+the two that use no language model at all, passes through that identical
+right-hand column.}
+\label{fig:loop}
+\end{figure}

@@ -1,0 +1,172 @@
+\section{Reproducing this work}
+\label{app:repro}
+
+{\footnotesize
+\begin{verbatim}
+pip install -e ".[ml,dev,harnesses]"
+python -m autotokamak.bench freeze-testset     # rebuild the frozen ground truth
+
+tools/campaign_guard.py preflight --harnesses "ursa dspy pi cursor" \
+                        --task benchmarks/tasks/L3_mini_v3.yaml
+tools/run_campaign.sh --tag <tag> --reps 5 --parallel 6 --budget-usd 250 \
+                      --harnesses "ursa dspy pi cursor"
+
+python tools/cost_report.py           --tag <tag>
+python tools/aggregate_matrix.py      --tag <tag>   # main table + all three tests
+python tools/render_paper_figures.py  --tag <tag> --out <paper>/figures
+python tools/render_physics_figures.py --tag <tag> --out <paper>/figures
+python tools/render_paper_tables.py   --tag <tag> --out <paper>/tables
+
+python tools/run_library_baseline.py --n-samples 450 --seeds 0 1 2   # the L0 arm
+python tools/run_control_arm.py      --reps 4                        # Sec. 7.8
+python tools/judge_code.py score --tag <tag> --judge-provider openai \
+                                 --samples 3 --per-cell 3
+\end{verbatim}
+}
+
+Every run records the task's SHA-256, its prompt version, its model string and
+its replicate index. The frozen test set carries provenance attributes --- the
+solver version, hashes of both the parameter file and the grid specification,
+and a scoring epoch --- and is never regenerated in place; results are pooled
+only within one epoch. The statistics are seeded (bootstrap and both
+permutation tests use seed \code{20260917}, with 10\,000 and 20\,000 resamples
+respectively), so the analysis reproduces exactly from the archived runs. Every
+figure and appendix table in this paper is generated from those artifacts by
+the scripts above rather than transcribed by hand.
+
+The one thing that does \emph{not} reproduce exactly is the agent runs
+themselves. They are stochastic, and the substrates are versioned third-party
+software that moves underneath us. That is why the campaign is replicated and
+reported with intervals rather than as point estimates.
+
+\section{Frozen assets}
+\label{app:assets}
+
+\begin{itemize}
+\item \code{benchmarks/assets/eval\_grid.json} --- the evaluation grid: 64
+  points in $\Rgrid \in [0.15, 0.80]$\,m and 96 in
+  $\Zgrid \in [-0.40, 0.40]$\,m, both linearly spaced. Flux arrays are stored
+  $(N, 96, 64)$, that is $(N, n_Z, n_R)$.
+\item \code{benchmarks/assets/test\_params.json} --- the 60 held-out parameter
+  vectors, generated with seed \code{20260809}.
+\item \code{benchmarks/assets/test\_set.h5} --- the ground-truth flux fields.
+  All 60 solves converged; 80.46\% of grid points are \texttt{NaN}, outside the
+  plasma. Provenance attributes record the stamp time, the solver version
+  (26.6), the SHA-256 of both the parameter file and the grid, the sweep
+  configuration and its hash, and the scoring epoch (\code{2026-08-18}).
+\item \code{benchmarks/assets/prices.json} --- the dated price table behind
+  every derived cost figure, so that a published dollar amount is traceable to
+  the rates it was computed with.
+\item \code{benchmarks/assets/scaling\_report.json} --- the task-characterisation
+  sweep behind Figure~\ref{fig:taskchar} and Appendix~\ref{app:characterisation}.
+\item \code{benchmarks/tasks/*.yaml} --- the task specifications.
+\end{itemize}
+
+\section{Task characterisation in full}
+\label{app:characterisation}
+
+From a direct sweep independent of any agent: a pool of 9993 converged solves
+with a 1499-case held-out test split. Error is reported as a ratio to the
+mean-predictor baseline, so $1.0$ means ``no better than predicting the average
+field''. Summarised as Figure~\ref{fig:taskchar}.
+
+\begin{table}[htbp]
+\caption{Scaling of surrogate error with training-set size. ``Best ratio'' is
+relative $L_2$ divided by the mean-predictor baseline, minimised over the model
+zoo. The winning family changes at $N = 400$.}
+\label{tab:scale}
+\small
+\begin{indented}\item[]
+\begin{tabular}{@{}lrrrrrrrr@{}}
+\toprule
+$N$ & 50 & 100 & 200 & 400 & 800 & 1600 & 3200 & 6400 \\
+\midrule
+best ratio & 0.575 & 0.526 & 0.485 & 0.465 & 0.369 & 0.303 & 0.278 & 0.268 \\
+$R^2$      & 0.804 & 0.840 & 0.865 & 0.876 & 0.922 & 0.948 & 0.956 & 0.959 \\
+\bottomrule
+\end{tabular}
+\end{indented}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Error ratio by sampling design at matched budget.}
+\label{tab:design}
+\small
+\begin{indented}\item[]
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+$N$ & space-filling & random & clustered \\
+\midrule
+100  & \textbf{0.550} & 0.699 & 0.963 \\
+400  & \textbf{0.358} & 0.438 & 0.873 \\
+1600 & \textbf{0.289} & 0.309 & 0.808 \\
+\bottomrule
+\end{tabular}
+\end{indented}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Out-of-distribution generalisation. The transfer directions, in bold,
+collapse to the mean predictor or worse.}
+\label{tab:ood}
+\small
+\begin{indented}\item[]
+\begin{tabular}{@{}lrr@{}}
+\toprule
+train $\rightarrow$ test & ratio & $R^2$ \\
+\midrule
+low $\rightarrow$ low   & 0.376 & 0.927 \\
+high $\rightarrow$ high & 0.401 & 0.919 \\
+\textbf{low $\rightarrow$ high}  & \textbf{0.943} & \textbf{0.280} \\
+\textbf{high $\rightarrow$ low}  & \textbf{0.937} & \textbf{$-0.097$} \\
+\bottomrule
+\end{tabular}
+\end{indented}
+\end{table}
+
+Dimensionality reduction bottoms out near $k \approx 24$ PCA components (ratio
+$0.293$) and degrades slightly by $k = 32$, confirming the field is low-rank but
+not as low-rank as normalised flux would be. Retaining physical webers costs
+rank and is still the right choice, because per-sample normalisation destroys
+the $\Ip$ dependence entirely.
+
+\section{The task text, and how the two levels differ}
+\label{app:tasktext}
+
+The \Lthree{} problem statement is reproduced verbatim below. The \Ltwo{} text
+is byte-identical except for the ten passages that follow, every one of which
+concerns access level: the title, the description of the solver, the three
+pipeline steps where the library would be used, the workspace and environment
+bullets, the advice about the solver's single global environment, and the
+constraints block. The parameter ranges, the budget, the stopping criterion,
+the evaluation interface, all five deliverables, the instruction not to
+fabricate metrics, and the three process gates are identical.
+
+\subsection{The \Lthree{} problem statement}
+\input{tables/task_text_L3}
+
+\subsection{Every difference from the \Ltwo{} statement}
+\input{tables/task_diff}
+
+\section{Solution-shape cross comparison}
+\label{app:shape}
+
+Twelve questions, each answered from the code that plays the relevant role,
+with \code{file:line} evidence recorded per run. Cells are abbreviated by level
+and harness: \code{2c} is \Ltwo{}-\hn{cursor}, \code{3u} is
+\Lthree{}-\hn{ursa}, and so on. A dash means the dimension is not answerable
+for that cell, which at \Ltwo{} generally means the library owns that part of
+the pipeline and no workspace code implements it.
+
+\begin{center}
+\scriptsize
+\input{tables/solution_shape}
+\end{center}
+
+\section{Glossary of canonical values}
+\label{app:glossary}
+
+Every code printed in Table~\ref{tab:logic} and Appendix~\ref{app:shape}. A
+code the reader has to guess at is not a measurement.
+
+\input{tables/glossary}
