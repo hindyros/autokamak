@@ -39,9 +39,14 @@ jobs:
       - name: Test
         run: pytest tests/ -q
 
+      # This repository leaked ~150 absolute developer paths for months via
+      # stale run archives, so the check is worth having. Excluded: this file
+      # and PUBLISHING.md, which quote the pattern; and notebooks, whose cell
+      # outputs are scrubbed separately.
       - name: No absolute paths from a developer machine
         run: |
-          if git grep -nI "/Users/\|/home/[a-z]" -- . ':!*.ipynb'; then
+          if git grep -nI "/Users/\|/home/[a-z]" -- . \
+               ':!*.ipynb' ':!.github/workflows/ci.yml' ':!PUBLISHING.md'; then
             echo "::error::an absolute developer path is tracked"
             exit 1
           fi

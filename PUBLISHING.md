@@ -22,7 +22,9 @@ ruff check src tools tests
 pytest tests/ -q
 
 # No developer paths anywhere in the tracked tree.
-git grep -nI "/Users/\|/home/[a-z]" -- . ':!*.ipynb' && echo "FOUND -- stop" || echo "clean"
+git grep -nI "/Users/\|/home/[a-z]" -- . \
+  ':!*.ipynb' ':!.github/workflows/ci.yml' ':!PUBLISHING.md' \
+  && echo "FOUND -- stop" || echo "clean"
 
 # No key-shaped strings.
 git grep -nIE "sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}" -- . \

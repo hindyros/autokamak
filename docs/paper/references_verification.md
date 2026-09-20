@@ -71,3 +71,26 @@ releases. The closest new work found:
   harnesses, measured spread.
 
 Neither displaces the claim, which is retained and narrowed in the text.
+
+## Added for the journal version (checked 2026-09-20)
+
+Two citations were added to §2 so that the motivation for a Grad–Shafranov
+surrogate rests on the live literature rather than on assertion. Both were
+verified by fetching the arXiv abstract page directly, not from a search
+summary.
+
+| key | verdict | confirmed against | fields |
+|---|---|---|---|
+| `krastev2026millisecond` | confirmed as preprint | arxiv.org/abs/2608.05555 | *Millisecond-Scale Neural Operator Surrogates for Double-Null Free-Boundary Grad–Shafranov Equilibria*; sole author Plamen G. Krastev (Harvard); submitted 6 August 2026 |
+| `grandin2026experimental` | confirmed as preprint | arxiv.org/abs/2606.09487 | *Experimental validation of a fast control-oriented, physics-informed surrogate model for plasma equilibrium reconstruction in the TCV tokamak*; M. Grandin, A. Mele, C. Galperti, D. Gonzales Castineiras, C. Heiß, A. Cenedese, with the TCV team and the EUROfusion Tokamak Exploitation team; submitted 8 June 2026 |
+
+The full author lists were read from the abstract pages rather than inferred;
+the two collaboration authorships are recorded in the `note` field rather than
+dropped, because omitting them would misstate the authorship.
+
+Also verified in passing while writing §2, and used without citation because
+they are textbook material rather than results: the Grad–Shafranov operator
+$\Delta^{*} = \partial_{RR} - R^{-1}\partial_R + \partial_{ZZ}$, and that
+contours of $\psi$ are the magnetic flux surfaces with the outermost closed
+one the plasma boundary. The equation itself is cited to Grad & Rubin (1958)
+and Shafranov (1958), both already verified above.
