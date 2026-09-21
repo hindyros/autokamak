@@ -158,7 +158,7 @@ def fig_primer(frozen, out: Path) -> None:
     from autotokamak.core.geometry import build_lcfs
 
     fig = plt.figure(figsize=(6.6, 2.5))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.1, 1.25], wspace=0.40)
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.0, 1.05, 1.15], wspace=0.34)
 
     # (a) the shape and the five parameters that set it
     ax = fig.add_subplot(gs[0])
@@ -167,8 +167,6 @@ def fig_primer(frozen, out: Path) -> None:
     ax.fill(b[:, 0], b[:, 1], color="#d8e6f3", zorder=0)
     ax.plot(b[:, 0], b[:, 1], "k-", lw=1.2, zorder=3)
     ax.plot([0, 0], [-0.30, 0.34], color="0.6", lw=0.8, ls=(0, (5, 3)))
-    ax.text(-0.018, 0.0, "axis of symmetry", fontsize=5.8, color="0.45",
-            rotation=90, va="center", ha="center")
     ax.annotate("", xy=(r0, 0), xytext=(0, 0), zorder=4,
                 arrowprops=dict(arrowstyle="->", lw=0.8, color="#B8860B"))
     ax.text(r0 / 2, 0.016, r"$r_0$", color="#B8860B", fontsize=8, ha="center", zorder=5)
@@ -185,6 +183,7 @@ def fig_primer(frozen, out: Path) -> None:
             fontsize=8, ha="right", va="center", zorder=5)
     ax.set_xlim(-0.06, 0.70); ax.set_ylim(-0.31, 0.33)
     ax.set_aspect("equal"); ax.set_xlabel("$R$ [m]"); ax.set_ylabel("$Z$ [m]")
+    ax.set_xticks([0.0, 0.3, 0.6]); ax.set_yticks([-0.2, 0.0, 0.2])
     ax.set_title("(a) the plasma boundary", fontsize=8)
     for s_ in ax.spines.values():
         s_.set_linewidth(0.4)
@@ -198,22 +197,26 @@ def fig_primer(frozen, out: Path) -> None:
                     lcfs=_lcfs_for(frozen["records"][i]))
     ax.set_title("(b) the solved flux", fontsize=8)
     ax.set_xlabel("$R$ [m]"); ax.set_ylabel("$Z$ [m]")
-    cb = fig.colorbar(pc, ax=ax, shrink=0.86, pad=0.04)
-    cb.set_label(r"$\psi$ [Wb]", fontsize=7); cb.ax.tick_params(labelsize=6)
+    cb = fig.colorbar(pc, ax=ax, shrink=0.72, aspect=16, pad=0.035)
+    cb.ax.set_xlabel(r"$\psi$ [Wb]", fontsize=6.5, labelpad=3)
+    cb.ax.tick_params(labelsize=6)
+    cb.locator = plt.MaxNLocator(4); cb.update_ticks()
 
     # (c) what elongation and triangularity do to the shape
     ax = fig.add_subplot(gs[2])
     kappas, deltas = [1.0, 1.3, 1.6], [0.0, 0.2, 0.4]
+    dx, dy = 2.6, 2.4
+    a_shape = 0.65
     for k, kap in enumerate(kappas):
         for j, dl in enumerate(deltas):
-            bb = build_lcfs(r0=0.0, z0=0.0, a=1.0, kappa=kap, delta=dl, npts=200)
-            ax.plot(bb[:, 0] + j * 3.0, bb[:, 1] + (1 - k) * 4.0,
+            bb = build_lcfs(r0=0.0, z0=0.0, a=a_shape, kappa=kap, delta=dl, npts=200)
+            ax.plot(bb[:, 0] + j * dx, bb[:, 1] + (1 - k) * dy,
                     "-", lw=0.9, color=plt.cm.viridis(0.12 + 0.35 * k))
     for j, dl in enumerate(deltas):
-        ax.text(j * 3.0, -6.9, f"$\\delta={dl}$", ha="center", fontsize=6.5)
+        ax.text(j * dx, -1.72 * dy, f"$\\delta={dl}$", ha="center", fontsize=6.5)
     for k, kap in enumerate(kappas):
-        ax.text(-2.7, (1 - k) * 4.0, f"$\\kappa={kap}$", va="center", ha="center", fontsize=6.5)
-    ax.set_xlim(-4.0, 7.4); ax.set_ylim(-7.6, 6.4)
+        ax.text(-1.55, (1 - k) * dy, f"$\\kappa={kap}$", va="center", ha="right", fontsize=6.5)
+    ax.set_xlim(-2.5, 2 * dx + 1.0); ax.set_ylim(-1.92 * dy, 1.36 * dy)
     ax.set_aspect("equal"); ax.axis("off")
     ax.set_title("(c) what the shape parameters do", fontsize=8)
 
@@ -350,7 +353,7 @@ def fig_task_character(report: Path, out: Path) -> None:
     plt = _style()
     d = json.loads(report.read_text())
 
-    fig, axes = plt.subplots(1, 3, figsize=(6.6, 1.95), gridspec_kw={"wspace": 0.34})
+    fig, axes = plt.subplots(1, 3, figsize=(6.8, 2.0), gridspec_kw={"wspace": 0.30})
 
     # (a) learning curve, with the winning model family marked
     ax = axes[0]
@@ -389,7 +392,9 @@ def fig_task_character(report: Path, out: Path) -> None:
     ax.legend(frameon=False, fontsize=6)
     ax.set_title("(b) at matched budget, where\nyou sample matters", fontsize=7.5)
 
-    # (c) out-of-distribution collapse
+    # (c) out-of-distribution collapse.
+    # Category labels go INSIDE the bars. As y-tick labels they sit outside the
+    # axes and, at the width this figure is printed, collide with panel (b).
     ax = axes[2]
     shift = {s["shift"]: s for s in d["expD_shift"]}
     order = ["train_low\u2192test_low", "train_high\u2192test_high",
@@ -399,12 +404,21 @@ def fig_task_character(report: Path, out: Path) -> None:
     vals = [shift[o]["ratio"] for o in order]
     cols = ["#1F4E79", "#1F4E79", "#8c2d2d", "#8c2d2d"]
     ax.barh(range(4), vals, color=cols, height=0.62)
+    for i, (lab, v, col) in enumerate(zip(labels, vals, cols, strict=True)):
+        # Inside the bar where it fits, just outside where it does not.
+        if v > 0.6:
+            ax.text(0.03, i, lab, va="center", ha="left", fontsize=6.4,
+                    color="white", fontweight="bold")
+        else:
+            ax.text(v + 0.03, i, lab, va="center", ha="left", fontsize=6.4,
+                    color=col)
     ax.axvline(1.0, color="0.35", lw=0.8, ls=(0, (4, 2)))
-    ax.text(0.98, 0.15, "no better than\nthe mean map", fontsize=5.8, color="0.35",
-            va="bottom", ha="right")
-    ax.set_yticks(range(4)); ax.set_yticklabels(labels, fontsize=6.5)
+    ax.text(0.95, 3.62, "no better than the mean map", fontsize=5.8,
+            color="0.35", va="center", ha="right")
+    ax.set_yticks([])
     ax.invert_yaxis()
-    ax.set_xlabel("error / mean-map baseline"); ax.set_xlim(0, 1.12)
+    ax.set_xlabel("error / mean-map baseline")
+    ax.set_xlim(0, 1.12); ax.set_ylim(3.9, -0.7)
     ax.set_title("(c) outside its training region the\nsurrogate collapses", fontsize=7.5)
 
     fig.savefig(out / "fig_task_character.pdf", bbox_inches="tight")

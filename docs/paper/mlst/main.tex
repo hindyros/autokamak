@@ -36,6 +36,10 @@
 \usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc,fit,backgrounds}
 \usepackage[colorlinks=true,linkcolor=black,citecolor=black,
             urlcolor=blue!55!black]{hyperref}
+% Keep floats inside the section that discusses them. Without this, Figure 5
+% drifted two pages earlier and appeared above the heading of the section it
+% belongs to.
+\usepackage[section]{placeins}
 
 % MLST postdates this class file, so name it here.
 \newcommand{\MLST}{{\it Mach. Learn.: Sci. Technol.}}

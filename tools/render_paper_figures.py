@@ -116,8 +116,8 @@ def fig_levels(runs, cells, out: Path) -> None:
                 bbox=dict(boxstyle="round,pad=0.12", fc="white",
                           ec="none", alpha=0.85))
     ax.axhline(BASELINE, color="crimson", linewidth=0.8, linestyle=(0, (4, 2)))
-    ax.text(-0.52, BASELINE * 1.09, "mean-map baseline", fontsize=6.5,
-            color="crimson", ha="left")
+    ax.text(-0.52, BASELINE * 0.86, "mean-map baseline", fontsize=6.5,
+            color="crimson", ha="left", va="top")
     ax.set_yscale("log")
     ax.set_ylim(0.012, 4.2)
     ax.set_xlim(-0.55, 3.55)
@@ -128,7 +128,8 @@ def fig_levels(runs, cells, out: Path) -> None:
                           label={"L2": "L2 library-assisted",
                                  "L3": "L3 from scratch"}[k])
                for k in ("L2", "L3")]
-    ax.legend(handles=handles, loc="lower left", frameon=False, ncol=2)
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.13),
+              ncol=2, frameon=False, handlelength=1.6, columnspacing=2.0)
     fig.tight_layout(pad=0.4)
     fig.savefig(out / "fig_levels.pdf")
     plt.close(fig)
@@ -152,13 +153,16 @@ def fig_verification(runs, out: Path) -> None:
                    zorder=3, **style)
     ax.axhline(0, color="0.5", linewidth=0.7)
     ax.axvline(BASELINE, color="crimson", linewidth=0.8, linestyle=(0, (4, 2)))
-    ax.text(BASELINE * 1.06, 1.55, "no better than\nthe mean map", fontsize=6,
-            color="crimson", va="top")
     ax.set_xscale("log")
+    ax.set_ylim(-1.15, 2.05)          # headroom: the largest gap is +1.76
+    ax.text(BASELINE * 1.14, 1.32, "no better than\nthe mean map", fontsize=6,
+            color="crimson", va="center")
     ax.set_xlabel(r"independently scored relative $L_2$")
     ax.set_ylabel("honesty gap  (self $-$ scored)")
-    ax.text(0.022, -0.78, "claimed better\nthan it was", fontsize=6, color="0.3")
-    ax.legend(loc="upper left", frameon=False)
+    ax.text(0.022, -0.62, "claimed better\nthan it was", fontsize=6, color="0.3",
+            va="top")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.20), ncol=2,
+              frameon=False, handletextpad=0.4, columnspacing=1.4)
     fig.tight_layout(pad=0.4)
     fig.savefig(out / "fig_verification.pdf")
     plt.close(fig)
@@ -191,7 +195,8 @@ def fig_cost(cells, costs, out: Path) -> None:
         plt.Line2D([], [], marker="^", linestyle="", color=LEVEL_COLOUR["L3"],
                    label="L3 from scratch"),
     ]
-    ax.legend(handles=handles, loc="lower left", frameon=False)
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.22),
+              ncol=2, frameon=False, handletextpad=0.4, columnspacing=1.6)
     fig.tight_layout(pad=0.4)
     fig.savefig(out / "fig_cost.pdf")
     plt.close(fig)
