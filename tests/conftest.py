@@ -3,9 +3,21 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
+
+# CI installs no Grad-Shafranov solver on purpose: OpenFUSIONToolkit is a
+# heavy dependency and the offline suite does not need it. A handful of
+# tests genuinely do -- `build_lcfs` calls OFT's `create_isoflux`, and the
+# sweep smoke test performs real solves. Those skip rather than error, so a
+# clean clone with only the light dependencies still gets a green run.
+requires_oft = pytest.mark.skipif(
+    importlib.util.find_spec("OpenFUSIONToolkit") is None,
+    reason="OpenFUSIONToolkit not installed",
+)
 
 
 def smooth_psi(inputs: np.ndarray, nz: int = 8, nr: int = 6, seed: int = 0) -> np.ndarray:

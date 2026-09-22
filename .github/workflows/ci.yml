@@ -24,10 +24,18 @@ jobs:
       # The base dependency set pulls URSA and LangChain, which the linter and
       # the offline tests do not need. Installing only what the checks use
       # keeps CI fast and stops a provider SDK's release breaking the build.
+      #
+      # scikit-learn/joblib/optuna/python-dotenv ARE needed: the surrogate,
+      # persistence, search and config paths are covered by the offline
+      # suite. Omitting them silently skipped ~75 tests' worth of coverage
+      # by turning it into 46 collection errors. OpenFUSIONToolkit stays
+      # out on purpose (heavy, and a solver is not needed offline); the few
+      # tests that genuinely need it carry @requires_oft and skip.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest pydantic pyyaml numpy scipy h5py
+          pip install ruff pytest pydantic pyyaml numpy scipy h5py \
+                      scikit-learn joblib optuna python-dotenv
           pip install -e . --no-deps
 
       - name: Lint

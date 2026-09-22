@@ -5,14 +5,17 @@ import numpy as np
 import pytest
 
 from autotokamak.core.geometry import build_lcfs, build_mesh_from_config
+from tests.conftest import requires_oft
 
 
+@requires_oft
 def test_build_lcfs_shape():
     lcfs = build_lcfs(r0=0.42, z0=0.0, a=0.15, kappa=1.4, delta=0.0, npts=80)
     assert lcfs.shape == (80, 2), f"Expected (80, 2), got {lcfs.shape}"
     assert lcfs.dtype == np.float64
 
 
+@requires_oft
 def test_build_lcfs_within_minor_radius_bounds():
     """All LCFS points should lie within the (R0 - a, R0 + a) horizontal envelope."""
     r0, a = 0.42, 0.15
@@ -22,6 +25,7 @@ def test_build_lcfs_within_minor_radius_bounds():
     assert R.max() <= r0 + a + 1e-9, f"R max {R.max()} above R0 + a = {r0 + a}"
 
 
+@requires_oft
 def test_build_lcfs_circle_when_kappa_1_delta_0():
     """kappa=1.0, delta=0 should produce a near-circular boundary."""
     a = 0.15
