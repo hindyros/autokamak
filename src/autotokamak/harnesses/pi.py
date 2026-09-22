@@ -16,10 +16,12 @@ Env: provider key (ANTHROPIC_API_KEY / OPENAI_API_KEY, per --provider).
 from __future__ import annotations
 
 import json
+import os
+import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -29,7 +31,7 @@ PI_BIN = "pi"
 PI_TOOLS = "read,bash,edit,write,grep,find,ls"
 
 
-def _argv(prompt: str, model: Optional[str]) -> list[str]:
+def _argv(prompt: str, model: str | None) -> list[str]:
     argv = [PI_BIN, "--mode", "json", "-p", "--no-session", "--tools", PI_TOOLS]
     if model:
         # our convention "anthropic:claude-x" → --provider anthropic --model claude-x
@@ -43,10 +45,19 @@ def _argv(prompt: str, model: Optional[str]) -> list[str]:
 
 
 class PiHarness(Harness):
+    """The ``pi`` command-line coding agent, as a subprocess.
+
+    ``cwd=workspace`` is load-bearing -- the agent resolves paths relative to
+    where it was started. The process gets its own session so a timeout can
+    reap the solver grandchildren it spawns, which a plain
+    ``subprocess.run(timeout=...)`` cannot: those children inherit the pipes
+    and hold them open, and the timeout path blocks forever waiting on them.
+    """
+
     name = "pi"
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         info = super().dry_run_info(task, workspace, model)
         resolved = self.resolve_model(task, model)
         info.update({
@@ -62,9 +73,17 @@ class PiHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or "(pi default)"
@@ -85,24 +104,48 @@ class PiHarness(Harness):
 
         events_path = run_dir / "pi_events.jsonl"
         status, error, tail = "completed", None, ""
+        cost_usd, usage = None, None
         try:
-            proc = subprocess.run(
-                _argv(task.render_prompt(self.name),
+            # NOT subprocess.run(capture_output=True, timeout=...): on timeout
+            # that kills only the direct child and then calls communicate()
+            # again, which blocks until every pipe writer closes. pi spawns
+            # solver grandchildren that inherit stdout and keep it open, so
+            # the "timeout" deadlocks forever — observed in the first n=10
+            # campaign attempt, where a pi cell sat for 9h19m against a
+            # 90-minute cap. Own process group + killpg reaps the whole tree,
+            # the same pattern bench.contract.run_predict already uses.
+            proc = subprocess.Popen(
+                _argv(task.render_prompt(self.name) + self.workspace_note(workspace),
                       self.resolve_model(task, model)),
                 cwd=workspace,           # load-bearing: pi has no cwd flag
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout,
+                start_new_session=True,
             )
-            events_path.write_text(proc.stdout, encoding="utf-8")
-            if proc.stderr:
-                (run_dir / "pi_stderr.log").write_text(proc.stderr, encoding="utf-8")
-            tail = _events_tail(proc.stdout)
-            if proc.returncode != 0:
+            try:
+                out, err = proc.communicate(timeout=timeout)
+                returncode = proc.returncode
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    proc.kill()
+                # The tree is dead, so these pipes now close promptly.
+                out, err = proc.communicate()
+                status, error = "timeout", f"exceeded {timeout}s"
+                returncode = None
+
+            if out:
+                events_path.write_text(out, encoding="utf-8")
+                tail = _events_tail(out)
+                # A timed-out run must still report the budget it burned.
+                cost_usd, usage = _usage_from_events(out)
+            if err:
+                (run_dir / "pi_stderr.log").write_text(err, encoding="utf-8")
+            if returncode not in (None, 0):
                 status = "errored"
-                error = f"pi exit {proc.returncode}: {proc.stderr[-500:]}"
-        except subprocess.TimeoutExpired:
-            status, error = "timeout", f"exceeded {timeout}s"
+                error = f"pi exit {returncode}: {(err or '')[-500:]}"
         except FileNotFoundError:
             status, error = "errored", f"'{PI_BIN}' not found on PATH (npm i -g @mariozechner/pi-coding-agent)"
         except KeyboardInterrupt:
@@ -127,8 +170,35 @@ class PiHarness(Harness):
             workspace=workspace,
             trace_path=trace._path,
             wall_seconds=time.time() - started,
+            cost_usd=cost_usd,
             error=error,
+            extra={"usage": usage} if usage else {},
         )
+
+
+def _usage_from_events(stdout: str) -> tuple[float | None, dict | None]:
+    """Sum pi's per-message usage/cost (``message_end`` events only —
+    ``turn_end`` repeats the same message and would double-count)."""
+    cost_total = 0.0
+    tokens = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+    seen = False
+    for ln in stdout.splitlines():
+        try:
+            evt = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        if evt.get("type") != "message_end":
+            continue
+        u = (evt.get("message") or {}).get("usage") or {}
+        if not u:
+            continue
+        seen = True
+        cost_total += float((u.get("cost") or {}).get("total") or 0.0)
+        for k in tokens:
+            tokens[k] += int(u.get(k) or 0)
+    if not seen:
+        return None, None
+    return round(cost_total, 6), tokens
 
 
 def _events_tail(stdout: str, n: int = 5) -> str:

@@ -1,0 +1,55 @@
+\section{Limitations}
+\label{sec:limitations}
+
+\begin{enumerate}
+\item \textbf{The primary statistical test was changed after we saw the data.}
+  We pre-specified a sign test over four harness pairs, discovered it cannot
+  return $p < 0.125$ at any effect size, and moved to a stratified rank test.
+  All three tests agree in sign, so the \emph{direction} of the result does not
+  depend on the choice; the $p$-value does. All three are reported wherever the
+  contrast appears (Section~\ref{sec:l2l3}).
+
+\item \textbf{\Lthree{} receives two scaffolding instructions that \Ltwo{} does
+  not} --- a mandatory meshing milestone and a warning against hand-built
+  meshes. They are arguably necessary, since \Lthree{} agents must write solver
+  plumbing that \Ltwo{} agents delegate to a library call. But it means the
+  \Ltwo{}/\Lthree{} contrast bundles library access together with a prompt
+  difference, and should not be read as a pure library-access effect.
+
+\item \textbf{Replicate counts are unequal and partly determined by failure.}
+  Two substrates have $n=10$ and two $n=5$. Denominators count attempts, so
+  \Ltwo{}-\hn{dspy} is $10/15$ where among executed runs it is $10/10$. Both
+  conventions are defensible and the choice moves the pooled \Ltwo{} pass rate
+  materially, so we state ours wherever a pass rate appears.
+
+\item \textbf{One model, and the judge shares it.} Model control buys internal
+  validity at the cost of external: we cannot say these results hold for other
+  models, and the harness effect may itself be model-dependent. Worse, the
+  blind code review of Section~\ref{sec:verification} is performed by the same
+  model that produced every run it grades. Self-preference cannot be excluded
+  and no correction is applied, which is why those scores only ever corroborate
+  the deterministic analysis and never stand alone.
+
+\item \textbf{Wall-clock time is not a clean metric here.} Cells ran
+  concurrently on one CPU-bound machine, so reported wall time reflects
+  contention, and no separate executed-time measure was recorded, so a cell
+  suspended by the operating system is indistinguishable from a slow one. Cost
+  and turn counts are the efficiency axes we report.
+
+\item \textbf{Two accounting defects, disclosed.} One \Lthree{}-\hn{ursa} run
+  was killed at a 1200\,s cap that later runs in the same cell did not face ---
+  the only such case. And two substrates reuse a run identifier across sibling
+  replicate directories, so a join on that identifier reuses one replicate's
+  cost for its siblings; we report the directory-keyed total (\$197.78) and
+  note the discrepancy (\$199.76).
+
+\item \textbf{Only two of the four ladder rungs are filled at this prompt
+  version.} The \Lzero{} reference is three seeds, and no \Lone{}
+  typed-decision arm was re-run. The ladder is a contribution of the design;
+  this campaign exercises half of it.
+
+\item \textbf{The physics is real but partial.} Fixed-boundary, a single
+  profile family, five parameters. An agent that does well here has not been
+  shown to do well on free-boundary equilibria, on time-dependent evolution, or
+  on a device whose geometry is not a smooth D.
+\end{enumerate}

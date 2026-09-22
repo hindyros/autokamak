@@ -18,14 +18,15 @@ to inject a pre-computed winner.pkl + report.json.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
+# Marked so `pytest -m needs_dataset` and the summary make the skip
+# visible: this dataset is gitignored, so on a fresh clone these tests
+# silently vanish and the suite looks greener than it is. See tests/README.md.
 REAL_DATASET = REPO_ROOT / "examples" / "dataset_generation" / "outputs" / "dataset.h5"
 PHASE2_PROMPT = REPO_ROOT / "src" / "autotokamak" / "agent" / "prompts" / "surrogate_automl.yaml"
 
@@ -61,6 +62,7 @@ def _make_picker(decisions: list[dict]):
     return picker
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -93,6 +95,7 @@ def test_meta_loop_terminate_path(meta_config_yaml: Path, tmp_path: Path):
     assert report.n_iterations == 1
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -183,6 +186,7 @@ def _file_hash(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -237,6 +241,7 @@ def test_meta_loop_creates_frozen_shard_and_honest_report(meta_config_yaml: Path
     assert shard_rows.isdisjoint(pool_rows)
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -297,14 +302,13 @@ def test_meta_loop_shard_untouched_by_regen(meta_config_yaml: Path):
 def test_refit_winner_on_pool_gives_regen_immediate_credit(tmp_path: Path):
     """After a regen grows the pool, the winner refit must compete on the
     shard — without it, rmse_after can never reflect a regen's value."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
     from autotokamak.surrogate.dataset import load_dataset
     from autotokamak.surrogate.metrics import psi_rmse
-    from autotokamak.surrogate.reduce import fit_pca, transform
     from autotokamak.surrogate.optuna_search import predict_with_winner
+    from autotokamak.surrogate.reduce import fit_pca, transform
     from autotokamak.surrogate.zoo import make_model
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
     shard = make_synthetic_h5(tmp_path / "shard.h5", n=4, seed=9)
@@ -350,9 +354,8 @@ def test_refit_winner_on_pool_gives_regen_immediate_credit(tmp_path: Path):
 
 
 def test_refit_winner_on_pool_none_without_winner(tmp_path: Path):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator.actions import MetaState, _refit_winner_on_pool
+    from tests.conftest import make_synthetic_h5
 
     state = MetaState(
         workspace=tmp_path / "ws",
@@ -412,6 +415,7 @@ def _stub_winner_workspace(sub_ws: Path, shard_h5: Path) -> None:
     )
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -425,7 +429,6 @@ def test_extend_search_structured_dispatch(meta_config_yaml: Path, monkeypatch):
     finally:
         sys.path.pop(0)
 
-    from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.schema import MetaConfig
 
     mc = MetaConfig.from_yaml(meta_config_yaml)
@@ -483,6 +486,7 @@ def test_extend_search_structured_dispatch(meta_config_yaml: Path, monkeypatch):
     assert report.final_rmse == pytest.approx(result["shard_rmse"])
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -513,8 +517,8 @@ def test_target_rmse_stops_loop_early(tmp_path: Path, monkeypatch):
         return {"winner": {"winner_model_name": "poly_ridge"}, "terminated_by": "agent",
                 "n_rounds": 1, "val_psi_rmse": 0.5}
 
-    import autotokamak.surrogate.automl_loop as loop_mod
     import autotokamak.agent.dspy.module as dspy_mod
+    import autotokamak.surrogate.automl_loop as loop_mod
 
     monkeypatch.setattr(loop_mod, "run_automl_loop", fake_run_automl_loop)
     monkeypatch.setattr(dspy_mod, "make_search_decision_fn", lambda model: (lambda ctx: None))
@@ -543,6 +547,7 @@ def test_target_rmse_stops_loop_early(tmp_path: Path, monkeypatch):
     assert '"target_rmse"' in meta_trace["iterations"][0]["picker_inputs"]["state_summary"]
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",
@@ -573,8 +578,8 @@ def test_target_accuracy_pct_stops_loop_early(tmp_path: Path, monkeypatch):
         return {"winner": {"winner_model_name": "poly_ridge"}, "terminated_by": "agent",
                 "n_rounds": 1, "val_psi_rmse": 0.5}
 
-    import autotokamak.surrogate.automl_loop as loop_mod
     import autotokamak.agent.dspy.module as dspy_mod
+    import autotokamak.surrogate.automl_loop as loop_mod
 
     monkeypatch.setattr(loop_mod, "run_automl_loop", fake_run_automl_loop)
     monkeypatch.setattr(dspy_mod, "make_search_decision_fn", lambda model: (lambda ctx: None))
@@ -600,6 +605,7 @@ def test_target_accuracy_pct_stops_loop_early(tmp_path: Path, monkeypatch):
     assert extras["final_accuracy_pct"] >= 10.0
 
 
+@pytest.mark.needs_dataset
 @pytest.mark.skipif(
     not REAL_DATASET.is_file(),
     reason=f"Phase-1 dataset not present at {REAL_DATASET}",

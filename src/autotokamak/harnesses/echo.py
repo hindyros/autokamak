@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -18,6 +17,15 @@ from autotokamak.harnesses.base import Harness, RunResult
 
 
 class EchoHarness(Harness):
+    """A no-LLM stand-in that exercises the whole benchmark machinery.
+
+    It writes a trivial but contract-valid deliverable, so continuous
+    integration can test the harness interface, the trace schema, the gates and
+    the scorer without spending a penny or depending on a provider. If you are
+    writing a new adapter, read this one first: it is 77 lines and shows every
+    obligation in :class:`~autotokamak.harnesses.base.Harness` being met.
+    """
+
     name = "echo"
 
     def run(
@@ -26,9 +34,17 @@ class EchoHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         self.prepare_workspace(task, workspace)

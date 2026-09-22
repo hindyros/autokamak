@@ -1,4 +1,13 @@
 # provenance: Human/Claude-authored platform code (engineered, not agent-generated)
+"""Repository-root resolution and YAML config loading for the agent runners.
+
+Almost every module that needs to reach a task file, a prompt or a frozen
+asset imports ``REPO_ROOT`` from here. That makes this the module which decides
+that autotokamak is a source-checkout project rather than an installable
+library: :func:`_find_repo_root` walks up for a ``pyproject.toml`` and raises
+if there is none, so an installed wheel cannot satisfy it. See the note in
+``pyproject.toml``.
+"""
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -24,7 +33,7 @@ REPO_ROOT = _find_repo_root()
 
 
 def load_config(path: str) -> NS:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
     if not isinstance(raw, dict):
         raise ValueError("Top-level YAML must be a mapping/object.")

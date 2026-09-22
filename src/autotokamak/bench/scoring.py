@@ -18,7 +18,6 @@ import importlib
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_PHASE1_SCORER = "autotokamak.agent.dspy.metric:score_run"
 
 

@@ -9,9 +9,10 @@ committed ``benchmarks/assets/test_params.json``.
 """
 from __future__ import annotations
 
+import datetime as _dt
+import hashlib
 import json
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -24,8 +25,8 @@ def solve_testset(
     records: list[dict],
     out_h5: Path,
     *,
-    grid_json: Optional[Path] = None,
-    sweep_config: Optional[Path] = None,
+    grid_json: Path | None = None,
+    sweep_config: Path | None = None,
 ) -> int:
     """Solve ``records`` (list of param dicts) and write ``out_h5``.
 
@@ -53,7 +54,51 @@ def solve_testset(
 
     X = np.array([[float(r[p]) for p in PARAM_ORDER] for r in records], dtype=np.float64)
     result = run_sweep(cfg, out_h5.parent, X=X)
+    stamp_provenance(out_h5, n_params=len(records))
     return int(result.n_succeeded)
+
+
+def _sha256(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def stamp_provenance(out_h5: Path, *, n_params: int | None = None) -> dict:
+    """Write provenance attrs onto the frozen test set, in place.
+
+    The .h5 is gitignored, so the only way a published score can be tied to
+    the ground truth it was computed against is a stamp inside the file
+    itself. Attribute-only: the arrays are never touched, so stamping an
+    existing test set does NOT invalidate prior scores (regenerating it
+    silently would).
+    """
+    import h5py
+
+    assets = REPO_ROOT / "benchmarks" / "assets"
+    meta: dict[str, object] = {
+        "stamped_utc": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+        "test_params_sha256": _sha256(assets / "test_params.json") or "",
+        "eval_grid_sha256": _sha256(assets / "eval_grid.json") or "",
+        "sweep_config": str(CANONICAL_SWEEP_CONFIG.relative_to(REPO_ROOT)),
+        "sweep_config_sha256": _sha256(CANONICAL_SWEEP_CONFIG) or "",
+        # The NaN-handling rule in rel_l2_errors changed on this date; scores
+        # are only poolable within one epoch.
+        "scoring_epoch": "2026-08-18",
+    }
+    if n_params is not None:
+        meta["n_params"] = int(n_params)
+    try:
+        from OpenFUSIONToolkit import __version__ as oft_version  # type: ignore
+        meta["oft_version"] = str(oft_version)
+    except Exception:  # noqa: BLE001 — provenance is best-effort, never fatal
+        meta["oft_version"] = "unknown"
+
+    with h5py.File(out_h5, "a") as f:
+        for k, v in meta.items():
+            f.attrs[k] = v
+    return meta
 
 
 def load_test_params(path: Path) -> list[dict]:

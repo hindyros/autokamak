@@ -1,0 +1,104 @@
+\section{What the agents actually did}
+\label{sec:agentlogic}
+
+A frozen-set score cannot distinguish two runs that reach the same error by
+different reasoning---one choosing its adaptive points by ensemble disagreement
+and stopping because validation error crossed the threshold, another relabelling
+uniform sampling as ``adaptive'' and stopping because it ran out of rounds. We
+measure that difference with two extractors over each finished workspace, both
+\textbf{LLM-free and execution-free}: they parse the agent's Python with the
+\code{ast} module and match role-scoped patterns, so the whole archive
+re-extracts identically and for nothing. Scope is load-bearing---a
+whole-workspace grep for \code{subprocess} is true of nearly every run---so each
+question is answered only from the code playing the relevant role,
+non-production files are excluded, and every answer carries \code{file:line}
+evidence. The vocabulary is anchored on the typed action space of the scripted
+levels, so every level lands in the same table and anything unmatched stays
+\code{unknown}.
+
+\begin{table}[tbp]
+\centering
+\caption{What each cell chose, and whether the code agrees with the prose.
+\emph{Agr.} is the share of a cell's replicates on its modal chain of methods
+(method reproducibility, not score reproducibility); \emph{Switch.} counts
+replicates whose acquisition criterion changed between rounds; \emph{M-inf.}
+counts replicates whose point-choosing function calls the surrogate; the last
+column is the modal verdict of comparing the criterion each run names against
+the one its code computes.}
+\label{tab:logic}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lllccccl@{}}
+\toprule
+\textbf{Cell} & \textbf{Model} & \textbf{Acquisition} &
+\textbf{Stop} & \textbf{Agr.} & \textbf{Switch.} &
+\textbf{M-inf.} & \textbf{Code vs prose} \\
+\midrule
+\Ltwo{}-\hn{cursor} & kernel ridge & \code{uncertainty\_gp} & no thresh. & 0.20 & 0/2 & --- & unverifiable 5/5 \\
+\Ltwo{}-\hn{dspy}   & kernel ridge & \code{residual\_ucb}   & no thresh. & 0.10 & 1/9 & 10/10 & partial 8, agree 2 \\
+\Ltwo{}-\hn{pi}     & kernel ridge & \code{residual\_ucb}   & no thresh. & 0.20 & 1/5 & --- & unverifiable 5/5 \\
+\Ltwo{}-\hn{ursa}   & ridge / k.r. & \code{uncertainty}     & unexpl.    & 0.38 & 0/3 & 2/5 & partial 3, \textbf{mismatch 2} \\
+\midrule
+\Lthree{}-\hn{cursor} & MLP (Torch) & \code{uncertainty\_ensemble} & thresh. met & 0.20 & 0/5 & 5/5 & \textbf{agree 4}, partial 1 \\
+\Lthree{}-\hn{dspy}   & MLP (Torch) & \code{uncertainty\_ensemble} & no thresh.  & 0.10 & 0/8 & 8/10 & partial 9, mismatch 1 \\
+\Lthree{}-\hn{pi}     & MLP (Torch) & \code{uncertainty\_ensemble} & thresh. met & 0.20 & 0/3 & 5/5 & \textbf{agree 3}, partial 2 \\
+\Lthree{}-\hn{ursa}   & MLP (Torch) & \code{uncertainty}           & unexpl.     & 0.17 & 0/2 & 4/5 & partial 4, mismatch 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Method choice tracks the access level, not the substrate.}
+Table~\ref{tab:logic} shows a split no outcome metric reveals. At \Ltwo{} the
+primary model is \textbf{kernel ridge in 19 of the 25 replicates with a
+classifiable primary}---modal in three of the four cells and tied first in the
+fourth, and the model the library's own zoo selects in all six \Lzero{} runs.
+At \Lthree{} it is \textbf{a hand-written PyTorch MLP in all 25}, without
+exception. Acquisition splits the same way: \Ltwo{} agents gravitate to
+residual-UCB and GP variance, the two strategies the \Ltwo{} prompt names as
+available in the library, while \Lthree{} agents converge on ensemble
+disagreement, which no prompt mentions. Four independent substrates, given a
+library, reproduce its defaults; given nothing, all four rediscover a different
+method family and two beat the library with it. That is the mechanism behind the
+level effect, and why we read it as anchoring rather than as the library being
+bad code.
+
+\paragraph{Method reproducibility is poor, even where score reproducibility is good.}
+Chain agreement never exceeds $0.38$ and is $0.10$ in both ten-replicate cells:
+the same agent, prompt and model produces a different pipeline nearly every
+time. \Lthree{}-\hn{cursor} is the sharpest case---five distinct chains in five
+replicates, while its error stayed inside $[0.062, 0.212]$ and every artifact
+was valid. A benchmark reporting only the score spread concludes the agent is
+consistent; it is consistently \emph{good}, but it is not doing the same thing
+twice.
+
+\paragraph{Nominal adaptivity is one fixed rule executed $n$ times.}
+The task mandates up to three adaptive rounds whose points are chosen from the
+current model or data. The criterion actually changed between rounds in
+\textbf{2 of the 37} runs where it could be classified; the rest ran one rule
+three times. The crude failure---a stated criterion that is pure
+randomness---occurs in no cell; the subtler one, non-reactive adaptivity, is near-universal,
+which is consistent with the control arm finding little for a reactive
+criterion to earn at this budget.
+
+\paragraph{The code often does not match the prose, and a library hides it.}
+Comparing the criterion each run \emph{states} against the one its code
+\emph{computes} gives \code{partial} 27, \code{unverifiable\_from\_code} 14,
+\code{agree} 9 and \code{mismatch} 4 of the 54 runs with a verdict; \code{agree}
+is modal in only two cells, both \Lthree{}, and the four mismatches fall in the
+two substrates that also produce every invalid artifact. Seven \Ltwo{} runs name
+a method for which their code carries no evidence at all, against \textbf{zero
+in any \Lthree{} cell}. Worse for an evaluator, \Ltwo{}-\hn{cursor} and
+\Ltwo{}-\hn{pi} are \code{unverifiable\_from\_code} in all ten runs: selection
+happens inside the library, so no workspace function chooses points---a
+structural consequence of scaffolding, not evasion, but it means \textbf{the
+more scaffolding an evaluation provides, the less of the agent's reasoning stays
+inspectable}. Twelve further dimensions
+(Appendix~\ref{app:logicdetail}) show where the rest of the solution agrees and
+where it only nearly does. No \Lthree{} run hand-built a mesh (26/26, an
+explicit prohibition that held); the pilot gate is enforced in 50 of the 51 runs
+where it can be read, storage validation in 46 (three runs claim it without
+evidence), and the test set stays out of every model-fitting function in 42 of
+43---\emph{one run references it inside one}. The mandatory constraint most
+widely sidestepped is the deliverable self-test: 24 runs satisfy ``re-run the
+documented command in a fresh process'' by \emph{importing} \code{predict.py}
+instead, against 22 that actually subprocess it.

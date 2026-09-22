@@ -18,9 +18,10 @@ import datetime as _dt
 import json
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import numpy as np
 from dotenv import load_dotenv
@@ -33,6 +34,8 @@ from autotokamak.agent.orchestrator.schema import (
     MetaIterationRecord,
     MetaReport,
 )
+from autotokamak.agent.runners.config import REPO_ROOT, resolve_workspace
+from autotokamak.bench.trace import RunTrace
 from autotokamak.data.schema import SweepConfig
 from autotokamak.surrogate.dataset import kfold, load_dataset
 from autotokamak.surrogate.metrics import (
@@ -40,9 +43,6 @@ from autotokamak.surrogate.metrics import (
     baseline_mean_predictor_rmse,
     per_cell_errors,
 )
-
-from autotokamak.agent.runners.config import REPO_ROOT, resolve_workspace
-from autotokamak.bench.trace import RunTrace
 
 load_dotenv(REPO_ROOT / ".env")
 
@@ -52,7 +52,7 @@ ActionPicker = Callable[[MetaConfig, MetaState, dict, list[MetaIterationRecord]]
 
 
 def _now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+    return _dt.datetime.now(_dt.UTC).isoformat()
 
 
 # ----------------------- terminal formatting helpers -----------------------
@@ -63,24 +63,24 @@ def _now() -> str:
 # rich/tabulate dependency.
 
 
-def _pct_improvement(new: Optional[float], old: Optional[float]) -> Optional[float]:
+def _pct_improvement(new: float | None, old: float | None) -> float | None:
     """Error-reduction percentage: positive means ``new`` is BETTER (lower)."""
     if new is None or old is None or not np.isfinite(old) or old <= 0:
         return None
     return 100.0 * (old - new) / old
 
 
-def _fmt_pct(pct: Optional[float]) -> str:
+def _fmt_pct(pct: float | None) -> str:
     if pct is None:
         return "—"
     return f"{pct:+.1f}%"
 
 
-def _fmt_rmse(rmse: Optional[float]) -> str:
+def _fmt_rmse(rmse: float | None) -> str:
     return f"{rmse:.5g}" if rmse is not None else "—"
 
 
-def _fmt_duration(seconds: Optional[float]) -> str:
+def _fmt_duration(seconds: float | None) -> str:
     if seconds is None or seconds < 0:
         return "—"
     s = int(round(seconds))
@@ -91,7 +91,7 @@ def _fmt_duration(seconds: Optional[float]) -> str:
     return f"{s // 3600}h {(s % 3600) // 60:02d}m"
 
 
-def _record_duration(rec: MetaIterationRecord) -> Optional[float]:
+def _record_duration(rec: MetaIterationRecord) -> float | None:
     """Iteration wall time from the record's ISO timestamps."""
     try:
         start = _dt.datetime.fromisoformat(rec.started_utc)
@@ -106,7 +106,7 @@ def _truncate(text: str, width: int) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
-def _action_outcome(result: Optional[dict]) -> str:
+def _action_outcome(result: dict | None) -> str:
     """One-line human summary of an action's result dict."""
     if not result:
         return "—"
@@ -147,16 +147,16 @@ def _print_table(headers: list[str], rows: list[list[str]]) -> None:
         max(len(headers[c]), *(len(r[c]) for r in rows)) if rows else len(headers[c])
         for c in range(len(headers))
     ]
-    line = "  ".join(h.ljust(w) for h, w in zip(headers, widths))
+    line = "  ".join(h.ljust(w) for h, w in zip(headers, widths, strict=False))
     print("  " + line)
     print("  " + "  ".join("-" * w for w in widths))
     for r in rows:
-        print("  " + "  ".join(cell.ljust(w) for cell, w in zip(r, widths)))
+        print("  " + "  ".join(cell.ljust(w) for cell, w in zip(r, widths, strict=False)))
 
 
 def _print_iteration_metrics(
-    rmse_after: Optional[float],
-    prev_rmse: Optional[float],
+    rmse_after: float | None,
+    prev_rmse: float | None,
     baseline_rmse: float,
 ) -> None:
     """Per-iteration RMSE line with Δ vs previous loop and vs baseline."""
@@ -180,7 +180,7 @@ def _print_summary_table(
         return
     print("\n=== META SUMMARY (per-iteration) ===")
     rows: list[list[str]] = []
-    prev_rmse: Optional[float] = None
+    prev_rmse: float | None = None
     for rec in history:
         rmse = rec.rmse_after
         rows.append(
@@ -253,7 +253,7 @@ def pick_action_via_llm(
     return module.predict_action_decision(**inputs)
 
 
-def measure_test_rmse(state: MetaState) -> Optional[float]:
+def measure_test_rmse(state: MetaState) -> float | None:
     """Evaluate the current best winner on the FROZEN eval set.
 
     Returns None if no winner or no eval set is available. The eval set is
@@ -288,7 +288,7 @@ class EvalSetup:
     train_pool: Path
     eval_h5: Path
     split_info: dict
-    envelope_bounds: Optional[tuple] = None  # (lows, highs) in PARAM_ORDER
+    envelope_bounds: tuple | None = None  # (lows, highs) in PARAM_ORDER
     n_bins: int = 2
 
     @property
@@ -308,7 +308,7 @@ def _setup_eval_sets(
     meta_config: MetaConfig,
     initial_dataset: Path,
     datasets_dir: Path,
-    base_sweep: Optional[SweepConfig],
+    base_sweep: SweepConfig | None,
 ) -> EvalSetup:
     """Freeze the evaluation set BEFORE anything else touches the data.
 
@@ -380,7 +380,7 @@ def _setup_eval_sets(
 
 def _resolve_target_rmse_abs(
     meta_config: MetaConfig, baseline_rmse: float
-) -> Optional[float]:
+) -> float | None:
     """Collapse the three aggregate stopping targets into one absolute RMSE.
 
     ``target_rmse`` (absolute), ``target_rmse_ratio`` (× baseline), and
@@ -404,7 +404,7 @@ def _resolve_target_rmse_abs(
 
 def _per_cell_breakdown(
     winner_payload: dict, shard_bundle, setup: EvalSetup
-) -> Optional[dict]:
+) -> dict | None:
     """Winner's per-geometry-cell error breakdown on the eval set.
 
     Never raises — a failed predict degrades to None so the loop keeps
@@ -427,8 +427,8 @@ def _per_cell_breakdown(
 
 
 def _worst_cell_accuracy(
-    per_cell: Optional[dict], baseline_cell_rmse: Optional[dict]
-) -> Optional[float]:
+    per_cell: dict | None, baseline_cell_rmse: dict | None
+) -> float | None:
     """Accuracy of the WEAKEST occupied eval cell, from precomputed breakdowns.
 
     Per cell: ``100*(1 - winner_cell_rmse / baseline_cell_rmse)`` using that
@@ -450,7 +450,7 @@ def _worst_cell_accuracy(
 
 def _per_cell_baseline(
     train_bundle, shard_bundle, setup: EvalSetup
-) -> Optional[dict]:
+) -> dict | None:
     """Per-cell RMSE of the trivial mean-predictor — the worst-cell denominator."""
     try:
         base_pred = baseline_mean_prediction(train_bundle.psi, shard_bundle.n_samples)
@@ -474,7 +474,9 @@ def _initial_diagnostics(state: MetaState) -> dict:
     from autotokamak.surrogate.zoo import make_poly_ridge
 
     bundle = load_dataset(state.current_dataset_h5)
-    factory = lambda: make_poly_ridge(alpha=0.1, degree=2)
+    def factory():
+        return make_poly_ridge(alpha=0.1, degree=2)
+
     return diag_mod.run_all(bundle, model_factory=factory)
 
 
@@ -484,7 +486,9 @@ def _diagnostics_with_winner(state: MetaState) -> dict:
     from autotokamak.surrogate.zoo import make_poly_ridge
 
     bundle = load_dataset(state.current_dataset_h5)
-    factory = lambda: make_poly_ridge(alpha=0.1, degree=2)
+    def factory():
+        return make_poly_ridge(alpha=0.1, degree=2)
+
     splits = None
     if state.best_winner_payload is not None:
         splits = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=state.seed)
@@ -496,25 +500,38 @@ def _diagnostics_with_winner(state: MetaState) -> dict:
     )
 
 
+def _count_train_pool(setup, split_info: dict) -> int:
+    """Successful samples in the CURRENT train pool, however it has grown."""
+    try:
+        import numpy as np
+
+        from autotokamak.data.h5io import read_h5_arrays
+
+        arrays = read_h5_arrays(setup.train_pool)
+        return int(np.asarray(arrays.success, dtype=bool).sum())
+    except Exception:  # noqa: BLE001 — fall back to the initial split
+        return int(split_info["n_train_success"])
+
+
 def run(
     config_path: str,
     *,
     pick_action: ActionPicker = pick_action_via_llm,
-    phase2_decision_fn: Optional[Callable[[dict], Any]] = None,
+    phase2_decision_fn: Callable[[dict], Any] | None = None,
     trace_enabled: bool = True,
-    experiments_dir: Optional[Path] = None,
-    model_override: Optional[str] = None,
-    max_iterations_override: Optional[int] = None,
-    n_samples_override: Optional[int] = None,
-    enrich_n_new_override: Optional[int] = None,
-    phase2_time_budget_override: Optional[int] = None,
+    experiments_dir: Path | None = None,
+    model_override: str | None = None,
+    max_iterations_override: int | None = None,
+    n_samples_override: int | None = None,
+    enrich_n_new_override: int | None = None,
+    phase2_time_budget_override: int | None = None,
     use_baseline_picker: bool = False,
-    workspace_override: Optional[str] = None,
-    phase2_mode_override: Optional[str] = None,
-    target_rmse_override: Optional[float] = None,
-    target_rmse_ratio_override: Optional[float] = None,
-    target_accuracy_pct_override: Optional[float] = None,
-    target_worst_cell_accuracy_pct_override: Optional[float] = None,
+    workspace_override: str | None = None,
+    phase2_mode_override: str | None = None,
+    target_rmse_override: float | None = None,
+    target_rmse_ratio_override: float | None = None,
+    target_accuracy_pct_override: float | None = None,
+    target_worst_cell_accuracy_pct_override: float | None = None,
 ) -> MetaReport:
     """Run the meta-loop. Returns the final ``MetaReport``.
 
@@ -654,7 +671,7 @@ def run(
             "resolvable bounds (set base_sweep_config) — per-cell scoring "
             "needs the target-envelope box."
         )
-    baseline_cell_rmse: Optional[dict] = None
+    baseline_cell_rmse: dict | None = None
     if setup.per_cell_enabled:
         baseline_cell_rmse = _per_cell_baseline(train_bundle, shard_bundle, setup)
 
@@ -822,7 +839,11 @@ def run(
             baseline_rmse=float(baseline_rmse),
             test_shard_path=str(setup.eval_h5),
             n_test_samples=int(split_info["n_test"]),
-            n_train_pool_samples=int(split_info["n_train_success"]),
+            # The pool GROWS: every enrich_active / regen_dataset iteration
+            # appends solves to it. Reporting the initial split's count made
+            # a run that trained on 2598 samples report 1999 — which in a
+            # per-solve comparison is the denominator, so it mattered.
+            n_train_pool_samples=_count_train_pool(setup, split_info),
             initial_rmse=state.rmse_history[0] if state.rmse_history else None,
             winner_model_name=(
                 state.best_surrogate_report.get("winner_model_name", "none")
@@ -874,7 +895,7 @@ def run(
 
         _print_summary_table(history, baseline_rmse)
 
-        print(f"\n=== META FINAL ===")
+        print("\n=== META FINAL ===")
         print(f"  total wall time: {_fmt_duration(time.time() - wall_start)}")
         print(f"  iterations: {len(history)}; terminated_by: {terminated_by}")
         final_str = f"{final_rmse:.4f}" if final_rmse is not None else "n/a (no winner)"

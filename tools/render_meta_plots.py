@@ -90,7 +90,7 @@ def plot_convergence(workspace: Path, out_dir: Path) -> Path | None:
     ax.plot(xs, ys, "-o", color="#1a1a1a", zorder=3, label="winner (frozen-shard RMSE)")
 
     # Color each marker by the action that produced it.
-    for x, y, a in zip(xs, ys, actions):
+    for x, y, a in zip(xs, ys, actions, strict=True):
         c = _ACTION_COLOR.get(a, "#1a1a1a")
         ax.plot([x], [y], "o", color=c, markersize=9, zorder=4)
         if a:
@@ -143,7 +143,7 @@ def plot_per_cell_rmse(workspace: Path, out_dir: Path) -> Path | None:
     ax.bar(range(len(keys)), rmses, color=colors)
     ax.set_xticks(range(len(keys)))
     ax.set_xticklabels(
-        [f"{k}\n(n={n})" for k, n in zip(keys, ns)], rotation=90, fontsize=7
+        [f"{k}\n(n={n})" for k, n in zip(keys, ns, strict=True)], rotation=90, fontsize=7
     )
     mean_cell = per_cell.get("mean_cell_rmse")
     if isinstance(mean_cell, (int, float)):

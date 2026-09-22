@@ -198,7 +198,7 @@ def score_surrogate_run(workspace: str | Path, *, mode: str = "codegen") -> Scor
     shard_path = _resolve_shard_path(parsed_report) if mode == "structured" else None
     if winner_payload is not None and dataset_path is not None:
         try:
-            from autotokamak.surrogate.dataset import load_dataset, kfold
+            from autotokamak.surrogate.dataset import kfold, load_dataset
             from autotokamak.surrogate.optuna_search import predict_with_winner
 
             bundle = load_dataset(dataset_path)
@@ -247,9 +247,8 @@ def score_surrogate_run(workspace: str | Path, *, mode: str = "codegen") -> Scor
 
     # -- val_rmse_vs_baseline --
     # Recompute the baseline from the data; do NOT trust the report's number.
+    from autotokamak.surrogate.dataset import kfold, load_dataset  # re-import for clarity
     from autotokamak.surrogate.metrics import baseline_mean_predictor_rmse, psi_rmse
-
-    from autotokamak.surrogate.dataset import load_dataset, kfold  # re-import for clarity
 
     bundle = load_dataset(dataset_path)
     splits = kfold(bundle, k=4, test_frac=2 / bundle.n_samples, seed=0)

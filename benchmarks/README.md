@@ -53,12 +53,327 @@ Each run writes `experiments/<tag>/<condition>/<run_id>/{workspace/,
 trace.json, result.json}`; `result.json` bundles the harness outcome, the
 contract gates, and (when the frozen test set exists) the head-to-head score.
 
+## Diagnostics beside the contract
+
+`contract.passed` is a frozen comparability asset — adding a gate would
+silently make every archived run incomparable. So the checks that catch what
+the gates miss live in `src/autotokamak/bench/diagnostics.py` and are
+recorded as a `diagnostics` block in `result.json`, never as gates:
+
+- `test_rel_l2_full_grid` and `exterior_inflation` — the contract metric
+  masks to finite ground truth, so field predicted *outside* the plasma is
+  scored as if absent. The full-grid variant charges for it; the ratio of
+  the two is the violation's size in physical terms. This is the
+  discriminator: two shakedown runs both scored NaN-mask agreement 0.195,
+  but one had inflation 1.22 (a NaN-convention slip on an otherwise good
+  model) and the other 16.97 (a fabricated exterior plasma whose honest
+  error is 1.94, four times worse than baseline). Counting disagreeing
+  pixels cannot tell those apart; magnitude can, which is why
+  `physically_valid` is judged on magnitude and `nan_mask_agreement` is
+  recorded but not decisive.
+- `pred_over_truth_spread` — catches a constant predictor that ignores its
+  inputs.
+- `physically_valid` and `passed_gates_but_invalid` — the headline
+  measurement: green on every machine-checkable gate, wrong in the field.
+- `honesty_gap` — agent's self-reported `metrics.test_rel_l2.mean` minus the
+  independently scored value, signed (negative = claimed better than it is).
+  `report_keys` only ever checked that metric keys were *present*, which is
+  exactly what makes this measurable. The same L3-ursa run reported 0.0784
+  against an actual 0.9596.
+- solver-budget use against v3's ≤150 + 3×100 campaign bound, and
+  acquisition-log presence.
+
+Thresholds are named constants in that module. Backfill the block onto older
+runs with `python -m autotokamak.bench diagnose --tag <tag> [--rescore]`
+(`--rescore` re-invokes each `predict.py`, costing CPU but no API spend).
+
+## Methodology: what was chosen, and on what reasoning
+
+Every measurement above scores the OUTCOME. None of them separates two runs
+that reach the same error by different reasoning — ensemble disagreement with
+a stop triggered by measured validation error, versus uniform random sampling
+relabelled "adaptive" and stopped because the rounds ran out. That difference
+is this repo's actual research question, so it is extracted as data, not left
+as prose in a README.
+
+`src/autotokamak/bench/methodology.py` is deterministic, LLM-free and
+execution-free: it reads the artifacts the v3 task already mandates (the
+acquisition log, `sampling_strategy`, `report.json`) plus the agent's own
+code, and writes a `methodology` block into `result.json`. Two things come
+out of it:
+
+1. **The chain of methods** — the final pipeline, canonicalised into one
+   vocabulary: `initial design → representation + model [ensembling] →
+   acquisition × rounds → stopping rule`, e.g.
+   `lhs -> pca+mlp_torch[mc_dropout] -> acq:uncertainty_ensemble x3 -> stop:val_threshold_70pct`.
+2. **The per-iteration decision logic** — for each adaptive round: the
+   criterion the agent stated, how many points it took, the validation error
+   against baseline it had *in hand* when it chose, and what it decided next
+   (`continue` / `stop_threshold_met` / `stop_without_threshold` /
+   `stop_unexplained`).
+
+The acquisition vocabulary is anchored on the L0/L1 typed action space
+(`agent.orchestrator.schema.AcquisitionStrategy`), and
+`extract_meta_methodology` maps a pipeline workspace's `meta_trace.json` onto
+the same record — so a scripted L0 policy, an L1 typed picker and a
+from-scratch L3 agent are described in one vocabulary and land in one table.
+
+Derived measurements that the score cannot give:
+
+- `chain_agreement` — share of a cell's replicates on the modal chain. Method
+  reproducibility is separate from score reproducibility: a cell can be
+  stable in error while its agent re-invents the pipeline every run.
+- `criterion_switched` — the acquisition criterion CHANGED between rounds
+  (logic that reacts to what it measured) rather than one fixed rule executed
+  n times.
+- `evidence_grounded` — fraction of rounds whose validation-vs-baseline error
+  was actually recorded. An ungrounded round's reasoning is unfalsifiable.
+- `adaptive_in_name_only` — every stated criterion names nothing but
+  randomness.
+- `prose_only_terms` — a method claimed in README/`report.json` that the code
+  never evidences (matrix-v3 shakedown: URSA's README claims ensemble
+  uncertainty; its log shows `farthest_point` on all three rounds).
+
+### The code comparison
+
+Everything above reads the agent's own account of itself — a log's "reason",
+a README's prose. `analyse_code_logic` reads the decision CODE instead. It
+parses every agent-authored `.py`, locates the functions that choose the next
+batch (by name: `acquire`/`select`/`propose`/`score`/`uncertainty`/…, falling
+back to file scope for straight-line scripts), and classifies the arithmetic
+each one actually performs — into the same vocabulary — with `file:line`
+evidence for every claim:
+
+- `code_acq` — the criterion the chooser computes: a standard deviation over
+  stacked model predictions, a `cdist` to the training set, `rng.choice`.
+- `model_informed` — whether that chooser calls the surrogate at all. This is
+  load-bearing: model-derived criteria (uncertainty, residual) are DROPPED
+  when it does not, because a `.std()` used to standardise parameters is
+  indistinguishable from one ranking predictive spread until you ask whether
+  the model was consulted. URSA's `propose_adaptive_batch` standardises with
+  `.std()` and never predicts — it is farthest-point, and is recorded as
+  such, whatever its docstring calls it.
+- `selection_rule` — `top_k` (argsort/topk) vs `random_draw` vs `threshold`.
+- `stated_vs_code` — the comparison column: `agree` / `partial` / `mismatch` /
+  `unverifiable_from_code` / `undocumented`, with `only_stated` (claimed but
+  never computed) and `only_implemented` (computed but never claimed).
+  Compared at the level of criterion FAMILY, not exact formula. A random
+  candidate POOL is discounted when the chooser also ranks: nearly every
+  implementation draws one, and it is not the selection criterion.
+
+Per cell the matrix then carries `code_logic_modal`, `code_logic_agreement`
+(replicates implementing the same logic), `n_distinct_code_logics`,
+`model_informed_k/n`, `stated_vs_code` verdict counts and
+`claimed_not_implemented`.
+
+### How the prompt was solved — the cross comparison
+
+The acquisition criterion is one paragraph of a task that also asks the agent
+to drive a finite-element solver under a one-`OFT_env`-per-process
+constraint, run and validate a data campaign, decide what "no plasma here"
+means when writing NaN, map a triangular mesh onto a frozen rectangle, and
+ship a CLI a stranger can run. Two agents can share an acquisition criterion
+and have solved almost none of those the same way.
+
+`src/autotokamak/bench/solution_shape.py` answers each of those demands from
+the code that plays that ROLE — the file that constructs `OFT_env`, the
+predictor that writes the NaNs, the function that calls `.fit()` — never a
+workspace-wide grep, which in this corpus is true of everything and
+therefore says nothing. Every answer carries `file:line`.
+
+| dimension | the question it answers |
+|---|---|
+| `oft_env_strategy` | OFT allows one `OFT_env` per process, ever. Who owns it? |
+| `solve_isolation` | What insulates one solve from the next? |
+| `mesh_route` | The OFT API, or a hand-built triangulation (which the task forbids)? |
+| `grid_mapping` | How does the mesh reach the frozen 64×96 grid? |
+| `mask_rule` | How is "no plasma here" decided when writing NaN? |
+| `storage` | What is a solved sample on disk, and is it indexed? |
+| `storage_validation` | Is a solve counted only after its file re-loads finite? |
+| `pilot_gate` | Was the mandated pilot run, and its 50% threshold enforced? |
+| `leakage_guard` | Does the test set stay out of the functions that fit the model? |
+| `self_test` | Was the documented `predict.py` CLI re-run in a fresh process? |
+| `code_shape` / `entry_point` | One script or a module tree; how would a stranger run it? |
+
+Two scoping rules do most of the work, and both were added after they went
+wrong on real runs:
+
+- **The production path is the default scope.** The task MANDATES a meshing
+  milestone, a pilot and a deliverable self-test, so every workspace contains
+  demo and verification scripts. Reading the campaign's execution model off a
+  `final_repro_check.py` is how a cross-comparison becomes fiction, so
+  `smoke|milestone|preflight|parity|repro|tests/` are excluded — except for
+  `self_test`, which is *supposed* to live in such a script.
+- **Function scope, not file scope.** "The file that trains also mentions
+  test" is true of any single-file pipeline; "the function that calls
+  `.fit()` touches a test path" is a specific thing to go and read.
+
+Every code either analysis emits is DEFINED, next to the detector that emits
+it (`VALUE_GLOSSARY` / `DIMENSION_NOTES` in `solution_shape.py`,
+`TERM_GLOSSARY` in `methodology.py`), and resolved for rendering by
+`bench/glossary.py` — which also handles composite values (`npz_per_solve+
+pickle+index` is three tokens) and counted ones (`11_modules`). In the HTML
+report every code is underlined and carries its definition on hover, the
+dimension names carry what they ask and why it matters, an `[src]` marker
+carries the `file:line` it was read from, and the whole vocabulary is listed
+in a glossary at the foot of the page. Tests fail if a detector gains a value
+or a pattern table gains a term without a definition — a code a reader cannot
+look up is not a measurement.
+
+`cross_compare` transposes it — one row per dimension, one column per cell,
+rows the agents disagreed on first — which is what a comparison has to look
+like to be read as one. It prints in `tools/aggregate_matrix.py`, lands in
+`solution_shape.csv`, and heads the HTML report with `file:line` on hover.
+
+The v3 shakedown, four agents on an identical prompt: all four meshed through
+`gs_Domain`, evaluated ψ with the solver's own `get_field_eval`, enforced the
+pilot gate and re-loaded stored artifacts before counting them — and they
+disagreed on execution model (`in_process_serial` vs `subprocess_per_batch`
+vs `process_pool`), on who owns `OFT_env` (a cached singleton vs one per
+worker), on masking (LCFS polygon alone, polygon plus a training-derived
+valid mask, polygon plus the solver's native NaNs), and on size, from one
+dominant module to a 27-module tree.
+
+Prose, log and code are kept as three separate witnesses and never merged:
+`prose_only_terms` is what the README claims over the code, `stated_vs_code`
+is what the run's own log claims against it. `tools/judge_code.py` remains
+the instrument for the qualitative call. Like `diagnostics`, nothing here
+touches `contract.passed`.
+
+```bash
+python -m autotokamak.bench methodology --tag <tag>        # extract + print per run
+python tools/aggregate_matrix.py --tag <tag> --show-rounds # cell table + every round
+```
+
+`aggregate_matrix.py` writes `methodology.csv` (one row per run: the chain)
+and `methodology_rounds.csv` (one row per adaptive round: the logic) beside
+`aggregate.csv`, and the HTML matrix report shows both per cell.
+
+## Replicated campaigns
+
+A cell run once is an anecdote: matrix-v1/v2 scored L3-pi at 0.0199 then
+0.1350, and L2-claude_sdk at 0.189 then a crash. Campaigns now run each cell
+n times (`bench run --rep N` records the index) via `tools/run_campaign.sh`,
+and `tools/aggregate_matrix.py` groups by cell to report pass-rates with
+Wilson intervals and rel-L2 medians with bootstrap CIs. Medians, not means —
+one 0.96 cell makes a mean meaningless.
+
+**The primary test is a stratified permutation test, not the sign test.**
+With 4-5 harnesses the paired sign test cannot reach p<0.05 however clean the
+result is: its smallest attainable two-sided p-value is 0.125 at n=4 pairs
+and 0.0625 at n=5. Reporting only that would cap the paper's central claim
+for reasons that have nothing to do with the evidence. So the primary
+contrast shuffles L2/L3 labels WITHIN each harness across that harness's
+runs — harness stays a blocking factor, the null is "access level does not
+matter within a substrate", and the statistic is the mean across harnesses of
+the within-harness median difference. At 5 replicates x 4 harnesses x 2
+levels it separates a 0.10 rel-L2 effect at p≈0.0002. The sign test is still
+printed, labelled descriptive.
+
+**Pilot first.** `tools/run_campaign.sh --tag <campaign-tag> --pilot` is the
+cheapest run that still exercises every moving part: one replicate, L3 only,
+`--parallel 4`, ursa on a 20-minute leash, preceded by a smoke pass. **~$9 and
+~20 minutes, 10M tokens (5% of the daily cap)** against ~$98 and ~5 h for the
+full campaign. Two things make it close to free:
+
+- `--smoke-first` runs `smoke.yaml` on every harness beforehand — seconds and
+  ~$0.03 each — and refuses to start the paid wave if any fails. A previous
+  smoke pass caught cursor and pi erroring at zero cost. Smoke runs go to
+  `<tag>-smoke`, never the campaign tag, so they cannot mix prompt versions
+  into the analysis.
+- Give the pilot the CAMPAIGN's tag and its cells ARE replicate 1: the full
+  run with `--resume` skips them. The pilot then costs nothing extra — it is
+  the first slice of the campaign, run early enough to learn from.
+
+What it proves before the expensive part: every adapter authenticates and
+completes on the real task, the cost and token model matches actual billing,
+the chosen parallelism does not trip rate limits, and the contract, scoring
+and methodology extraction all work on fresh runs.
+
+**Money guards** (`tools/campaign_guard.py`, wired into `run_campaign.sh`):
+
+- `preflight` refuses to start on a missing key, a logged-out CLI, a harness
+  the task does not pin a model for, a missing frozen asset, or under 10 GB
+  of free disk. It also refuses `claude_sdk` unless asked explicitly: this
+  campaign pins an OpenAI model across substrates and that adapter is
+  Anthropic by construction, so including it would spend on another provider
+  AND confound the harness axis with the model axis.
+- `--resume` skips (condition, replicate) pairs that already completed. Without
+  it a crash at hour 18 re-runs and re-pays for every finished cell, because
+  `bench run` always mints a new run_id.
+- `--budget-usd N` stops launching new cells once recorded spend reaches a
+  ceiling; cells in flight finish and record their cost.
+- `--harness-budget "ursa=45"` **ring-fences a substrate**. A single global
+  ceiling is not enough: ursa does not reliably terminate under v3, runs to
+  its cap, and on observed figures is **65% of the worst case** ($125 of $192
+  at 5 reps x 2 levels). Left alone it eats the ceiling and starves the other
+  three. When a substrate reaches its own cap its remaining cells are skipped
+  and the campaign CONTINUES.
+- `--harness-timeout "ursa=2700"` gives a known non-terminator a shorter
+  leash, so such a cell wastes 45 minutes instead of 110. Spend tracks time
+  for a substrate that runs until stopped, so this truncates cost too.
+- `forecast` prints worst-case exposure per substrate BEFORE the first call,
+  honouring rep caps, harness budgets and harness timeouts. The three levers
+  together take the v3 campaign from **$192 / 9.4 h worst case to $98 /
+  4.8 h**, with ursa down from 65% to 31% of exposure.
+- `--tpd-headroom 0.85` stops launching when the day's tokens reach that
+  fraction of the org's **daily** cap. TPM bounds a burst and is not this
+  campaign's problem; TPD is, because hitting it stops every substrate at
+  once, mid-run, and the fix is the clock rather than a bigger ceiling. The
+  org's limits are committed in `benchmarks/assets/rate_limits.json` —
+  headers carry TPM and RPM but never TPD, so the daily cap is only knowable
+  from the dashboard. `campaign_guard tokens --tag <tag> --since-hours 24`
+  reports the day's consumption per substrate.
+- `ratelimits` reads this key's ACTUAL limits from the response headers of
+  one minimal call, and sizes `--parallel` against measured per-session
+  consumption rather than a number written in a doc. On the archived v3
+  runs a single session burns 88k-391k tokens/min; with the observed
+  4,000,000 TPM / 10,000 RPM ceiling, 60% headroom supports `--parallel 6`,
+  so the standard `--parallel 3` has roughly 3x of room. `cursor-agent`
+  routes through Cursor's backend, so its tokens do not touch this key's
+  quota and are excluded from the sizing.
+
+**The daily cap is the real campaign-scale constraint.** At gpt-5.2's
+200,000,000 TPD, the measured per-run footprints (pi 5.7M, dspy 2.9M, ursa
+~5.3M inferred from spend, cursor 0 on this key) put the unconstrained
+5-rep campaign at **139M — 70% of one day** — so a re-run or a second arm on
+the same day would hit the wall. The ring-fenced configuration comes to
+**99M, 50%**. `forecast` prints this before anything is spent. Cached input
+is counted throughout: whether it consumes quota is not documented, and
+assuming it does is the direction that cannot cause an unplanned stop — if
+it turns out not to, these figures roughly halve.
+- `reconcile` writes a stub `result.json` for cells the watchdog killed. They
+  otherwise vanish from every report — the denominator silently shrinks, and
+  a substrate that always times out looks like one that was never run (the
+  matrix-v3 shakedown had 3 such invisible cells).
+
 ## reference_runs/
 
 Archived agent-generated workspaces from the pre-refactor capability tests
 (`L3-ursa/`, `L3-dspy/` — formerly top-level `just_ursa/` and `just_dspy/`).
 The READMEs are tracked documentation of those experiments; the workspaces
 are agent output, kept on disk, gitignored, and NEVER edited.
+
+## Prompt versioning
+
+Task problem texts are frozen comparability assets: **runs are only
+comparable within one prompt version.** Any change to a problem text goes
+into a new `_v2`/`_v3` file with a bumped `prompt_version:` field and a
+header explaining what changed and why — never an in-place edit. Each run's
+`result.json` records `task.prompt_version` and the trace records the YAML's
+sha256, so every result is attributable to its exact prompt. Version changes
+must be process-level (engineering-discipline gates, identical for every
+harness) — never physics/ML hints, and never per-harness. The version ladder
+is itself data: what each added gate does to where agents fail is part of
+the experiment.
+
+Current versions: v1 = original capability-test text; v2 (2026-08-10) adds
+the STORAGE VALIDATION GATE and DELIVERABLE SELF-TEST after the URSA agent
+stored all-NaN datasets as successes and shipped an untested predict.py;
+v3 (2026-08-18, mini tasks only) fixes budget numbers left over from the
+full-size tasks — v2 mini stated "3 rounds of 100" and "500 per round /
+10-round cap" simultaneously, a ~17x solver-budget ambiguity. Use
+`L2_mini_v3.yaml` / `L3_mini_v3.yaml` for any new mini campaign.
 
 ## Adding a harness
 

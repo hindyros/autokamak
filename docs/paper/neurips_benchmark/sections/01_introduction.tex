@@ -1,0 +1,49 @@
+\section{Introduction}
+\label{sec:intro}
+
+Agentic machine-learning benchmarks have converged on a shape: present the agent
+with a dataset and a metric, and see how good a model it can fit. MLE-bench
+draws on Kaggle competitions; MLAgentBench, DSBench, ScienceAgentBench and
+related suites vary the domain and the scaffolding but keep the
+shape.\footnote{Citations are collected in Section~\ref{sec:related}.} The data
+exists before the agent starts.
+
+Real computational science does not look like that. The expensive step is
+usually \emph{acquiring} the data---running the simulation, the experiment, the
+solve---and the interesting decision is \emph{where to spend the next unit of
+budget}. An agent good at fitting a given dataset may be useless at deciding
+which equilibria are worth computing. This benchmark restores that decision: the
+agent is given a solver, a parameter space and a budget, and must decide what to
+compute (Figure~\ref{fig:loop}, Appendix~\ref{app:loop}).
+
+The ground-truth operator is TokaMaker (Open FUSION Toolkit), a finite-element
+solver for the axisymmetric \GS{} equation
+$\Delta^{*}\psi = -\mu_{0}R^{2}p'(\psi) - F(\psi)F'(\psi)$ on a triangular mesh
+of a D-shaped plasma cross-section. It is a good instrument here because it is
+expensive and \emph{failable}, so the feasible set must be discovered rather
+than assumed; high-dimensional in the output (a $96\times64$ flux field, NaN
+outside the plasma boundary) but low-dimensional in the input, making
+dimensionality reduction a real design decision; unforgiving about physics,
+since flux is signed and physical and an agent that quietly clips or
+renormalises produces a field that looks plausible and is wrong; and not
+memorisable.
+
+\paragraph{Contributions.}
+\textbf{(i) A closed-loop scientific-ML benchmark} in which the agent pays for
+its own data from an expensive solver under a fixed budget, with a
+machine-checkable deliverable contract, independent scoring on a frozen grid,
+and a graded scaffolding ladder from a zero-LLM scripted policy to from-scratch,
+all rungs inside the identical contract (Section~\ref{sec:benchmark}).
+\textbf{(ii) A model-controlled harness comparison}---four substrates on one
+identical model, so ``which agent framework'' is not confounded with ``which
+model'', a confound we found in our own earlier campaigns---which finds that
+library access makes agents \emph{worse} in all four
+(Section~\ref{sec:results}).
+\textbf{(iii) A verification layer} distinguishing delivery, physical validity
+and self-report honesty, which finds that 31\% of scored runs pass every
+contract gate while being physically invalid
+(Section~\ref{sec:verification}).
+\textbf{(iv) A deterministic, LLM-free account of what each agent built}---its
+chain of methods, its per-round decision logic, and whether its code agrees with
+its own prose---which is what makes the level effect interpretable
+(Section~\ref{sec:agentlogic}).

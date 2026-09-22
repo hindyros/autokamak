@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -36,7 +37,7 @@ def build_round_context(
     time_budget_seconds: int,
     elapsed_seconds: float,
     trials_used: int,
-    focus: Optional[dict],
+    focus: dict | None,
     bundle,
     dataset_h5: Path,
     n_pca_components_default: int,
@@ -83,9 +84,9 @@ def run_automl_loop(
     n_pca_components_default: int = 8,
     k_folds: int = 4,
     seed: int = 0,
-    focus: Optional[dict] = None,
+    focus: dict | None = None,
     test_shard_h5: str | Path | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run the structured AutoML search; return a summary dict.
 
     When ``test_shard_h5`` is given, ``test_psi_rmse`` is measured on that
@@ -150,7 +151,7 @@ def run_automl_loop(
     trials_used = 0
     started = time.time()
     terminated_by = "rounds_cap"
-    stop_reason: Optional[str] = None
+    stop_reason: str | None = None
     rounds_completed = 0
 
     for r in range(1, max_rounds + 1):

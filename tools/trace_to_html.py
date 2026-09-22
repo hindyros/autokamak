@@ -19,7 +19,6 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,7 +39,7 @@ class LogFile:
     started_utc: _dt.datetime
 
 
-def _parse_utc(s: str) -> Optional[_dt.datetime]:
+def _parse_utc(s: str) -> _dt.datetime | None:
     if not s:
         return None
     try:
@@ -48,7 +47,7 @@ def _parse_utc(s: str) -> Optional[_dt.datetime]:
     except ValueError:
         return None
     if dt.tzinfo is None:  # naive stamps (e.g. "20260719_182653") are UTC
-        dt = dt.replace(tzinfo=_dt.timezone.utc)
+        dt = dt.replace(tzinfo=_dt.UTC)
     return dt
 
 
@@ -61,19 +60,19 @@ def _index_logs(logs_dir: Path) -> list[LogFile]:
         if not m:
             continue
         try:
-            ts = _dt.datetime.strptime(m.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=_dt.timezone.utc)
+            ts = _dt.datetime.strptime(m.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=_dt.UTC)
         except ValueError:
             continue
         out.append(LogFile(path=p, started_utc=ts))
     return out
 
 
-def _match_log(run_started: Optional[_dt.datetime], logs: list[LogFile], tol_seconds: int = 120) -> Optional[LogFile]:
+def _match_log(run_started: _dt.datetime | None, logs: list[LogFile], tol_seconds: int = 120) -> LogFile | None:
     """Pick the log whose start time is closest to (but not after) the run's start."""
     if run_started is None or not logs:
         return None
-    best: Optional[LogFile] = None
-    best_dt: Optional[_dt.timedelta] = None
+    best: LogFile | None = None
+    best_dt: _dt.timedelta | None = None
     for lf in logs:
         delta = run_started - lf.started_utc
         if delta.total_seconds() < -5:
@@ -312,7 +311,7 @@ def _phase_of(score: dict, prompt_path: str) -> str:
 
 
 def _write_index(
-    runs: list[dict], out_dir: Path, since: Optional[_dt.datetime] = None
+    runs: list[dict], out_dir: Path, since: _dt.datetime | None = None
 ) -> None:
     rows = []
     for r in runs:
@@ -647,13 +646,13 @@ def _render_meta_iterations(workspace: Path | None) -> str:
             f'</div>'
         )
     return (
-        f'<h2>Agent decision timeline</h2>'
-        f'<p class="muted">Each iteration: what the deterministic diagnostics reported, what the LLM decided, and why.</p>'
+        '<h2>Agent decision timeline</h2>'
+        '<p class="muted">Each iteration: what the deterministic diagnostics reported, what the LLM decided, and why.</p>'
         + "".join(cards)
     )
 
 
-def _meta_pct(new, old) -> Optional[float]:
+def _meta_pct(new, old) -> float | None:
     """Error-reduction %: positive means ``new`` is better (lower). None if not computable."""
     try:
         new_f = float(new)
@@ -665,7 +664,7 @@ def _meta_pct(new, old) -> Optional[float]:
     return 100.0 * (old_f - new_f) / old_f
 
 
-def _fmt_meta_pct(p: Optional[float]) -> str:
+def _fmt_meta_pct(p: float | None) -> str:
     if p is None:
         return '<span class="muted">—</span>'
     cls = "pos" if p >= 0 else "neg"
@@ -714,7 +713,7 @@ def _meta_records(workspace: Path) -> tuple[list, dict]:
     return [], (_load_json(workspace / "report.json") or {})
 
 
-def _meta_index_summary(workspace: Path | None) -> Optional[dict]:
+def _meta_index_summary(workspace: Path | None) -> dict | None:
     """Headline meta metrics for an index row, or None if this isn't a meta run."""
     if workspace is None:
         return None
@@ -1312,7 +1311,7 @@ def _render_capability_report(workspace: Path | None, trace: dict | None = None)
     # results to an earlier trace.
     started = _parse_utc((trace or {}).get("started_utc", "") or "")
     if started is not None:
-        mtime = _dt.datetime.fromtimestamp(rpt_path.stat().st_mtime, tz=_dt.timezone.utc)
+        mtime = _dt.datetime.fromtimestamp(rpt_path.stat().st_mtime, tz=_dt.UTC)
         finished = _parse_utc((trace or {}).get("finished_utc", "") or "")
         window_end = (finished or mtime) + _dt.timedelta(minutes=5)
         if not (started <= mtime <= window_end):
@@ -1384,7 +1383,7 @@ def _render_dspy_run(t: dict) -> str:
                 f'<div class="card"><b>Review round {r.get("round", "?")}:</b> '
                 f'<span style="color:{color}">{mark}</span>{missing_html}</div>'
             )
-        parts.append(f"<h2>Deliverable reviews</h2>" + "".join(rows))
+        parts.append("<h2>Deliverable reviews</h2>" + "".join(rows))
     return "".join(parts)
 
 
@@ -1449,7 +1448,7 @@ def _write_detail(run: dict, out_dir: Path, all_runs: list[dict] | None = None) 
     files_html = ""
     if files:
         files_html = (
-            f'<h2>Files written by agent</h2><ul class="mono">'
+            '<h2>Files written by agent</h2><ul class="mono">'
             + "".join(f'<li>{html.escape(f)}</li>' for f in files)
             + "</ul>"
         )
@@ -1497,7 +1496,7 @@ def _write_detail(run: dict, out_dir: Path, all_runs: list[dict] | None = None) 
     )
 
 
-def _run_started(trace: dict, run_id: str) -> Optional[_dt.datetime]:
+def _run_started(trace: dict, run_id: str) -> _dt.datetime | None:
     """Run start time from the trace, falling back to the run-id timestamp."""
     started = _parse_utc(trace.get("started_utc", ""))
     if started is not None:
@@ -1506,14 +1505,14 @@ def _run_started(trace: dict, run_id: str) -> Optional[_dt.datetime]:
     if m:
         try:
             return _dt.datetime.strptime(m.group(1), "%Y%m%dT%H%M%SZ").replace(
-                tzinfo=_dt.timezone.utc
+                tzinfo=_dt.UTC
             )
         except ValueError:
             pass
     return None
 
 
-def _parse_since(value: str) -> Optional[_dt.datetime]:
+def _parse_since(value: str) -> _dt.datetime | None:
     """'all' → no cutoff; else an ISO date/datetime (assumed UTC if naive)."""
     if not value or value.lower() == "all":
         return None
@@ -1521,7 +1520,7 @@ def _parse_since(value: str) -> Optional[_dt.datetime]:
     if cutoff is None:
         raise SystemExit(f"--since: cannot parse {value!r} (use YYYY-MM-DD or 'all')")
     if cutoff.tzinfo is None:
-        cutoff = cutoff.replace(tzinfo=_dt.timezone.utc)
+        cutoff = cutoff.replace(tzinfo=_dt.UTC)
     return cutoff
 
 

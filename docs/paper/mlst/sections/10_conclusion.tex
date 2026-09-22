@@ -1,0 +1,31 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We built a benchmark in which an agent has to buy its own data, and then ran 59
+agents through it on a single model.
+
+Giving an agent a proven library made it worse. From-scratch agents beat
+library-assisted ones in all four substrates, by a pooled median \relltwo{} of
+$0.137$ against $0.229$, and the deterministic analysis of what they wrote says
+why: given a library, all four settle on its default model and its named
+acquisition strategies; given nothing, all four converge on a different family
+and two of them beat the library's own score. Holding the model fixed, which
+framework wrapped it mattered more than how much help it was given. And the
+pipeline that uses no language model at all, at a matched budget and no cost,
+still beat five of the eight agent cells.
+
+The finding we would most like to see travel is the one about verification.
+Thirty-one per cent of scored runs passed every machine-checkable gate while
+being physically invalid, and the single clearest example scored better than
+most of the corpus on the error metric while inventing a magnetic field in a
+vacuum. The runs that misreported their own performance were largely not the
+same runs, so neither measurement detects the other.
+
+A benchmark that checks only whether the required files appeared will certify
+work that is physically wrong and self-reported dishonestly, and it will do so
+silently. Separating \emph{did it deliver}, \emph{is it valid} and \emph{did it
+tell the truth} costs three diagnostics computed from predictions the benchmark
+already holds. Asking the fourth question --- \emph{did it build what it said it
+built} --- costs a parser. Between them they are the difference between
+measuring what an agent can do and measuring whether it filed the right
+paperwork.

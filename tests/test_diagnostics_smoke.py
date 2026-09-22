@@ -8,7 +8,6 @@ file has no dependency on a physical TokaMaker run. ~5s.
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from autotokamak.surrogate.dataset import DatasetBundle
 
@@ -71,9 +70,9 @@ def test_pca_spectrum_explains_low_rank_data():
 
 def test_residual_structure_after_real_fit(tmp_path):
     """End-to-end: train a real winner via automl, then probe residuals."""
+    from autotokamak.surrogate import optuna_search as automl
     from autotokamak.surrogate.dataset import kfold
     from autotokamak.surrogate.diagnostics import residual_structure
-    from autotokamak.surrogate import optuna_search as automl
     from autotokamak.surrogate.schema import SearchSpec
     from autotokamak.surrogate.zoo import DEFAULT_SEARCH_SPACES
 
@@ -96,7 +95,7 @@ def test_residual_structure_after_real_fit(tmp_path):
         }
     )
     result = automl.run_study(spec, bundle=bundle, splits=splits, workdir=tmp_path)
-    info = automl.refit_winner(
+    automl.refit_winner(
         result, bundle=bundle, splits=splits, save_to=tmp_path / "winner.pkl"
     )
     import joblib

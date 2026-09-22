@@ -9,7 +9,6 @@ workspace. Agent-written dataset generation is an L2/L3 benchmark condition:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.pipelines._common import (
     default_dataset_config,
@@ -20,8 +19,8 @@ from autotokamak.pipelines._common import (
 
 def run_phase1(
     *,
-    config: Optional[str] = None,
-    n_samples: Optional[int] = None,
+    config: str | None = None,
+    n_samples: int | None = None,
 ) -> dict:
     """Generate a dataset using the platform library (no LLM).
 

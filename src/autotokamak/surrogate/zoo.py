@@ -16,13 +16,12 @@ outer-loop round.
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
+from typing import Any
 
 # Hyperparameter-range presets the prompt advertises. Values are ``ParamRange``
 # dicts (see ``schema.ParamRange``) so the agent can copy them into a
 # ``ModelSpec`` with no shape adjustment.
-DEFAULT_SEARCH_SPACES: Dict[str, Dict[str, Dict[str, Any]]] = {
+DEFAULT_SEARCH_SPACES: dict[str, dict[str, dict[str, Any]]] = {
     "gp": {
         "length_scale": {"type": "loguniform", "low": 1e-2, "high": 1e2},
         "noise_level": {"type": "loguniform", "low": 1e-6, "high": 1e-1},
@@ -72,7 +71,7 @@ def make_gp(**hp: Any):
     Multi-output is native in sklearn's GP — no MultiOutputRegressor needed.
     """
     from sklearn.gaussian_process import GaussianProcessRegressor
-    from sklearn.gaussian_process.kernels import RBF, WhiteKernel, ConstantKernel
+    from sklearn.gaussian_process.kernels import RBF, ConstantKernel, WhiteKernel
 
     length_scale = float(hp.get("length_scale", 1.0))
     noise_level = float(hp.get("noise_level", 1e-3))

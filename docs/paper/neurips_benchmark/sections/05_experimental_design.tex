@@ -1,0 +1,62 @@
+\section{Experimental design}
+\label{sec:design}
+
+\paragraph{Conditions and model control.}
+$\{\Ltwo{}, \Lthree{}\} \times \{\hn{ursa}, \hn{dspy}, \hn{pi}, \hn{cursor}\}
+= 8$ cells, replicated, plus a budget-matched \Lzero{} reference arm. We
+attempted 59 runs and scored 49. Replicate counts are deliberately unequal---two
+substrates at $n=10$ and two at $n=5$---because the campaign was budgeted in
+dollars rather than in runs and one substrate costs an order of magnitude more
+per run than another; failures reduce some cells further, and every denominator
+in this paper counts attempts, not survivors. Every cell runs the \emph{same}
+model, \code{gpt-5.2}, pinned per adapter inside the task specification because
+the adapters disagree about how a model is named. Pinning it in the frozen task
+text rather than as a command-line override is what makes the control auditable:
+the model string is recorded three independent times per run. In our own earlier
+campaign one harness ran a different model family from the others, making
+``harness effect'' and ``model effect'' inseparable; a fifth adapter is excluded
+here for the same reason, being unable to run the pinned model. Harness versions
+were \hn{ursa} 0.15.1, \hn{dspy} 3.2.1, \hn{pi} 0.73.1 and \hn{cursor}
+2026.09.18, against Open FUSION Toolkit 26.6---\textbf{recorded from the
+machine, not from the run records}, which stamp the task hash, prompt version,
+model and replicate index but not the substrate's version---a provenance gap in
+our harness that we state rather than imply otherwise.
+
+\paragraph{Equal compute budgets, and why they are hard to enforce.}
+Giving every substrate the same budget was the hardest engineering requirement
+in the benchmark. Two adapters accepted a \code{timeout\_seconds} argument and
+silently ignored it; fixing that exposed two deeper failures---a timeout raised
+as an ordinary exception is \emph{swallowed} by the broad \code{except Exception}
+handlers agent frameworks wrap their step loops in, and, \code{signal.alarm}
+being one-shot, one harness then ran over ten hours against a 90-minute cap; and
+killing the agent does not stop the work, because a timing-out
+\code{subprocess.run} waits again on pipes the solver's grandchildren hold open,
+which left one cell deadlocked for 9\,h\,19\,m. The lesson generalises past this
+benchmark---\textbf{an agent harness is third-party code and cannot be trusted
+to honour a deadline from inside}---so we enforce the budget in-adapter, by
+process-group kill, and by a driver watchdog nothing inside the cell can
+intercept (Appendix~\ref{app:budget}). We also equalised \code{feedback\_rounds}
+to 1, the only value all four adapters honour identically. Held fixed: prompt
+text (version 3, hashed per run), the frozen grid, the 60-parameter test set,
+the gate set and the scoring rule; the \Ltwo{} and \Lthree{} problem texts are
+byte-identical except for ten hunks, all concerning access level
+(Appendix~\ref{app:tasktext}).
+
+\paragraph{Analysis, and one post-hoc change we must disclose.}
+The unit of analysis is the cell. Pass rates carry \textbf{Wilson score
+intervals} \citep{wilson1927probable}, which---unlike the normal
+approximation---do not collapse to zero width at $0/n$ or $n/n$; relative-$L_2$
+is summarised by \textbf{medians with percentile bootstrap intervals}
+\citep{efron1979bootstrap}, not means, because a single catastrophic replicate
+makes a mean uninterpretable and we have several. The \Ltwo{}/\Lthree{} contrast
+is paired within harness, since harness is a blocking factor rather than a
+treatment. We pre-specified an exact two-sided sign test over the four harness
+pairs. That test cannot return a $p$ below $0.125$ at four pairs, and the
+campaign produced a unanimous $4/4$ direction, so we \textbf{changed the primary
+test after seeing the data} to a stratified rank statistic in the van Elteren
+family \citep{vanelteren1960combination}, which uses all 49 scored runs while
+still permuting labels only within harness. This is post-hoc and we treat it as
+such: the analysis tool prints all three tests on every run, all three appear in
+Section~\ref{sec:l2l3}, and the conclusion carries the caveat. Per-cell
+orderings are exploratory throughout; the pooled level contrast is the claim
+that carries weight.

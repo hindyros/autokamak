@@ -20,13 +20,13 @@ identifies which decision patterns correlate with high scores.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import dspy
 
 from autotokamak.agent.dspy.picker_inputs import PICKER_INPUT_KEYS
-
 
 META_PROMPT_PATH_SUFFIX = "surrogate_meta.yaml"
 

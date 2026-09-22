@@ -11,6 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
+
+from tests.conftest import requires_oft
 
 
 def _tiny_config() -> dict:
@@ -36,7 +39,7 @@ def test_sweep_config_rejects_missing_param_key():
 
     bad = _tiny_config()
     del bad["parameters"]["Ip"]
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         SweepConfig.model_validate(bad)
 
 
@@ -45,10 +48,11 @@ def test_sweep_config_rejects_inverted_bounds():
 
     bad = _tiny_config()
     bad["parameters"]["a"] = {"low": 0.20, "high": 0.10}
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         SweepConfig.model_validate(bad)
 
 
+@requires_oft
 def test_run_sweep_produces_phase1_compatible_h5(tmp_path: Path):
     import h5py
 
@@ -73,6 +77,7 @@ def test_run_sweep_produces_phase1_compatible_h5(tmp_path: Path):
             assert f[f"inputs/{p}"].shape == (2,)
 
 
+@requires_oft
 def test_run_sweep_outputs_load_through_eval_data(tmp_path: Path):
     from autotokamak.data.schema import SweepConfig
     from autotokamak.data.sweep import run_sweep

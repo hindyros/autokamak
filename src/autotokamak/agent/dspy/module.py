@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import dspy
 
@@ -204,7 +204,7 @@ DEFAULT_OPTIMIZED_PATH = (
 )
 
 
-def load_module(optimized_path: Optional[Path] = None) -> MetaActionPickerModule:
+def load_module(optimized_path: Path | None = None) -> MetaActionPickerModule:
     """Construct a baseline module; load optimized state if available.
 
     ``optimized_path`` defaults to the package-relative
@@ -341,7 +341,7 @@ def _coerce_to_round_decision(pred: dspy.Prediction):
         )
 
 
-def load_search_module(optimized_path: Optional[Path] = None) -> SearchRoundPickerModule:
+def load_search_module(optimized_path: Path | None = None) -> SearchRoundPickerModule:
     """Baseline search-picker module; loads optimized state when available."""
     module = SearchRoundPickerModule()
     path = optimized_path or DEFAULT_SEARCH_OPTIMIZED_PATH

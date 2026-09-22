@@ -23,15 +23,26 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
 
 from autotokamak.agent.runners.config import REPO_ROOT
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
-from autotokamak.harnesses.base import Harness, RunResult
+from autotokamak.harnesses.base import (
+    Harness,
+    HarnessTimeout,
+    RunResult,
+    time_limit,
+)
 
 MAX_TOOL_OUTPUT_CHARS = 8_000
 MAX_SHELL_TIMEOUT = 4 * 3600  # a full campaign may run in one command
+# Absolute wall-clock deadline for the whole run, set when a run starts.
+# A single jailed shell call is clamped to the time REMAINING against it:
+# without this an agent can ask for 14400s inside a 5400s task and the cell
+# runs for hours past its budget. Observed: five L2-dspy cells at 4-5 hours
+# against a 90-minute budget, with the outer SIGALRM apparently absorbed
+# somewhere inside the agent loop.
+_RUN_DEADLINE: float | None = None
 DEFAULT_MODEL = "openai/gpt-5.2"
 DEFAULT_MAX_ITERS_PER_STEP = 40
 
@@ -108,7 +119,13 @@ def make_tools(workspace: Path, tool_log: list[dict]):
     def _resolve(path: str) -> Path:
         p = (workspace / path).resolve()
         if not p.is_relative_to(workspace):
-            raise ValueError(f"path escapes the workspace: {path}")
+            # Task-provided symlinks (e.g. the OpenFUSIONToolkit reference
+            # clone) resolve outside the workspace by construction; paths
+            # whose UNRESOLVED form stays inside the jail are legitimate —
+            # other substrates can read this material, so must dspy.
+            unresolved = Path(os.path.normpath(workspace / path))
+            if not unresolved.is_relative_to(workspace):
+                raise ValueError(f"path escapes the workspace: {path}")
         return p
 
     def _clip(text: str, limit: int = MAX_TOOL_OUTPUT_CHARS) -> str:
@@ -179,6 +196,13 @@ def make_tools(workspace: Path, tool_log: list[dict]):
         on timeout.
         """
         timeout_seconds = min(int(timeout_seconds), MAX_SHELL_TIMEOUT)
+        if _RUN_DEADLINE is not None:
+            remaining = int(_RUN_DEADLINE - time.time())
+            if remaining <= 0:
+                return _record("run_shell", {"command": command},
+                               "ERROR: the run's time budget is exhausted; "
+                               "no further shell commands will be executed.")
+            timeout_seconds = min(timeout_seconds, remaining)
         env = os.environ.copy()
         env["PATH"] = f"{REPO_ROOT / 'venv' / 'bin'}:{env.get('PATH', '')}"
         env["PYTHONUNBUFFERED"] = "1"
@@ -275,6 +299,13 @@ def _build_campaign(workspace: Path, tool_log: list[dict],
 
 
 class DspyHarness(Harness):
+    """DSPy: plan, then per-step ReAct, then review, then fix.
+
+    In-process. Shell commands it issues are clamped to the remaining run
+    budget rather than to their own timeout, so a long-running command near
+    the end of a run cannot outlive the run.
+    """
+
     name = "dspy"
 
     def run(
@@ -283,9 +314,17 @@ class DspyHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         # litellm convention: "openai/gpt-5.2"; accept our "openai:..." form too.
@@ -302,9 +341,23 @@ class DspyHarness(Harness):
             feedback_rounds=task.feedback_rounds,
         )
 
-        import dspy
+        status, error = "completed", None
+        lm = None
+        try:
+            import dspy
 
-        dspy.configure(lm=dspy.LM(model_name, temperature=1.0, max_tokens=32_000))
+            lm = dspy.LM(model_name, temperature=1.0, max_tokens=32_000)
+            dspy.configure(lm=lm)
+        except Exception as exc:  # noqa: BLE001 — missing dep/bad model must
+            # still yield a result.json, like every other adapter
+            trace.mark_errored(exc)
+            return RunResult(
+                status="errored", run_id=run_id,
+                condition=self.condition_for(task), harness=self.name,
+                model=model_name, workspace=workspace, trace_path=trace._path,
+                wall_seconds=time.time() - started,
+                error=f"{type(exc).__name__}: {exc}",
+            )
 
         tool_log: list[dict] = []
         campaign = _build_campaign(
@@ -314,9 +367,19 @@ class DspyHarness(Harness):
             fix_rounds=max(0, task.feedback_rounds - 1),
         )
 
-        status, error = "completed", None
+        # The CLI always passes one; fall back to the task's own cap so a
+        # direct adapter call is never unbounded either. A single jailed
+        # shell call may still hold MAX_SHELL_TIMEOUT internally; the outer
+        # alarm is what actually bounds the run.
+        effective_timeout = timeout_seconds or task.timeout_seconds
+        # The deadline every jailed shell call is measured against, so the
+        # in-adapter cap holds even if the outer signal never lands.
+        global _RUN_DEADLINE
+        _RUN_DEADLINE = time.time() + effective_timeout
+
         try:
-            final = campaign(task=task.render_prompt(self.name), trace=trace)
+            with time_limit(effective_timeout):
+                final = campaign(task=task.render_prompt(self.name), trace=trace)
             trace.record_artifacts(workspace, expected_artifacts=task.expected_artifacts)
             from autotokamak.bench.scoring import try_score
 
@@ -325,6 +388,9 @@ class DspyHarness(Harness):
                 trace.record_score(score)
             trace.mark_completed()
             print(f"\n=== FINAL ===\n{final}\nWorkspace: {workspace}")
+        except HarnessTimeout as exc:
+            trace.mark_errored(exc)
+            status, error = "timeout", str(exc)
         except KeyboardInterrupt:
             trace.mark_interrupted()
             status, error = "interrupted", "KeyboardInterrupt"
@@ -336,6 +402,25 @@ class DspyHarness(Harness):
                 for rec in tool_log:
                     f.write(json.dumps(rec) + "\n")
 
+        # litellm computes per-call cost + usage; harvest from the LM history.
+        cost_usd, usage = None, None
+        try:
+            history = getattr(lm, "history", None) or []
+            costs = [h.get("cost") for h in history if h.get("cost") is not None]
+            if costs:
+                cost_usd = round(float(sum(costs)), 6)
+            prompt_toks = completion_toks = 0
+            for h in history:
+                u = h.get("usage") or {}
+                prompt_toks += int(u.get("prompt_tokens") or 0)
+                completion_toks += int(u.get("completion_tokens") or 0)
+            if prompt_toks or completion_toks:
+                usage = {"prompt_tokens": prompt_toks,
+                         "completion_tokens": completion_toks,
+                         "n_lm_calls": len(history)}
+        except Exception:  # noqa: BLE001 — usage capture must never fail a run
+            pass
+
         return RunResult(
             status=status,
             run_id=run_id,
@@ -345,6 +430,8 @@ class DspyHarness(Harness):
             workspace=workspace,
             trace_path=trace._path,
             wall_seconds=time.time() - started,
+            cost_usd=cost_usd,
             error=error,
-            extra={"n_tool_calls": len(tool_log)},
+            extra={"n_tool_calls": len(tool_log),
+                   **({"usage": usage} if usage else {})},
         )

@@ -1,0 +1,93 @@
+\section{Introduction}
+\label{sec:intro}
+
+Benchmarks for machine-learning agents have settled into a shape. You give the
+agent a dataset and a metric, and you see how good a model it can fit. MLE-bench
+draws its tasks from Kaggle competitions; MLAgentBench, DSBench,
+ScienceAgentBench and their relatives vary the domain and the scaffolding but
+keep the shape.\footnote{Citations are collected in
+Section~\ref{sec:related}.} In every case the data exists before the agent
+starts, and it is the same data for every agent. That is exactly what makes
+those benchmarks clean comparisons.
+
+It is also what makes them unlike most of computational science. There, the
+expensive step is usually \emph{getting} the data --- running the simulation,
+performing the experiment, doing the solve --- and the decision that separates a
+good researcher from a mediocre one is \emph{where to spend the next unit of
+budget}. An agent that is excellent at fitting a dataset it was handed may be
+useless at deciding which experiments are worth running. Nothing in the current
+crop of benchmarks would tell us either way.
+
+This paper introduces a benchmark that puts that decision back. The agent is
+given a physics solver, a five-dimensional space of inputs, and a hard budget of
+solver calls. It must work out how to drive the solver, decide which points in
+the space to spend its budget on, train a model on what it collected, and hand
+over a predictor --- which we then score, on a set of cases it has never seen,
+with machinery it does not control (Figure~\ref{fig:loop}).
+
+\input{sections/fig_loop}
+
+\paragraph{Why this particular solver.}
+The ground truth comes from TokaMaker~\citep{hansen2024tokamaker}, a
+finite-element solver for the equilibrium of a magnetically confined fusion
+plasma. Section~\ref{sec:physics} explains the physics from scratch; the
+properties that make it a good instrument for measuring agents are these. It is
+\emph{genuinely expensive} --- seconds per solve, so a budget bites. It
+\emph{fails}, and does so as a function of the inputs, so the feasible region
+has to be discovered rather than assumed. Its output is
+\emph{high-dimensional} (a field on a $96\times64$ grid) while its input is
+five numbers, so dimensionality reduction is a real design decision rather than
+a formality. It is \emph{unforgiving about physics}: the quantity being
+predicted is a signed physical field in webers, undefined outside the plasma, so
+an agent that quietly normalises it, or fills in the region where it does not
+exist, produces something that looks plausible and is wrong. And the answers are
+\emph{not memorisable} --- these particular equilibria are not on the internet.
+
+\paragraph{What we found.}
+Three things, in increasing order of how much they surprised us.
+
+First, with the language model held fixed across every condition, \emph{which
+agent framework you use matters more than how much help you give it}. The
+per-cell medians span a factor of $8.8$ across four substrates, against a factor
+of $1.7$ between the two levels of scaffolding.
+
+Second, \emph{the scaffolding helped in the wrong direction}. Agents allowed to
+import a proven, tested pipeline library did worse than agents made to write
+everything themselves --- in all four substrates, with no exceptions. A
+deterministic analysis of the code they wrote (Section~\ref{sec:agentlogic})
+says why, and it is not that the library is bad: given the library, all four
+substrates adopt its default model and the acquisition strategies its
+documentation names; given nothing, all four independently find a different
+method family, and two of them beat the library's own score on the same test
+set.
+
+Third, and this is the finding we think matters beyond this benchmark:
+\textbf{31\% of the runs that passed every machine-checkable gate were
+physically invalid}. Not marginal --- invalid. One of them scored better than
+most of the corpus on the error metric while emitting a magnetic field
+throughout the vacuum region outside the plasma, where the field is not defined
+at all (Figure~\ref{fig:pva}, second row). The contract that certified it is the
+standard instrument in this literature: check the files exist, check they parse,
+check the predictor runs and returns the right shape. It cannot see this class
+of failure, and neither can the headline error number.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item \textbf{A closed-loop scientific-ML benchmark} in which the agent buys its
+  own training data from an expensive solver under a fixed budget, with a
+  machine-checkable deliverable, independent scoring on a frozen set, and a
+  four-rung ladder of scaffolding from a zero-LLM scripted policy to
+  from-scratch --- every rung inside the identical contract
+  (Section~\ref{sec:benchmark}).
+\item \textbf{A model-controlled comparison of four agent frameworks.} Every
+  cell runs the same model, so ``which framework'' is not confounded with
+  ``which model'' --- a confound we had in our own earlier campaigns
+  (Section~\ref{sec:results}).
+\item \textbf{A verification layer} that separates delivery, physical validity
+  and self-report honesty, and finds all three come apart
+  (Section~\ref{sec:verification}).
+\item \textbf{A deterministic, LLM-free account of what each agent actually
+  built} --- its chain of methods, its per-round decision logic, and whether its
+  code agrees with its own prose. This is what makes the scaffolding result
+  interpretable rather than merely surprising (Section~\ref{sec:agentlogic}).
+\end{enumerate}

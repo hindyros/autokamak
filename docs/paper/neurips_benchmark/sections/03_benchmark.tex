@@ -1,0 +1,85 @@
+\section{The benchmark}
+\label{sec:benchmark}
+
+\subsection{The task, the contract, and the scoring}
+\label{sec:task}
+
+The agent receives a frozen, versioned problem statement
+(Appendix~\ref{app:tasktext}) giving: the forward problem---fixed-boundary
+equilibria of D-shaped plasmas in five parameters ($\rzero$, $a$, $\kappa$,
+$\delta$, $\Ip$) over stated ranges at the solver's default profiles; a campaign
+structure with a hard budget---at most 150 initial space-filling solves then up
+to three adaptive rounds of exactly 100 new solves each, failures included, with
+each round's points required to be chosen from the current model or data, so a
+one-shot design is explicitly insufficient; a stopping criterion---stop early
+once validation error reaches $\le 0.30\times$ the mean-predictor baseline, on a
+validation set kept separate from the test set; a held-out test set of at least
+20 solves at a recorded seed, never used for training, selection or acquisition;
+and a requirement to report whether the adaptive sampling actually helped, ``or
+an honest statement that it did not''. Four process gates are mandatory and
+identical for every condition: a \emph{meshing milestone}, a \emph{pilot gate}
+($\ge 20$ solves at $\ge 50\%$ success before the rounds begin), a
+\emph{storage-validation gate} (a solve counts only after its stored artifact is
+re-read from disk and confirmed finite), and a \emph{deliverable self-test} (run
+every documented command in a fresh process before declaring done).
+
+\paragraph{The deliverable contract.}
+Every condition emits the same artifacts, checked mechanically. The nine checks
+(Appendix~\ref{app:gates}) require the three artifacts to exist and be
+non-empty, \code{report.json} to parse and carry the required keys,
+\code{predict.py} to run to completion as a subprocess on sample parameters,
+and its output to have the right shape on the right grid. One
+further gate applies at \Lthree{} only---a static audit that no workspace file
+imports the platform library---so \Lthree{} runs face nine gates and \Ltwo{}
+eight. \code{contract.passed} is the flat \textsc{and} of them: no weighting, no
+partial credit. The scoring subprocess is stripped of provider credentials, so
+\code{predict.py} must work offline, and runs in its own process group so a
+timeout reaps the solver's children. Critically, \code{report\_keys}
+\textbf{checks key \emph{presence}, never correctness}: self-reported metrics
+are recorded verbatim and never cross-checked, which is what makes the honesty
+measurement of Section~\ref{sec:honesty} possible.
+
+\paragraph{Independent scoring.}
+Predictions are scored against a frozen test set of 60 parameter vectors (seed
+\code{20260809}, all 60 converged) solved once and stamped with
+provenance---solver version, the SHA-256 of both the parameter file and the grid, and a
+scoring epoch---so a score is only ever pooled with scores computed the same
+way. The archive is never regenerated. The metric is per-sample relative $L_2$
+over the finite ground-truth points, and \textbf{a NaN prediction at a finite
+ground-truth point is scored as a full-magnitude miss}, never skipped, since
+otherwise an all-NaN prediction would score as perfect
+(Appendix~\ref{app:scoring}). Accuracy is quoted against the trivial
+mean-flux-map predictor on the same set, which scores $0.4933$.
+
+\subsection{The access-level ladder, and the substrates}
+\label{sec:ladder}
+
+Four levels, all emitting the identical contract and scored on the identical
+frozen set: \Lzero{} \emph{scripted}, the pre-written pipeline with seeded
+heuristic decisions and zero LLM calls; \Lone{} \emph{structured}, the same
+pipeline with an LLM making only typed decisions; \Ltwo{}
+\emph{library-assisted}, where the agent writes the glue code and may import the
+platform library; and \Lthree{} \emph{from-scratch}, where it writes everything
+and the import is forbidden and audited. \Lzero{} is the golden baseline---same
+seed, same decisions, no model---and having a zero-LLM condition scored on the
+same frozen set is what lets us say how much of a score is the task and how much
+is the agent. Four agent substrates implement one adapter each behind the same
+interface: \hn{ursa} (a plan/execute agent pair on LangGraph), \hn{dspy} (plan
+$\rightarrow$ per-step ReAct $\rightarrow$ review $\rightarrow$ fix), and
+\hn{pi} and \hn{cursor} (CLI coding agents); adding a substrate is one adapter
+module and one registry entry.
+
+\paragraph{Is the task hard for the right reasons?}
+\label{sec:characterisation}
+Three facts from a direct sweep independent of any agent, detailed in
+Appendix~\ref{app:characterisation}. The \emph{best model family changes with
+$N$}---polynomial ridge up to $N = 200$, kernel ridge from $400$---so model
+selection depends on the data the agent chose, and the 450-solve bound sits
+where that still matters. At matched budget space-filling beats uniform-random
+by $21\%$ at $N = 100$ and $6\%$ by $1600$, while clustered sampling is
+catastrophic everywhere. And the surrogate \emph{collapses out of
+distribution}---trained on half the parameter space and tested on the other,
+ratio $0.94$ against $0.38$--$0.40$ within-distribution---so an agent that
+samples badly does not lose a few percent; it produces a model that fails
+completely off-distribution and, evaluating itself on its \emph{own} test set,
+may never notice.

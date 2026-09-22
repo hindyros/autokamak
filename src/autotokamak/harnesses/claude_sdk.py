@@ -20,7 +20,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from autotokamak.bench.taskspec import TaskSpec
 from autotokamak.bench.trace import RunTrace, utc_run_id
@@ -33,10 +33,20 @@ MAX_TURNS = 300
 
 
 class ClaudeSdkHarness(Harness):
+    """Anthropic's Claude Agent SDK, driven through ``query()``.
+
+    ``setting_sources=[]`` is load-bearing: without it the SDK would pick up
+    this repository's own ``.claude/`` configuration and the agent under test
+    would inherit instructions written for the agent doing the testing.
+
+    Excluded from the published campaign, because that study pinned one model
+    across every substrate and this adapter cannot run it.
+    """
+
     name = "claude_sdk"
 
     def dry_run_info(self, task: TaskSpec, workspace: Path,
-                     model: Optional[str] = None) -> dict[str, Any]:
+                     model: str | None = None) -> dict[str, Any]:
         info = super().dry_run_info(task, workspace, model)
         info.update({
             "model": self.resolve_model(task, model) or DEFAULT_MODEL,
@@ -59,9 +69,17 @@ class ClaudeSdkHarness(Harness):
         workspace: Path,
         *,
         run_dir: Path,
-        model: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        model: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> RunResult:
+        """Run one agent against ``task`` inside ``workspace``.
+
+        Implementations must materialise ``task.symlinks``, write a
+        :class:`~autotokamak.bench.trace.RunTrace` under ``run_dir``, confine
+        all writes to ``workspace`` and ``run_dir``, honour
+        ``timeout_seconds``, and leave the substrate's raw event stream at
+        ``run_dir/<name>_events.jsonl``. See ``CONTRIBUTING.md``.
+        """
         started = time.time()
         run_id = utc_run_id()
         model_name = self.resolve_model(task, model) or DEFAULT_MODEL
@@ -81,9 +99,10 @@ class ClaudeSdkHarness(Harness):
 
         events_path = run_dir / "claude_events.jsonl"
         status, error, cost_usd, num_turns = "completed", None, None, None
+        usage: dict | None = None
 
         async def _session() -> None:
-            nonlocal cost_usd, num_turns, error, status
+            nonlocal cost_usd, num_turns, error, status, usage
             from claude_agent_sdk import ClaudeAgentOptions, query
 
             options = ClaudeAgentOptions(
@@ -95,11 +114,13 @@ class ClaudeSdkHarness(Harness):
                 model=model_name,
                 max_turns=MAX_TURNS,
             )
+            # Runtime note, not task info: the Bash tool's cwd persists across
+            # calls, so an agent that cd's away (e.g. through the OFT symlink)
+            # silently litters the enclosing repo. Pin it to absolute paths.
+            prompt = task.render_prompt(self.name) + self.workspace_note(workspace)
             step_no = 0
             with events_path.open("w", encoding="utf-8") as events:
-                async for message in query(
-                    prompt=task.render_prompt(self.name), options=options
-                ):
+                async for message in query(prompt=prompt, options=options):
                     kind = type(message).__name__
                     payload = _message_payload(message)
                     events.write(json.dumps({"kind": kind, **payload}, default=str) + "\n")
@@ -113,6 +134,8 @@ class ClaudeSdkHarness(Harness):
                     elif kind == "ResultMessage":
                         cost_usd = payload.get("total_cost_usd")
                         num_turns = payload.get("num_turns")
+                        if isinstance(payload.get("usage"), dict):
+                            usage = payload["usage"]
                         subtype = payload.get("subtype")
                         if subtype and subtype != "success":
                             status = "errored"
@@ -120,12 +143,21 @@ class ClaudeSdkHarness(Harness):
 
         try:
             asyncio.run(asyncio.wait_for(_session(), timeout=timeout))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             status, error = "timeout", f"exceeded {timeout}s"
         except KeyboardInterrupt:
             status, error = "interrupted", "KeyboardInterrupt"
         except Exception as exc:  # noqa: BLE001
             status, error = "errored", f"{type(exc).__name__}: {exc}"
+
+        # An agent that escaped its cwd leaves the workspace empty (symlinks
+        # aside) while claiming success — flag it instead of trusting it.
+        if status == "completed":
+            written = [p for p in workspace.iterdir() if not p.is_symlink()]
+            if not written:
+                status = "errored"
+                error = ("workspace empty after a 'successful' session — the "
+                         "agent likely wrote its files outside its cwd")
 
         trace.record_artifacts(workspace, expected_artifacts=task.expected_artifacts)
         if status == "completed":
@@ -146,14 +178,18 @@ class ClaudeSdkHarness(Harness):
             wall_seconds=time.time() - started,
             cost_usd=cost_usd,
             error=error,
-            extra={"num_turns": num_turns} if num_turns is not None else {},
+            extra={
+                **({"num_turns": num_turns} if num_turns is not None else {}),
+                **({"usage": usage} if usage else {}),
+            },
         )
 
 
 def _message_payload(message: Any) -> dict[str, Any]:
     """Best-effort flatten of SDK message objects (robust across SDK versions)."""
     out: dict[str, Any] = {}
-    for attr in ("subtype", "total_cost_usd", "num_turns", "duration_ms", "is_error"):
+    for attr in ("subtype", "total_cost_usd", "num_turns", "duration_ms", "is_error",
+                 "usage"):
         val = getattr(message, attr, None)
         if val is not None:
             out[attr] = val

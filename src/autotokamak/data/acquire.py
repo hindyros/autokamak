@@ -71,12 +71,10 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 
 from autotokamak.data.schema import PARAM_ORDER
-
 
 # Successful solves needed before the GP path is trusted; below this we
 # fall back to maximin space-filling (a GP on 5-D inputs with fewer points
@@ -94,7 +92,7 @@ class AcquisitionResult:
     feasibility: np.ndarray  # P(success) estimate per selected point
     n_pca_components: int
     pca_explained_variance: float
-    kernel_summaries: List[str] = field(default_factory=list)
+    kernel_summaries: list[str] = field(default_factory=list)
     n_candidates: int = 0
     seed: int = 0
     notes: str = ""
@@ -123,7 +121,7 @@ class AcquisitionResult:
 # --------------------------- internals ----------------------------------
 
 
-def _ard_rbf(d: int, *, noise_level: Optional[float] = None, noise_bounds=(1e-8, 1e0)):
+def _ard_rbf(d: int, *, noise_level: float | None = None, noise_bounds=(1e-8, 1e0)):
     """The module's standard ARD-RBF kernel; optional additive WhiteKernel.
 
     One factory for the three GP fits in this module (feasibility classifier,
@@ -256,7 +254,7 @@ class _GPBatch:
 
     def __init__(
         self,
-        kernels: List,
+        kernels: list,
         weights: np.ndarray,
         X_train: np.ndarray,
         X_cand: np.ndarray,
@@ -281,7 +279,7 @@ class _GPBatch:
     def total_variance(self) -> np.ndarray:
         """Weighted field variance for every candidate (dead ones = -inf)."""
         tot = np.zeros(self.X_cand.shape[0], dtype=np.float64)
-        for w, s in zip(self.weights, self.state):
+        for w, s in zip(self.weights, self.state, strict=True):
             var = s["prior"] - np.einsum("ij,ij->j", s["V"], s["V"])
             tot += w * np.maximum(var, 0.0)
         tot[~self.alive] = -np.inf
@@ -313,7 +311,7 @@ def _fit_component_kernels(
     X_train_std: np.ndarray,
     coeffs_std: np.ndarray,
     seed: int,
-) -> List:
+) -> list:
     """One ARD-RBF GP fit per standardized PCA coefficient; returns kernels.
 
     Hyperparameters are optimized ONCE here (marginal likelihood, one
@@ -607,7 +605,7 @@ def select_acquisition_points_residual(
     beta = float(np.clip(beta, 0.0, 3.0))
 
     min_needed = max(MIN_SUCCESS_FOR_GP, 2 * k_folds)
-    fallback_reason: Optional[str] = None
+    fallback_reason: str | None = None
     if winner_payload is None:
         fallback_reason = "no winner payload"
     elif n_success < min_needed:
@@ -740,7 +738,7 @@ def select_from_dataset(
     bounds_low: np.ndarray,
     bounds_high: np.ndarray,
     n_points: int,
-    winner_payload: Optional[dict] = None,
+    winner_payload: dict | None = None,
     beta: float = 1.0,
     strategy: str = "auto",
     **kwargs,

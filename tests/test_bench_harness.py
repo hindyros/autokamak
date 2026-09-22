@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from autotokamak.bench.taskspec import TaskSpec
 
@@ -39,7 +40,7 @@ def test_taskspec_from_yaml_and_prompt_rendering(tmp_path):
 
 
 def test_taskspec_rejects_unknown_fields(tmp_path):
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         TaskSpec.from_yaml(_task_yaml(tmp_path, bogus_field=1))
 
 
@@ -173,7 +174,8 @@ def test_rel_l2_ignores_nan_ground_truth():
 # ------------------------------ bench CLI --------------------------------- #
 
 def test_bench_cli_dry_run(tmp_path):
-    import subprocess, sys
+    import subprocess
+    import sys
 
     task = _task_yaml(tmp_path)
     r = subprocess.run(

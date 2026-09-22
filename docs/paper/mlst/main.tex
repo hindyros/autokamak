@@ -1,0 +1,143 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Paying for Your Own Data:
+%% A Closed-Loop Benchmark for Scientific ML Agents
+%%
+%% Target: Machine Learning: Science and Technology (IOP).
+%% Compile with pdfLaTeX + BibTeX. See README.md.
+%%
+%% iopart.cls and its companions are redistributed here under the LPPL; they
+%% are IOP Publishing's own class files, unmodified.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[12pt]{iopart}
+
+\usepackage[T1]{fontenc}
+
+% iopart.cls defines equation* itself (iopart.cls:788), which amsmath then
+% tries to define again. Release the names before loading amsmath; amsmath's
+% version is the one we want.
+\makeatletter
+\expandafter\let\csname equation*\endcsname\relax
+\expandafter\let\csname endequation*\endcsname\relax
+\makeatother
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{enumitem}
+\usepackage{url}
+\usepackage[numbers,sort&compress]{natbib}
+% iopart's thebibliography does not define \newblock, which the natbib
+% bibliography styles emit between fields.
+\providecommand{\newblock}{}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc,fit,backgrounds}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,
+            urlcolor=blue!55!black]{hyperref}
+% Keep floats inside the section that discusses them. Without this, Figure 5
+% drifted two pages earlier and appeared above the heading of the section it
+% belongs to.
+\usepackage[section]{placeins}
+
+% MLST postdates this class file, so name it here.
+\newcommand{\MLST}{{\it Mach. Learn.: Sci. Technol.}}
+
+\setlist{nosep,leftmargin=1.4em}
+\input{macros}
+
+\begin{document}
+
+% \title[running head]{full title} -- iopart.cls:102
+\title[Benchmarking coding agents on \GS{} surrogates]
+      {Autokamak: Benchmarking coding agents on budgeted
+       surrogate modelling of the \GS{} equation}
+
+\author{Hindy Ros$^{1}$ and Deepjyoti Deka$^{2}$}
+\address{$^{1}$ Massachusetts Institute of Technology, Cambridge, MA, USA}
+\address{$^{2}$ MIT Energy Initiative, Massachusetts Institute of Technology,
+         Cambridge, MA, USA}
+\ead{hindyros@mit.edu}
+
+\begin{abstract}
+Benchmarks for coding and machine-learning agents almost always hand the agent
+its data. We present a benchmark in which the agent must instead \emph{generate
+its own data} from an expensive physics simulator under a fixed budget of
+solver calls, and then ship a predictor that is scored independently on a
+frozen set of cases it never sees. The task is surrogate modelling of the
+\GS{} plasma equilibrium: the agent must learn to drive a finite-element
+solver, design a sampling campaign, train a model mapping five plasma-shape
+parameters to a $96\times64$ magnetic-flux field, and assess itself honestly.
+Every condition emits the same machine-checkable deliverable, so any agent
+substrate is scored on identical terms.
+
+Across 59 runs on a single language model we find, first, that
+\emph{giving an agent a proven library makes it worse}: from-scratch agents beat
+library-assisted ones in all four substrates we tested (median \relltwo{}
+$0.137$ against $0.229$; stratified rank test $z=-4.17$, permutation
+$p\approx5\times10^{-5}$, blocked on substrate). A deterministic analysis of the
+code each agent wrote explains why: given a library, all four substrates settle
+on its default model and its named acquisition strategies; given nothing, all
+four converge on a different method family, and two of them beat the library's
+own score.
+
+Our central finding concerns verification. \textbf{Fifteen of 49 scored runs
+passed every contract gate while being physically invalid} --- a rate that
+depends strongly on the agent substrate and not at all on how much scaffolding
+it was given. The failures are not subtle once looked for: one run scored
+$0.071$, better than most of the corpus, while emitting a magnetic field
+throughout the vacuum region where the field is undefined. Self-reported error
+diverges from independently measured error by up to $0.93$, and the runs that
+misreport are largely \emph{not} the runs that are invalid, so neither
+measurement detects the other. Machine-checkable deliverable contracts, the
+standard instrument in this literature, detect none of it. We therefore
+separate three questions a benchmark must ask --- did the agent deliver, is the
+artifact physically valid, and did it tell the truth --- and measure all three,
+alongside a fourth: did it build what it said it built.
+\end{abstract}
+
+\noindent{\it Keywords}: agent benchmarks, large language models, surrogate
+modelling, active learning, plasma equilibrium, scientific machine learning
+
+\submitto{\MLST}
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_physics}
+\input{sections/03_related_work}
+\input{sections/04_benchmark}
+\input{sections/05_experimental_design}
+\input{sections/06_results}
+\input{sections/07_verification}
+\input{sections/08_agent_logic}
+\input{sections/09_limitations}
+\input{sections/10_conclusion}
+
+\ack
+The campaign ran on a single workstation with no external compute grant. We
+thank the Open FUSION Toolkit developers, whose solver and worked examples are
+the substrate this benchmark is built on, and the maintainers of the four agent
+frameworks evaluated here, none of whom were involved in or consulted about this
+evaluation.
+
+\section*{Data availability statement}
+All data and code needed to reproduce this work are openly available. The
+benchmark --- task specifications, the deliverable contract, the frozen
+evaluation grid and parameter set, every harness adapter and every analysis
+script --- is at \url{https://github.com/hindyros/autokamak}. The campaign
+artifacts analysed here (per-run records, agent transcripts, the aggregated
+result tables and the statistical output) are released with it. The
+ground-truth flux fields are regenerated deterministically from the committed
+parameter file and grid specification by a single command; they are not
+redistributed as a binary because every archived score is defined relative to a
+provenance-stamped rebuild.
+
+\appendix
+\input{sections/11_appendix}
+
+\section*{References}
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

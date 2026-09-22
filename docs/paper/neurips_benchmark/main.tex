@@ -1,0 +1,144 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Paying for Your Own Data:
+%% A Closed-Loop Benchmark for Scientific ML Agents
+%%
+%% Target venue: NeurIPS Datasets & Benchmarks Track.
+%% Compile with pdfLaTeX + BibTeX (Overleaf's default recipe works as-is).
+%% See README.md for the fill-in workflow and for how to retarget the venue.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% ---------------------------------------------------------------- venue ----
+% Style options:
+%   [eandd]            anonymous submission, line numbers on   <- for review
+%   [preprint,eandd]   named authors, no line numbers          <- for arXiv
+%   [final,eandd]      camera ready
+% NOTE: for NeurIPS 2026 the Datasets & Benchmarks track is the "Evaluations
+% and Datasets" track and its style option is [eandd]; [datasets] is not a
+% declared option of neurips_2026.sty and will raise an error.
+\usepackage[preprint,eandd]{neurips_2026}
+
+% -------------------------------------------------------------- packages ---
+\usepackage[utf8]{inputenc}
+% T1: real braces in typewriter font (OT1 cmtt has none, so a brace in
+% \code{...} silently fell back to the math-symbol font), plus correct
+% hyphenation and copy-pasteable text in the PDF.
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{microtype}
+\usepackage{nicefrac}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{url}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!60!black]{hyperref}
+
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc,fit,backgrounds}
+
+% Float placement only -- the text block, margins and font sizes are exactly as
+% the venue style sets them; these parameters just let LaTeX put more text on a
+% page that already carries a float, instead of leaving it half empty.
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{4}
+
+\captionsetup{font=small,labelfont=bf,skip=6pt}
+\setlist{nosep,leftmargin=1.4em}
+
+\input{macros}
+
+% ---------------------------------------------------------------- title ----
+\title{Paying for Your Own Data:\\A Closed-Loop Benchmark for Scientific ML Agents}
+
+\author{%
+  Hindy Ros \\
+  Massachusetts Institute of Technology \\
+  \texttt{hindyros@mit.edu} \\
+  \And
+  Deepjyoti Deka \\
+  MIT Energy Initiative \\
+  Massachusetts Institute of Technology \\
+  \texttt{deepj87@mit.edu} \\
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Benchmarks for coding and machine-learning agents overwhelmingly hand the agent
+its data. We present a benchmark in which the agent must \emph{generate its own
+data from an expensive physics simulator under a fixed solve budget}, then ship
+a predictor that is scored independently on a frozen grid it never sees. The
+task is surrogate modelling of the \GS{} plasma equilibrium: an agent must learn
+to drive a finite-element solver, design a sampling campaign (an initial
+space-filling design plus up to three adaptive rounds of exactly 100 solves),
+train a surrogate mapping five shaping parameters to a $96\times64$
+poloidal-flux field, and evaluate itself honestly. Every condition emits the
+same machine-checkable contract, so any agent substrate is scored identically.
+We evaluate four agent harnesses at two access levels---library-assisted
+(\Ltwo{}, may import a proven pipeline library) and from-scratch (\Lthree{},
+imports audited and forbidden)---with \emph{all cells on one model}, alongside
+a zero-LLM scripted baseline running the same pipeline code at a matched solve
+budget.
+Across 59 runs, from-scratch agents beat library-assisted ones in \emph{all
+four} substrates (median relative-$L_2$ $0.137$ vs $0.229$; stratified rank test
+$z = -4.17$, permutation $p \approx 5\times10^{-5}$, blocked on harness). Our
+central finding concerns \emph{verification}: \textbf{15 of 49 scored runs
+passed every contract gate while being physically invalid}, a rate that is
+substrate-specific ($11/20$ and $4/9$ for two harnesses, $0/20$ for the other
+two) and independent of access level. Self-reported error diverges from
+independently scored error by up to $0.93$, and large honesty gaps and invalid
+artifacts are largely \emph{different} runs, so neither detects the other.
+Machine-checkable deliverable contracts, the standard instrument in this
+literature, detect none of this. We therefore separate three questions a
+benchmark must ask---did the agent deliver, is the artifact physically valid,
+and did it tell the truth---and measure all three, alongside a deterministic
+LLM-free account of the method chain each agent actually built.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_benchmark}
+\input{sections/05_experimental_design}
+\input{sections/06_results}
+\input{sections/07_verification}
+\input{sections/08_agent_logic}
+\input{sections/09_limitations}
+\input{sections/10_conclusion}
+
+% -------------------------------------------------------- acknowledgements -
+\begin{ack}
+The campaign ran on a single workstation with no external compute grant. We
+thank the Open FUSION Toolkit developers, whose solver and worked examples are
+the substrate this benchmark is built on, and the maintainers of the four agent
+frameworks evaluated here, none of whom were involved in or consulted about this
+evaluation.
+\end{ack}
+
+% ------------------------------------------------------------ references ---
+\small
+\bibliographystyle{plainnat}
+\bibliography{references}
+\normalsize
+
+\appendix
+\input{sections/11_appendix}
+
+% Mandatory, and exempt from the page limit.
+\input{sections/12_checklist}
+
+\end{document}

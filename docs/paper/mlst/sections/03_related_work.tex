@@ -1,0 +1,68 @@
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Benchmarks that hand the agent its data.}
+The dominant shape gives an agent a repository or a dataset and scores the
+artifact it produces. SWE-bench~\citep{jimenez2024swebench} scores patches
+against held-out tests; AgentBench~\citep{liu2024agentbench} covers interactive
+environments more broadly. Closest to our setting are the ML-engineering
+suites: MLE-bench~\citep{chan2024mlebench} runs agents on Kaggle competitions
+and grades against the private leaderboard;
+MLAgentBench~\citep{huang2024mlagentbench} scores iterative experimentation on
+fixed task datasets; DSBench~\citep{jing2024dsbench} draws on data-science
+competitions.
+
+A second line targets science specifically.
+ScienceAgentBench~\citep{chen2025scienceagentbench} assembles data-driven
+discovery tasks from published papers;
+DiscoveryBench~\citep{majumder2025discoverybench} formalises hypothesis search
+over provided datasets; BixBench~\citep{mitchener2025bixbench} does the same for
+computational biology; CORE-Bench~\citep{siegel2024corebench} scores
+computational reproducibility; PaperBench~\citep{starace2025paperbench} scores
+replication of ML papers; RE-Bench~\citep{wijk2024rebench} pits agents against
+human experts on open-ended research engineering.
+
+These differ enormously in domain and open-endedness, and in one respect they
+agree: the training data exists in advance and is identical for every agent.
+That is what makes them clean comparisons --- and it is also what removes
+acquisition from the set of decisions being measured.
+
+\paragraph{The literature the task asks an agent to rediscover.}
+Deciding where to measure next is of course a mature field. Active
+learning~\citep{settles2009active} and Bayesian experimental
+design~\citep{chaloner1995bayesian} supply the strategies a competent agent
+might reach for --- uncertainty sampling, residual-targeted acquisition,
+variance reduction under a probabilistic model --- and space-filling designs
+such as Latin hypercubes~\citep{mckay1979lhs} supply the baseline those
+strategies have to beat. We contribute nothing to that literature. What we
+measure is whether an agent reaches for any of it unprompted, implements what it
+says it implemented, and spends a hard budget sensibly
+(Section~\ref{sec:agentlogic}).
+
+\paragraph{What we add, stated narrowly.}
+The gap is not that nobody acquires data. It is that \emph{agentic coding
+benchmarks do not make the acquisition policy part of what is scored}. To our
+knowledge, as of mid-2026, no existing agent benchmark requires the agent to
+(i) drive an expensive, failure-prone numerical solver for which it has not been
+handed a working harness, (ii) allocate a hard budget across adaptive rounds,
+and (iii) be scored on a frozen set it never sees, with a zero-LLM scripted
+policy running inside the identical contract as the reference point.
+
+Two recent works come closest. AstaBench~\citep{bragg2025astabench} assembles a
+large scientific-agent suite and is motivated by the same complaint about
+confounders --- model cost and tool access varying across compared systems ---
+that motivates our model control; it supplies the tools and the data rather than
+scoring acquisition. And a position paper argues that the execution harness,
+not the model it wraps, is often the binding constraint on agent
+performance~\citep{zhang2026harness}. Our campaign is a direct empirical test of
+that claim: one model, four harnesses, and the spread measured
+(Section~\ref{sec:harness-effect}).
+
+\paragraph{The agent frameworks we evaluate.}
+These are existing systems, not contributions of this paper:
+URSA~\citep{ursa2025}, a planner/executor pair built on LangGraph, part of the
+LangChain project~\citep{langchain2022}; DSPy~\citep{khattab2024dspy}, whose
+typed modules we also use for the \Lone{} decision layer and whose GEPA
+optimiser~\citep{agrawal2025gepa} we use for prompt optimisation; and two
+commercial command-line coding agents. We evaluated them as we found them; none
+of their authors was involved in or consulted about this evaluation.

@@ -10,10 +10,9 @@ mesh/shape combinations, so we keep the proven try/retry pattern from
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
-
 
 # OFT only permits one OFT_env per Python kernel. Cache the first one we make
 # and reuse it across calls so make_solver / solve_equilibrium can be invoked
@@ -24,14 +23,14 @@ _OFT_ENV_CACHE: Any = None
 # value) so callers can opt in without forcing every existing caller to unpack
 # a tuple. Currently records whether the isoflux constraint was honored or
 # whether we fell back to the unconstrained solve.
-_LAST_SOLVE_INFO: Dict[str, Any] = {
+_LAST_SOLVE_INFO: dict[str, Any] = {
     "isoflux_used": None,
     "fallback_reason": None,
     "boundary_enforced_by": "none",
 }
 
 
-def get_last_solve_info() -> Dict[str, Any]:
+def get_last_solve_info() -> dict[str, Any]:
     """Return status of the most recent solve_equilibrium call.
 
     Keys:
@@ -63,7 +62,7 @@ def get_oft_env() -> Any:
     return _OFT_ENV_CACHE
 
 
-def _targets_kwargs_from_cfg(cfg: Dict[str, Any]) -> Dict[str, float]:
+def _targets_kwargs_from_cfg(cfg: dict[str, Any]) -> dict[str, float]:
     """Extract the kwargs to forward to ``TokaMaker.set_targets``."""
     t = cfg.get("targets", {}) or {}
     return {
@@ -73,7 +72,7 @@ def _targets_kwargs_from_cfg(cfg: Dict[str, Any]) -> Dict[str, float]:
     }
 
 
-def _solver_setup_kwargs(cfg: Dict[str, Any]) -> Dict[str, Any]:
+def _solver_setup_kwargs(cfg: dict[str, Any]) -> dict[str, Any]:
     sol = cfg["solver"]
     return {
         "order": int(sol["order"]),
@@ -82,14 +81,14 @@ def _solver_setup_kwargs(cfg: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _apply_solver_settings(gs: Any, cfg: Dict[str, Any]) -> None:
+def _apply_solver_settings(gs: Any, cfg: dict[str, Any]) -> None:
     sol = cfg["solver"]
     gs.settings.free_boundary = bool(sol.get("free_boundary", False))
     if "maxits" in sol:
         gs.settings.maxits = int(sol["maxits"])
 
 
-def _seed_psi(gs: Any, cfg: Dict[str, Any]) -> None:
+def _seed_psi(gs: Any, cfg: dict[str, Any]) -> None:
     """Run ``init_psi`` per the config's ``init_psi.method``, with shape-aware fallback.
 
     For the ``isoflux`` method, OFT's internal isoflux fit during ``init_psi`` can
@@ -128,9 +127,9 @@ def make_solver(
     mesh_pts: np.ndarray,
     mesh_lc: np.ndarray,
     mesh_reg: np.ndarray | None,
-    cfg: Dict[str, Any],
+    cfg: dict[str, Any],
     env: Any | None = None,
-) -> Tuple[Any, Any]:
+) -> tuple[Any, Any]:
     """Build a ``TokaMaker`` on an OFT env, load the mesh, apply settings & targets.
 
     OFT has a hard constraint: only ONE ``OFT_env`` can ever be created per Python
@@ -161,7 +160,7 @@ def solve_equilibrium(
     mesh_lc: np.ndarray,
     mesh_reg: np.ndarray | None,
     lcfs: np.ndarray,
-    cfg: Dict[str, Any],
+    cfg: dict[str, Any],
 ) -> Any:
     """End-to-end: create solver → seed psi → (maybe constrain) → solve.
 

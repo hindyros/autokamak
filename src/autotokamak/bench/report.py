@@ -52,7 +52,7 @@ def render_table(rows: list[dict[str, Any]]) -> str:
     widths = [max(len(row[i]) for row in table) for i in range(len(cols))]
     lines = []
     for i, row in enumerate(table):
-        lines.append("  ".join(cell.ljust(w) for cell, w in zip(row, widths)))
+        lines.append("  ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=False)))
         if i == 0:
             lines.append("  ".join("-" * w for w in widths))
     return "\n".join(lines)

@@ -19,15 +19,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from autotokamak.data.schema import PARAM_ORDER, ParamBounds
 from tests.conftest import (
     fake_run_sweep_factory,
     make_picker,
+)
+from tests.conftest import (
     make_sweep_config as _make_sweep_config,
+)
+from tests.conftest import (
     smooth_psi as _smooth_psi,
+)
+from tests.conftest import (
     train_winner as _train_winner,
 )
-
-from autotokamak.data.schema import PARAM_ORDER, ParamBounds
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -108,9 +113,8 @@ def test_resolve_envelope_bounds_fallback_and_override():
 
 
 def test_generate_envelope_eval_h5_passthrough(tmp_path: Path):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.data.envelope import EnvelopeConfig, generate_envelope_eval
+    from tests.conftest import make_synthetic_h5
 
     existing = make_synthetic_h5(tmp_path / "env.h5", n=8)
     env = EnvelopeConfig(h5=str(existing))
@@ -260,12 +264,11 @@ def test_residual_falls_back_without_winner_or_data():
 
 
 def test_enrich_active_uses_residual_path_with_winner(tmp_path: Path, monkeypatch):
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.actions import MetaState, enrich_active
     from autotokamak.agent.orchestrator.schema import EnrichActivePayload
     from autotokamak.surrogate.dataset import load_dataset
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=24, seed=0)
     shard = make_synthetic_h5(tmp_path / "shard.h5", n=4, seed=9)
@@ -294,11 +297,10 @@ def test_enrich_active_uses_residual_path_with_winner(tmp_path: Path, monkeypatc
 
 def test_enrich_active_acquires_over_envelope_bounds(tmp_path: Path, monkeypatch):
     """envelope_bounds on state must widen where the batch can land."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.actions import MetaState, enrich_active
     from autotokamak.agent.orchestrator.schema import EnrichActivePayload
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=16, seed=0)
     calls: dict = {}
@@ -364,10 +366,9 @@ def test_coerce_enrich_payload_strategy():
 
 def test_select_from_dataset_strategy_dispatch(tmp_path: Path):
     """Each strategy routes to the expected acquisition method."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.data.acquire import select_from_dataset
     from autotokamak.surrogate.dataset import load_dataset
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=24, seed=0)
     bundle = load_dataset(pool)
@@ -398,12 +399,11 @@ def test_select_from_dataset_strategy_dispatch(tmp_path: Path):
 
 def test_enrich_active_respects_strategy(tmp_path: Path, monkeypatch):
     """enrich_active threads payload.strategy into acquisition."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.agent.orchestrator.actions import MetaState, enrich_active
     from autotokamak.agent.orchestrator.schema import EnrichActivePayload
     from autotokamak.surrogate.dataset import load_dataset
+    from tests.conftest import make_synthetic_h5
 
     pool = make_synthetic_h5(tmp_path / "pool.h5", n=24, seed=0)
     calls: dict = {}
@@ -527,10 +527,9 @@ def test_worst_cell_accuracy_stop_requires_envelope(tmp_path: Path):
 
 def test_worst_cell_accuracy_stops_loop_early(tmp_path: Path, monkeypatch):
     """Envelope mode + a strong winner clears the per-region bar and stops."""
-    from tests.conftest import make_synthetic_h5
-
     from autotokamak.agent.orchestrator import actions
     from autotokamak.surrogate.dataset import load_dataset
+    from tests.conftest import make_synthetic_h5
 
     # A large initial pool + envelope eval on the SAME synthetic generator, so
     # a well-fit winner has low per-cell error everywhere.
@@ -575,7 +574,6 @@ def test_worst_cell_accuracy_stops_loop_early(tmp_path: Path, monkeypatch):
     finally:
         sys.path.pop(0)
 
-    from autotokamak.agent.orchestrator.schema import ActionDecision
 
     picker = make_picker(
         [

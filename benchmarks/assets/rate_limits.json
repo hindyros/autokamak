@@ -1,0 +1,39 @@
+{
+  "_comment": [
+    "This organization's API rate limits, per model. Committed for the same",
+    "reason prices.json is: a campaign plan that depends on a limit must be",
+    "traceable to the limit it was planned against.",
+    "",
+    "TPM and RPM can be read live from response headers (campaign_guard",
+    "ratelimits probes them, and a probe WINS over this file). TPD cannot —",
+    "OpenAI does not expose a daily counter in headers — so the daily cap is",
+    "only knowable from the dashboard, and only from this file at runtime.",
+    "",
+    "TPD is the limit that matters at campaign scale: TPM bounds a burst,",
+    "TPD bounds the whole day. Hitting it stops every substrate at once until",
+    "the reset, mid-campaign.",
+    "",
+    "Bump as_of whenever the dashboard changes (tier moves, model added)."
+  ],
+  "as_of": "2026-09-19",
+  "source": "OpenAI org dashboard, rate limits page, transcribed by the account owner",
+  "models": {
+    "gpt-5.2":      {"tpm": 4000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-5.4":      {"tpm": 4000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-4o":       {"tpm": 2000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-4o-mini":  {"tpm": 10000000, "rpm": 10000, "tpd": 1000000000},
+    "gpt-6-astra":  {"tpm": 4000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-5.6-sol":  {"tpm": 4000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-5.6-terra":{"tpm": 4000000,  "rpm": 10000, "tpd": 200000000},
+    "gpt-5.6-luna": {"tpm": 10000000, "rpm": 10000, "tpd": 1000000000}
+  },
+  "_notes": [
+    "cursor-agent reaches the model through Cursor's backend, so its tokens",
+    "are limited and billed there and do NOT count against these numbers.",
+    "Whether CACHED input tokens count toward TPM/TPD is not stated in the",
+    "dashboard. The guards assume they DO (the conservative direction for",
+    "planning); pi and cursor sessions are ~95% cache, so the assumption",
+    "changes the campaign's daily footprint by roughly 2x. Confirm against",
+    "the usage page after the first paid day."
+  ]
+}

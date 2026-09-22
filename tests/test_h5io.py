@@ -10,7 +10,6 @@ import pytest
 
 from autotokamak.data.h5io import merge_h5, read_h5_arrays, split_h5, write_h5_arrays
 from autotokamak.surrogate.dataset import load_dataset
-
 from tests.conftest import make_synthetic_h5
 
 

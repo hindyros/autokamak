@@ -118,7 +118,7 @@ def _config_hash(cfg: SweepConfig) -> str:
 def run_sweep(
     cfg: SweepConfig,
     output_dir: Path | str,
-    X: "np.ndarray | None" = None,
+    X: np.ndarray | None = None,
 ) -> SweepResult:
     """Run the GS sweep described by ``cfg``; write HDF5 to ``output_dir``.
 

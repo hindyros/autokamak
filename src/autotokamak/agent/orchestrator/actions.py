@@ -14,11 +14,11 @@ problem text.
 from __future__ import annotations
 
 import json
-import shutil
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -43,10 +43,10 @@ class MetaState:
 
     workspace: Path
     current_dataset_h5: Path
-    base_sweep_config: Optional[SweepConfig] = None
-    best_winner_payload: Optional[dict] = None
-    best_winner_path: Optional[Path] = None
-    best_surrogate_report: Optional[dict] = None
+    base_sweep_config: SweepConfig | None = None
+    best_winner_payload: dict | None = None
+    best_winner_path: Path | None = None
+    best_surrogate_report: dict | None = None
     # Best frozen-shard RMSE so far. All winner comparisons happen on the
     # frozen test shard (test_shard_h5), never on nested-run val splits.
     best_rmse: float = float("inf")
@@ -59,33 +59,33 @@ class MetaState:
     # Frozen held-out test shard: either carved from the initial dataset at
     # meta-loop start (legacy) or the full-envelope eval set (design doc
     # §D2). Never merged into, never regenerated.
-    test_shard_h5: Optional[Path] = None
+    test_shard_h5: Path | None = None
     # Target-envelope acquisition bounds (lows, highs) in PARAM_ORDER, set by
     # the meta-loop when MetaConfig.eval_envelope is configured. When None,
     # enrich_active acquires over base_sweep_config's (seed-box) bounds.
-    envelope_bounds: Optional[tuple] = None
+    envelope_bounds: tuple | None = None
     # In-memory cache of the loaded frozen eval set. The file never changes
     # during a run, so _frozen_shard_rmse loads it once instead of re-parsing
     # the HDF5 on every winner comparison (up to 3x per iteration).
-    shard_bundle_cache: Optional[Any] = None
+    shard_bundle_cache: Any | None = None
     # "structured" = deterministic automl_loop with typed per-round LLM
     # decisions; "codegen" = legacy nested plan_execute_feedback agent.
     phase2_mode: str = "structured"
     # LLM string for the structured search picker (falls back to a default
     # inside _extend_search_structured when None).
-    phase2_model: Optional[str] = None
+    phase2_model: str | None = None
     phase2_max_rounds: int = 3
     # Test hook: when set, the structured path uses this instead of the DSPy
     # search picker (no LLM required).
-    phase2_decision_fn: Optional[Callable[[dict], Any]] = None
+    phase2_decision_fn: Callable[[dict], Any] | None = None
     # Resolved ABSOLUTE shard-RMSE target (meta_loop derives it from
     # MetaConfig.target_rmse / target_rmse_ratio x baseline). None = no bar;
     # surfaced to the picker and checked mechanically after each iteration.
-    target_rmse_abs: Optional[float] = None
+    target_rmse_abs: float | None = None
     # Hard budget the Phase-2 agent MUST write into surrogate_config.yaml.
     # Threaded into every extend_search overlay's FOCUS DIRECTIVE. None → the
     # Phase-2 agent picks the budget from its own prompt defaults.
-    phase2_time_budget_seconds: Optional[int] = None
+    phase2_time_budget_seconds: int | None = None
     # When True, the meta-loop's pick_action_via_llm uses the in-code
     # baseline DSPy module instead of loading the optimized JSON. Used for
     # A/B comparison post-GEPA-optimization.
@@ -97,7 +97,7 @@ class MetaState:
 
 # ----------------------------- regen_dataset ----------------------------- #
 
-def _deep_set(d: Dict[str, Any], dotted_key: str, value: Any) -> None:
+def _deep_set(d: dict[str, Any], dotted_key: str, value: Any) -> None:
     parts = dotted_key.split(".")
     cur = d
     for p in parts[:-1]:
@@ -107,7 +107,7 @@ def _deep_set(d: Dict[str, Any], dotted_key: str, value: Any) -> None:
     cur[parts[-1]] = value
 
 
-def _merge_datasets(old_path: Path, new_path: Path, merged_path: Path) -> Dict[str, int]:
+def _merge_datasets(old_path: Path, new_path: Path, merged_path: Path) -> dict[str, int]:
     """Concatenate old + new HDF5 datasets into ``merged_path``.
 
     Delegates to ``autotokamak.data.h5io.merge_h5`` (lazy import keeps the
@@ -118,7 +118,7 @@ def _merge_datasets(old_path: Path, new_path: Path, merged_path: Path) -> Dict[s
     return merge_h5(old_path, new_path, merged_path)
 
 
-def _refit_winner_on_pool(state: MetaState) -> Optional[Dict[str, Any]]:
+def _refit_winner_on_pool(state: MetaState) -> dict[str, Any] | None:
     """Refit the current winner's architecture on the (grown) train pool.
 
     Without this, a ``regen_dataset`` action can NEVER show immediate credit:
@@ -172,7 +172,7 @@ def _refit_winner_on_pool(state: MetaState) -> Optional[Dict[str, Any]]:
         return {"refit_error": f"{type(exc).__name__}: {exc}"}
 
 
-def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str, Any]:
+def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> dict[str, Any]:
     """Apply overrides and run a fresh sweep, then ENRICH the current dataset.
 
     The new sweep uses a per-iteration seed offset so its samples are not
@@ -193,8 +193,8 @@ def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str,
     import copy
 
     raw = state.base_sweep_config.model_dump(mode="json")
-    overrides_applied: Dict[str, Any] = {}
-    overrides_dropped: Dict[str, Any] = {}
+    overrides_applied: dict[str, Any] = {}
+    overrides_dropped: dict[str, Any] = {}
     for k, v in payload.overrides.items():
         candidate = copy.deepcopy(raw)
         _deep_set(candidate, k, v)
@@ -260,7 +260,7 @@ def regen_dataset(payload: RegenDatasetOverrides, state: MetaState) -> Dict[str,
 
 # ----------------------------- enrich_active ----------------------------- #
 
-def enrich_active(payload: EnrichActivePayload, state: MetaState) -> Dict[str, Any]:
+def enrich_active(payload: EnrichActivePayload, state: MetaState) -> dict[str, Any]:
     """ACTIVE data enrichment: solve the points where the surrogate is weak.
 
     Where ``regen_dataset`` appends another blind LHS batch, this action
@@ -348,7 +348,7 @@ def enrich_active(payload: EnrichActivePayload, state: MetaState) -> Dict[str, A
 
 # ----------------------------- extend_search ----------------------------- #
 
-def _frozen_shard_rmse(winner_payload: dict, state: MetaState) -> Optional[float]:
+def _frozen_shard_rmse(winner_payload: dict, state: MetaState) -> float | None:
     """RMSE of ``winner_payload`` on the frozen test shard; None on any failure.
 
     This is the ONLY number winners are compared on — same fixed samples for
@@ -376,7 +376,7 @@ def _build_overlay_prompt(
     focus: ExtendSearchFocus,
     dataset_path: Path,
     workspace: Path,
-    time_budget_seconds: Optional[int] = None,
+    time_budget_seconds: int | None = None,
 ) -> Path:
     """Write a copy of the Phase-2 prompt with a 'FOCUS' block injected.
 
@@ -427,7 +427,7 @@ def _build_overlay_prompt(
     return overlay_path
 
 
-def extend_search(payload: ExtendSearchFocus, state: MetaState) -> Dict[str, Any]:
+def extend_search(payload: ExtendSearchFocus, state: MetaState) -> dict[str, Any]:
     """Run a Phase-2 surrogate search; update ``state.best_*`` on improvement.
 
     Dispatches by ``state.phase2_mode``:
@@ -447,11 +447,11 @@ def extend_search(payload: ExtendSearchFocus, state: MetaState) -> Dict[str, Any
 
 
 def _maybe_update_best(
-    winner_payload: Optional[dict],
+    winner_payload: dict | None,
     winner_path: Path,
-    nested_report: Optional[dict],
+    nested_report: dict | None,
     state: MetaState,
-) -> tuple[Optional[float], bool]:
+) -> tuple[float | None, bool]:
     """Compare a candidate winner on the frozen shard; update state if better.
 
     Returns ``(shard_rmse, became_best)`` — the explicit flag exists so
@@ -469,7 +469,7 @@ def _maybe_update_best(
     return shard_rmse, False
 
 
-def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> Dict[str, Any]:
+def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> dict[str, Any]:
     """Legacy path: ``plan_execute_feedback`` as a sub-LLM run on the Phase-2 prompt."""
     iter_idx = len(state.actions_taken)
     sub_ws = state.workspace / "surrogate_runs" / f"iter{iter_idx}"
@@ -500,8 +500,8 @@ def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> Dict
     # Load nested artifacts; winner comparison happens on the frozen shard.
     winner_path = sub_ws / "outputs" / "winner.pkl"
     report_path = sub_ws / "outputs" / "report.json"
-    nested_rmse: Optional[float] = None
-    shard_rmse: Optional[float] = None
+    nested_rmse: float | None = None
+    shard_rmse: float | None = None
     if winner_path.is_file() and report_path.is_file():
         import joblib
 
@@ -525,7 +525,7 @@ def _extend_search_codegen(payload: ExtendSearchFocus, state: MetaState) -> Dict
     }
 
 
-def _extend_search_structured(payload: ExtendSearchFocus, state: MetaState) -> Dict[str, Any]:
+def _extend_search_structured(payload: ExtendSearchFocus, state: MetaState) -> dict[str, Any]:
     """Structured path: deterministic AutoML loop + typed per-round LLM decisions."""
     iter_idx = len(state.actions_taken)
     sub_ws = state.workspace / "surrogate_runs" / f"iter{iter_idx}"
@@ -553,7 +553,7 @@ def _extend_search_structured(payload: ExtendSearchFocus, state: MetaState) -> D
     elapsed = time.time() - started
 
     winner_path = sub_ws / "outputs" / "winner.pkl"
-    shard_rmse: Optional[float] = None
+    shard_rmse: float | None = None
     if out.get("winner") is not None and winner_path.is_file():
         import joblib
 
@@ -582,7 +582,7 @@ def _extend_search_structured(payload: ExtendSearchFocus, state: MetaState) -> D
 
 # ----------------------------- terminate ----------------------------- #
 
-def terminate(payload: TerminateReason, state: MetaState) -> Dict[str, Any]:
+def terminate(payload: TerminateReason, state: MetaState) -> dict[str, Any]:
     return {
         "kind": "terminate",
         "reason": payload.reason,
@@ -600,7 +600,7 @@ DISPATCH = {
 }
 
 
-def dispatch(decision: ActionDecision, state: MetaState) -> Dict[str, Any]:
+def dispatch(decision: ActionDecision, state: MetaState) -> dict[str, Any]:
     payload = decision.selected_payload()
     if payload is None:
         raise ValueError(

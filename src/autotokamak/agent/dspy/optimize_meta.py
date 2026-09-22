@@ -21,10 +21,8 @@ val split (mean score across val examples).
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import dspy
 
@@ -66,7 +64,7 @@ def _eval_mean_score(
     return total / n if n else 0.0
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--experiments-dir",

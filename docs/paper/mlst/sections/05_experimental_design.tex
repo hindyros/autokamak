@@ -1,0 +1,109 @@
+\section{Experimental design}
+\label{sec:design}
+
+\subsection{Conditions}
+
+The campaign is the cross of two access levels and four agent frameworks:
+$\{\Ltwo{}, \Lthree{}\} \times \{\hn{ursa}, \hn{dspy}, \hn{pi}, \hn{cursor}\}$,
+eight cells, replicated --- plus a budget-matched \Lzero{} reference arm. We
+attempted 59 runs and scored 49.
+
+Replicate counts are deliberately unequal: two substrates at $n=10$ and two at
+$n=5$. The campaign was budgeted in dollars rather than in runs, and one
+substrate costs an order of magnitude more per run than another
+(Section~\ref{sec:cost}). Failures reduce some cells further. Every denominator
+in this paper counts \emph{attempts}, not survivors, which is the conservative
+choice and is stated wherever a rate appears.
+
+\subsection{Holding the model fixed}
+
+Every cell runs the same language model, \code{gpt-5.2}. This is the point of
+the design. In an earlier campaign of our own, one harness ran a different
+model family from the others, and the resulting comparison was uninterpretable:
+any difference could have been the framework or the model, and nothing in the
+data could separate them.
+
+Pinning it is fiddlier than it sounds, because the four adapters disagree about
+how a model is named --- two take \code{openai:gpt-5.2}, one takes
+\code{openai/gpt-5.2}, and the command-line agent takes a bare \code{gpt-5.2}.
+We pin the name per adapter inside the frozen task specification rather than
+passing a single command-line override, so that the model string is recorded
+three independent times per run and the control is auditable after the fact. A
+fifth adapter we maintain is excluded from the campaign entirely for the same
+reason: it cannot run the pinned model, and including it would have reintroduced
+exactly the confound the design exists to remove.
+
+Framework versions were \hn{ursa} 0.15.1, \hn{dspy} 3.2.1, \hn{pi} 0.73.1 and
+\hn{cursor} 2026.09.18, against Open FUSION Toolkit 26.6. Those are recorded
+from the machine, not from the run records --- which stamp the task hash, the
+prompt version, the model and the replicate index, but not the substrate's own
+version. That is a gap in our harness and we would close it in a future
+campaign.
+
+\subsection{Equal compute budgets, and why they are hard to enforce}
+\label{sec:budgets}
+
+Giving every substrate the same budget turned out to be the hardest engineering
+requirement in the benchmark, and the failure modes generalise well past this
+paper.
+
+Two adapters accepted a \code{timeout\_seconds} argument and silently ignored
+it. Fixing that exposed two deeper problems. First, \textbf{a timeout raised as
+an ordinary exception is swallowed}: agent frameworks wrap their step loops in
+broad \code{except Exception} handlers and treat anything caught as a
+recoverable step failure, so a timeout delivered by signal vanishes into the
+agent's own retry logic --- and because \code{signal.alarm} is one-shot, a
+single swallowed alarm disables the cap permanently. One harness absorbed its
+90-minute cap this way and ran for over ten hours. Second, \textbf{killing the
+agent process does not stop the work}: Python's \code{subprocess.run}, called
+with a timeout, kills the direct child and then waits on its pipes again --- but
+the solver's grandchildren inherit those pipes and hold them open, so the
+timeout path itself blocks. One cell sat in that deadlock for 9 hours 19
+minutes.
+
+The fixes are to raise a \code{BaseException} subclass, for the same reason
+\code{KeyboardInterrupt} is one, and to run each agent in its own process group
+and signal the group. The general lesson is worth stating plainly: \textbf{an
+agent harness is third-party code and cannot be trusted to honour a deadline
+from inside}. We enforce the budget at three independent levels --- in-adapter,
+by process-group kill, and by a driver-side watchdog that nothing running inside
+the cell can intercept.
+
+We also equalised the outer feedback-round setting to 1. Only two of the four
+adapters implement outer review-and-fix rounds at all, so any higher value hands
+those two a second pass the others never get --- an arbitrary two-tier design
+that was the mechanical cause of their longer runtimes and larger spend in
+earlier campaigns. One is the only value all four honour identically.
+
+\subsection{What is held fixed}
+
+The prompt text (version 3, hashed per run), the evaluation grid, the
+60-parameter test set, the gate set and the scoring rule. The \Ltwo{} and
+\Lthree{} problem statements are byte-identical except for ten passages, every
+one of which concerns access level; they are reproduced with the differences
+marked in Appendix~\ref{app:tasktext}. Results are pooled only within one prompt
+version and one scoring epoch, and the aggregation tool refuses to mix them.
+
+\subsection{Analysis, and one change we made after seeing the data}
+\label{sec:analysis}
+
+The unit of analysis is the cell. Pass rates carry Wilson score
+intervals~\citep{wilson1927probable}, which --- unlike the normal
+approximation --- do not collapse to zero width at $0/n$ or $n/n$.
+Relative-$L_2$ is summarised by medians with percentile bootstrap
+intervals~\citep{efron1979bootstrap} rather than means, because a single
+catastrophic replicate makes a mean uninterpretable and we have several.
+
+The \Ltwo{}/\Lthree{} contrast is paired within harness, since the harness is a
+blocking factor rather than a treatment. We pre-specified an exact two-sided
+sign test over the four harness pairs.
+
+That test cannot return a $p$ below $0.125$ at four pairs, whatever the data
+show, and the campaign produced a unanimous $4/4$ direction. We therefore
+\textbf{changed the primary test after seeing the data}, to a stratified rank
+statistic in the van Elteren family~\citep{vanelteren1960combination}, which
+uses all 49 scored runs while still permuting labels only within harness. This
+is a post-hoc change and we treat it as one: the analysis tool prints all three
+tests on every run, all three are reported in Section~\ref{sec:l2l3}, and the
+conclusion carries the caveat. Per-cell orderings are exploratory throughout;
+the pooled level contrast is the claim that carries weight.

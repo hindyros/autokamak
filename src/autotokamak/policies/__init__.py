@@ -15,12 +15,12 @@ Two decision points exist:
 """
 from __future__ import annotations
 
-from typing import Optional
-
 POLICY_KINDS = ("scripted", "llm")
+# Meta-policy-only kinds: the active-learning control arm (see forced.py).
+FORCED_META_KINDS = ("forced_enrich", "forced_regen")
 
 
-def get_search_policy(kind: str, *, model: Optional[str] = None, seed: int = 0):
+def get_search_policy(kind: str, *, model: str | None = None, seed: int = 0):
     """Return a ``DecisionFn`` for the Phase-2 AutoML loop."""
     if kind == "scripted":
         from autotokamak.policies.scripted import make_scripted_search_policy
@@ -33,7 +33,8 @@ def get_search_policy(kind: str, *, model: Optional[str] = None, seed: int = 0):
     raise ValueError(f"Unknown policy kind {kind!r}. Choose from {POLICY_KINDS}")
 
 
-def get_meta_policy(kind: str, *, model: Optional[str] = None, seed: int = 0):
+def get_meta_policy(kind: str, *, model: str | None = None, seed: int = 0,
+                    forced_n_new: int = 200):
     """Return an ``ActionPicker`` for the meta-loop."""
     if kind == "scripted":
         from autotokamak.policies.scripted import make_scripted_meta_policy
@@ -43,4 +44,15 @@ def get_meta_policy(kind: str, *, model: Optional[str] = None, seed: int = 0):
         from autotokamak.policies.llm import make_llm_meta_policy
 
         return make_llm_meta_policy()
-    raise ValueError(f"Unknown policy kind {kind!r}. Choose from {POLICY_KINDS}")
+    if kind in FORCED_META_KINDS:
+        from autotokamak.policies.forced import make_forced_meta_policy
+
+        return make_forced_meta_policy(
+            "enrich_active" if kind == "forced_enrich" else "regen_dataset",
+            n_new=forced_n_new,
+            seed=seed,
+        )
+    raise ValueError(
+        f"Unknown policy kind {kind!r}. Choose from "
+        f"{POLICY_KINDS + FORCED_META_KINDS}"
+    )

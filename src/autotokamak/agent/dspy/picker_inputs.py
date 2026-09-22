@@ -18,7 +18,7 @@ byte-identical to what the deployed picker saw.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 PICKER_INPUT_KEYS = ("diagnostics_json", "history_summary", "state_summary")
 
@@ -29,14 +29,14 @@ HISTORY_MAX_CHARS = 2000
 def build_picker_inputs(
     *,
     diagnostics: dict,
-    prior_decisions: List[Dict[str, Any]],
-    rmse_history: List[Optional[float]],
+    prior_decisions: list[dict[str, Any]],
+    rmse_history: list[float | None],
     iteration: int,
     iterations_remaining: int,
     current_dataset: str,
-    best_rmse_so_far: Optional[float],
-    target_rmse: Optional[float] = None,
-) -> Dict[str, str]:
+    best_rmse_so_far: float | None,
+    target_rmse: float | None = None,
+) -> dict[str, str]:
     """Render the three LM input strings from plain data.
 
     ``target_rmse`` is the resolved absolute early-stop bar (None = no bar).
@@ -70,8 +70,8 @@ def picker_inputs_from_runtime(
     meta_config: Any,
     state: Any,
     diagnostics: dict,
-    history: List[Any],
-) -> Dict[str, str]:
+    history: list[Any],
+) -> dict[str, str]:
     """Build picker inputs from live meta-loop objects.
 
     ``meta_config`` / ``state`` / ``history`` are duck-typed (MetaConfig,

@@ -17,11 +17,10 @@ Mirrors the pattern in ``autotokamak.core.schema``:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ModelKind = Literal["gp", "kernel_ridge", "poly_ridge", "mlp"]
 MODEL_KINDS: tuple[ModelKind, ...] = ("gp", "kernel_ridge", "poly_ridge", "mlp")
@@ -38,17 +37,17 @@ class ParamRange(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     type: Literal["float", "int", "categorical", "loguniform"]
-    low: Optional[float] = None
-    high: Optional[float] = None
-    choices: Optional[List[Any]] = None
-    step: Optional[float] = None
+    low: float | None = None
+    high: float | None = None
+    choices: list[Any] | None = None
+    step: float | None = None
 
 
 class ModelSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: ModelKind
     n_trials: int = Field(ge=1, le=200)
-    search_space: Dict[str, ParamRange]
+    search_space: dict[str, ParamRange]
 
 
 class SearchSpec(BaseModel):
@@ -60,7 +59,7 @@ class SearchSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     round: int = Field(ge=1)
-    models: List[ModelSpec] = Field(min_length=1)
+    models: list[ModelSpec] = Field(min_length=1)
     n_pca_components: int = Field(ge=1, le=64)
     val_metric: Literal["psi_rmse"] = "psi_rmse"
     # "continue" is the label the structured automl_loop uses for rounds >= 2
@@ -85,12 +84,12 @@ class RoundDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     action: Literal["run_round", "terminate"]
-    models: List[ModelSpec] = Field(default_factory=list)
-    n_pca_components: Optional[int] = Field(default=None, ge=1, le=64)
+    models: list[ModelSpec] = Field(default_factory=list)
+    n_pca_components: int | None = Field(default=None, ge=1, le=64)
     rationale: str = ""
 
     @model_validator(mode="after")
-    def _models_required_for_run(self) -> "RoundDecision":
+    def _models_required_for_run(self) -> RoundDecision:
         if self.action == "run_round" and not self.models:
             raise ValueError("action='run_round' requires at least one ModelSpec")
         return self
@@ -102,7 +101,7 @@ class TrialRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
     number: int
     value: float
-    params: Dict[str, Any]
+    params: dict[str, Any]
 
 
 class ModelStudyResult(BaseModel):
@@ -110,9 +109,9 @@ class ModelStudyResult(BaseModel):
     model_name: ModelKind
     n_trials: int
     best_value: float
-    best_params: Dict[str, Any]
-    edge_hit: Dict[str, bool] = Field(default_factory=dict)
-    trials: List[TrialRecord] = Field(default_factory=list)
+    best_params: dict[str, Any]
+    edge_hit: dict[str, bool] = Field(default_factory=dict)
+    trials: list[TrialRecord] = Field(default_factory=list)
 
 
 class StudyResult(BaseModel):
@@ -120,7 +119,7 @@ class StudyResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     spec: SearchSpec
-    per_model: List[ModelStudyResult]
+    per_model: list[ModelStudyResult]
     storage_path: str
 
     @property
@@ -148,8 +147,8 @@ class SurrogateConfig(BaseModel):
     output_dir: str = "outputs"
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "SurrogateConfig":
-        with open(path, "r", encoding="utf-8") as f:
+    def from_yaml(cls, path: str | Path) -> SurrogateConfig:
+        with open(path, encoding="utf-8") as f:
             raw = yaml.safe_load(f)
         if not isinstance(raw, dict):
             raise ValueError("Top-level YAML must be a mapping/object.")
@@ -167,7 +166,7 @@ class SurrogateReport(BaseModel):
 
     model_config = ConfigDict(extra="allow")
     winner_model_name: ModelKind
-    winner_hyperparams: Dict[str, Any]
+    winner_hyperparams: dict[str, Any]
     val_psi_rmse: float = Field(ge=0.0)
     test_psi_rmse: float = Field(ge=0.0)
     baseline_mean_psi_rmse: float = Field(ge=0.0)
@@ -176,7 +175,7 @@ class SurrogateReport(BaseModel):
     n_total_trials: int = Field(ge=1)
     n_outer_rounds: int = Field(ge=1)
     terminated_by: Literal["agent", "rounds_cap"] = "agent"
-    models_tried: List[ModelKind]
+    models_tried: list[ModelKind]
 
 
 __all__ = [

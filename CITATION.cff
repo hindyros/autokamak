@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use this benchmark or its results, please cite the paper."
+title: "autotokamak: a closed-loop benchmark for scientific machine-learning agents"
+abstract: >-
+  A benchmark in which a coding agent must generate its own training data from
+  an expensive Grad-Shafranov plasma-equilibrium solver under a fixed budget,
+  then ship a predictor scored independently on a frozen set it never sees.
+  Includes a verification layer separating delivery, physical validity and
+  self-report honesty, and a deterministic analysis of the method chain each
+  agent built.
+type: software
+license: MIT
+repository-code: "https://github.com/hindyros/autokamak"
+keywords:
+  - agent benchmarks
+  - large language models
+  - surrogate modelling
+  - active learning
+  - plasma equilibrium
+  - scientific machine learning
+authors:
+  - family-names: Ros
+    given-names: Hindy
+    affiliation: Massachusetts Institute of Technology
+    email: hindyros@mit.edu
+  - family-names: Deka
+    given-names: Deepjyoti
+    affiliation: MIT Energy Initiative, Massachusetts Institute of Technology
+preferred-citation:
+  type: article
+  title: >-
+    Paying for Your Own Data: A Closed-Loop Benchmark for Scientific
+    Machine-Learning Agents
+  authors:
+    - family-names: Ros
+      given-names: Hindy
+    - family-names: Deka
+      given-names: Deepjyoti
+  year: 2026
