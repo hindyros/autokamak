@@ -1,0 +1,127 @@
+
+=== Per-cell summary (prompt_version=3) ===
+condition  n   n_completed  n_timeout  n_errored  pass_k  pass_rate  pass_ci_lo  pass_ci_hi  n_scored  rel_l2_median  rel_l2_ci_lo  rel_l2_ci_hi  rel_l2_full_median  ext_inflation_median  phys_valid_k  phys_valid_n  passed_but_invalid_k  n_solves_median  acc_per_100_solves  cost_usd_mean
+---------  --  -----------  ---------  ---------  ------  ---------  ----------  ----------  --------  -------------  ------------  ------------  ------------------  --------------------  ------------  ------------  --------------------  ---------------  ------------------  -------------
+L2-cursor  5   5            0          0          5       1.0        0.566       1.0         5         0.2186         0.1749        0.2335        0.2203              1.0                   5             5             0                     525              10.81               1.024        
+L2-dspy    15  10           0          0          10      0.667      0.417       0.848       10        0.4146         0.2633        0.5027        0.6732              1.21                  5             10            5                     689              3.21                2.137        
+L2-pi      5   5            0          0          5       1.0        0.566       1.0         5         0.1878         0.1672        0.2108        0.1895              1.01                  5             5             0                     510              12.14               0.788        
+L2-ursa    8   5            0          3          4       0.5        0.215       0.785       4         0.6101         0.2176        2.4941        0.6634              1.04                  2             4             2                     496              -4.59               6.821        
+L3-cursor  5   5            0          0          5       1.0        0.566       1.0         5         0.0692         0.0622        0.2121        0.0695              1.0                   5             5             0                     310              27.25               1.847        
+L3-dspy    10  10           0          0          10      1.0        0.722       1.0         10        0.1985         0.1191        0.2294        0.3304              1.59                  4             10            6                     239              16.59               2.346        
+L3-pi      5   5            0          0          5       1.0        0.566       1.0         5         0.1052         0.0621        0.1299        0.1053              1.0                   5             5             0                     285              29.56               1.232        
+L3-ursa    6   5            1          0          5       0.833      0.436       0.97        5         0.2342         0.019         1.0842        0.235               1.0                   3             5             2                     500              10.51               12.654       
+
+=== Methodology matrix (what each cell chose, and how firmly) ===
+condition  n_with_chain  chain_agreement  n_distinct_chains  model_primary                                  acq_classes                                                                                                  rounds_median  criterion_switched_k  criterion_switched_n  evidence_grounded_median  stop_decisions                                 adaptive_in_name_only_k  prose_only_claim_k
+---------  ------------  ---------------  -----------------  ---------------------------------------------  -----------------------------------------------------------------------------------------------------------  -------------  --------------------  --------------------  ------------------------  ---------------------------------------------  -----------------------  ------------------
+L2-cursor  5             0.2              5                  kernel_ridge:5                                 uncertainty_gp:2,residual_ucb:1,space_filling:1,feasibility:1,uncertainty:1                                  3              0                     2                     1.0                       stop_without_threshold:3,stop_unexplained:2    0                        0                 
+L2-dspy    10            0.1              10                 kernel_ridge:7,ridge_linear:2,random_forest:1  residual_ucb:5,uncertainty:5,space_filling:4,feasibility:3,uncertainty_ensemble:2,random:1,uncertainty_gp:1  3              1                     9                     1.0                       stop_without_threshold:7,stop_unexplained:3    0                        3                 
+L2-pi      5             0.2              5                  kernel_ridge:5                                 feasibility:4,residual_ucb:4,uncertainty:4,uncertainty_gp:4,random:1,space_filling:1                         3              1                     5                     1.0                       stop_without_threshold:4,stop_unexplained:1    0                        2                 
+L2-ursa    8             0.38             6                  ridge_linear:2,kernel_ridge:2,mlp_sklearn:1    uncertainty:2,uncertainty_gp:1,residual_ucb:1,space_filling:1                                                3              0                     3                     0.33                      stop_unexplained:2,stop_without_threshold:1    0                        2                 
+L3-cursor  5             0.2              5                  mlp_torch:5                                    uncertainty_ensemble:5,uncertainty:2,space_filling:1,random:1                                                1              0                     5                     1.0                       stop_threshold_met:5                           0                        0                 
+L3-dspy    10            0.1              10                 mlp_torch:10                                   uncertainty_ensemble:8,uncertainty:6,random:2,space_filling:1                                                1              0                     8                     1.0                       stop_without_threshold:7,stop_threshold_met:2  0                        0                 
+L3-pi      5             0.2              5                  mlp_torch:5                                    uncertainty_ensemble:3,space_filling:1                                                                       1              0                     3                     1.0                       stop_threshold_met:3                           0                        0                 
+L3-ursa    6             0.17             6                  mlp_torch:5                                    uncertainty:2,uncertainty_ensemble:2,space_filling:1,random:1                                                3              0                     2                     0.17                      stop_unexplained:2                             0                        0                 
+
+=== Code comparison (what the generated code actually computes) ===
+condition  code_acq                                                                                                     selection_rule                     model_informed_k  model_informed_n  stated_vs_code                                 claimed_not_implemented                                                      code_logic_agreement  n_distinct_code_logics
+---------  -----------------------------------------------------------------------------------------------------------  ---------------------------------  ----------------  ----------------  ---------------------------------------------  ---------------------------------------------------------------------------  --------------------  ----------------------
+L2-cursor  -                                                                                                            -                                  0                 0                 unverifiable_from_code:5                       uncertainty:5,residual_ucb:4,space_filling:4,feasibility:4,random:3          1.0                   1                     
+L2-dspy    space_filling:9,feasibility:8,residual_ucb:8,uncertainty:7,uncertainty_gp:7,random:5,uncertainty_ensemble:3  top_k:6,random_draw:2,threshold:1  10                10                partial:8,agree:2                              random:2                                                                     0.1                   10                    
+L2-pi      -                                                                                                            -                                  0                 0                 unverifiable_from_code:5                       uncertainty:5,feasibility:4,residual_ucb:4,random:1,space_filling:1          1.0                   1                     
+L2-ursa    feasibility:5,space_filling:4,random:3,uncertainty:2,residual_ucb:1                                          top_k:1                            2                 5                 partial:3,unverifiable_from_code:3,mismatch:2  uncertainty:3,random:2,residual_ucb:2                                        0.38                  5                     
+L3-cursor  uncertainty:5,uncertainty_ensemble:5,space_filling:1,feasibility:1                                           top_k:5                            5                 5                 agree:4,partial:1                              random:1                                                                     0.6                   3                     
+L3-dspy    uncertainty:8,uncertainty_ensemble:8,feasibility:4,residual_ucb:4,space_filling:3,random:2                   top_k:8,threshold:2                8                 10                partial:9,mismatch:1                           random:4,uncertainty:2,feasibility:2,space_filling:1                         0.3                   8                     
+L3-pi      uncertainty:5,uncertainty_ensemble:5,space_filling:2,random:1                                                top_k:2,random_draw:1              5                 5                 agree:3,partial:2                              feasibility:2,random:2,space_filling:1                                       0.6                   3                     
+L3-ursa    uncertainty:4,feasibility:3,uncertainty_ensemble:3,space_filling:2,random:1                                  top_k:4                            4                 5                 partial:4,unverifiable_from_code:1,mismatch:1  random:5,feasibility:3,gradient_sensitivity:3,space_filling:2,uncertainty:1  0.17                  6                     
+
+  Modal implemented logic per cell (from the code, not the prose):
+    L2-cursor        acq:?|sel:?|model_informed:?
+    L2-dspy          acq:feasibility,residual_ucb,space_filling,uncertainty,uncertainty_gp|sel:top_k|model_informed:yes
+    L2-pi            acq:?|sel:?|model_informed:?
+    L2-ursa          acq:?|sel:?|model_informed:?
+    L3-cursor        acq:uncertainty,uncertainty_ensemble|sel:top_k|model_informed:yes
+    L3-dspy          acq:feasibility,residual_ucb,uncertainty,uncertainty_ensemble|sel:top_k|model_informed:yes
+    L3-pi            acq:uncertainty,uncertainty_ensemble|sel:?|model_informed:yes
+    L3-ursa          acq:?|sel:?|model_informed:?
+
+  code_acq = acquisition criterion classified from the AST of the functions that choose the next batch.
+  model_informed = that chooser actually calls the surrogate; a model-derived criterion that never does is not one.
+  stated_vs_code = agree / partial / mismatch / unverifiable_from_code / undocumented, comparing the run's stated criterion to its code.
+  claimed_not_implemented = criterion families named in the log or report that the chooser never computes.
+
+=== How each agent solved the prompt — cross comparison (rows the cells disagreed on first) ===
+dimension           L2-cursor                           L2-dspy                             L2-pi                                     L2-ursa                             L3-cursor                           L3-dspy                             L3-pi                               L3-ursa                                 agreement
+------------------  ----------------------------------  ----------------------------------  ----------------------------------------  ----------------------------------  ----------------------------------  ----------------------------------  ----------------------------------  --------------------------------------  ---------
+code_shape          single_script (3/5)                 14_modules (5/10)                   single_script                             15_modules (1/5)                    8_modules (2/5)                     11_modules (5/10)                   9_modules (2/5)                     7_modules (1/6)                         mixed    
+entry_point         2_runnable_scripts (4/5)            10_runnable_scripts (4/10)          2_runnable_scripts                        9_runnable_scripts (1/5)            3_runnable_scripts (3/5)            7_runnable_scripts (4/10)           2_runnable_scripts (3/5)            10_runnable_scripts (2/6)               mixed    
+grid_mapping        -                                   -                                   -                                         -                                   solver_field_eval                   solver_field_eval (9/10)            solver_field_eval                   solver_field_eval                       mixed    
+mask_rule           lcfs_polygon                        training_valid_mask (4/5)           lcfs_polygon                              training_valid_mask (3/5)           lcfs_polygon (3/5)                  lcfs_polygon (4/10)                 lcfs_polygon (4/5)                  lcfs_polygon+training_valid_mask (2/6)  mixed    
+mesh_route          oft_gs_domain                       -                                   -                                         oft_gs_domain                       oft_gs_domain                       oft_gs_domain                       oft_gs_domain                       oft_gs_domain                           mixed    
+oft_env_strategy    -                                   -                                   -                                         -                                   singleton_reused                    singleton_reused                    singleton_reused                    singleton_reused                        mixed    
+self_test           subprocess_reruns_predict (3/5)     subprocess_reruns_predict (6/10)    imported_not_subprocessed (4/5)           subprocess_reruns_predict (4/5)     imported_not_subprocessed (3/4)     imported_not_subprocessed           subprocess_reruns_predict (3/5)     subprocess_reruns_predict (4/5)         mixed    
+solve_isolation     in_process_serial (3/5)             in_process_serial (9/10)            in_process_serial (3/4)                   in_process_serial                   in_process_serial (3/5)             in_process_serial (6/10)            subprocess_per_batch (3/5)          in_process_serial (4/6)                 mixed    
+storage             npz_per_solve+pickle (3/5)          npz_per_solve+hdf5 (9/10)           npz_per_solve+pickle (4/5)                npz_per_solve+hdf5+index (3/5)      npz_per_solve+pickle (3/5)          npz_per_solve+pickle+index          npz_per_solve+pickle (3/5)          npz_per_solve+pickle+index (3/6)        mixed    
+leakage_guard       test_absent_from_fitting_functions  test_absent_from_fitting_functions  test_absent_from_fitting_functions (2/3)  test_absent_from_fitting_functions  test_absent_from_fitting_functions  test_absent_from_fitting_functions  test_absent_from_fitting_functions  test_absent_from_fitting_functions      all_same 
+pilot_gate          enforced                            enforced                            enforced                                  enforced (4/5)                      enforced                            enforced                            enforced                            enforced                                all_same 
+storage_validation  reload_and_check_finite             reload_and_check_finite             reload_and_check_finite (3/4)             reload_and_check_finite             reload_and_check_finite (4/5)       reload_and_check_finite             reload_and_check_finite (4/5)       reload_and_check_finite                 all_same 
+
+  Each row is one demand of the task, answered from the code that plays that role (not a workspace-wide grep):
+    code_shape           One script or a module tree?
+    entry_point          How would a stranger run it?
+    grid_mapping         How does the triangular mesh reach the frozen 64x96 grid?
+    mask_rule            How is 'no plasma here' decided when writing NaN?
+    mesh_route           Meshed through the OFT API, or hand-built (which the task forbids)?
+    oft_env_strategy     OFT allows one OFT_env per process, ever. Who owns it?
+    self_test            Was the documented predict.py CLI re-run in a fresh process?
+    solve_isolation      What insulates one solve from the next?
+    storage              What is a solved sample on disk, and is it indexed?
+    leakage_guard        Does the test set stay out of the functions that fit the model?
+    pilot_gate           Was the mandated pilot run, and was its 50% threshold enforced?
+    storage_validation   Is a solve counted only after its file re-loads finite?
+  Per-run evidence (file:line for every answer) is in each result.json under methodology.solution_shape.
+
+  Modal chain per cell (design -> representation+model[ensembling] -> acquisition x rounds -> stop):
+    L2-cursor        lhs -> pca+kernel_ridge -> acq:residual_ucb,space_filling,uncertainty_gp x3 -> stop:val_threshold_70pct
+    L2-dspy          sobol -> pca+kernel_ridge -> acq:random,residual_ucb,space_filling,uncertainty x3 -> stop:round_cap,val_threshold_70pct
+    L2-pi            lhs -> pca+kernel_ridge -> acq:feasibility,residual_ucb,uncertainty x3 -> stop:round_cap
+    L2-ursa          ? -> ? -> acq:? -> stop:?
+    L3-cursor        lhs -> pca+mlp_torch[mc_dropout] -> acq:space_filling,uncertainty,uncertainty_ensemble x1 -> stop:val_threshold_70pct
+    L3-dspy          lhs -> mlp_torch[mc_dropout] -> acq:uncertainty,uncertainty_ensemble x3 -> stop:plateau,round_cap,val_threshold_70pct
+    L3-pi            lhs -> pca+mlp_torch[deep_ensemble] -> acq:feasibility,random,space_filling,uncertainty_ensemble -> stop:round_cap,val_threshold_70pct
+    L3-ursa          uniform_random -> ? -> acq:feasibility,gradient_sensitivity,random -> stop:?
+
+  chain_agreement = share of a cell's replicates on the modal chain (method reproducibility, not score reproducibility).
+  evidence_grounded = fraction of adaptive rounds whose validation error vs baseline was actually recorded when the round's choice was made.
+  criterion_switched = the acquisition criterion CHANGED between rounds (reactive logic) rather than one fixed rule executed n times.
+  prose_only_claim = a method named in README/report.json that the code never evidences.
+
+=== Pooled by access level ===
+level  n   pass_k  n_timeout  pass_rate  pass_ci      rel_l2_median  rel_l2_ci      phys_valid  passed_but_invalid  acc_per_100_solves
+-----  --  ------  ---------  ---------  -----------  -------------  -------------  ----------  ------------------  ------------------
+L2     33  24      0          0.727      [0.56,0.85]  0.2287         [0.211,0.396]  17/24       7/24                10.31             
+L3     26  25      1          0.962      [0.81,0.99]  0.1368         [0.077,0.207]  17/25       8/25                19.55             
+
+=== Primary contrast: L2 (library) vs L3 (from scratch), paired within harness ===
+Positive delta = L3 WORSE (higher error) / lower pass rate than L2.
+
+
+=== Paired by harness ===
+harness  L2_rel_l2  L3_rel_l2  delta_rel_l2  L2_pass  L3_pass  delta_pass_rate
+-------  ---------  ---------  ------------  -------  -------  ---------------
+cursor   0.2186     0.0692     -0.1494       5/5      5/5      0.0            
+dspy     0.4146     0.1985     -0.2161       10/15    10/10    -0.333         
+pi       0.1878     0.1052     -0.0826       5/5      5/5      0.0            
+ursa     0.6101     0.2342     -0.3759       4/8      5/6      -0.333         
+  relative-L2 median: L3 worse in 0/4 harnesses (exact two-sided sign test p=0.1250, n_pairs=4)
+  contract pass rate: L3 worse in 0/2 harnesses (exact two-sided sign test p=0.5000, n_pairs=4)
+  NOTE: the sign test is DESCRIPTIVE here — with 4 harnesses its smallest attainable two-sided p is 0.125, whatever the data show.
+  relative-L2 (PRIMARY, stratified rank / van Elteren): z = -4.168, permutation p = 0.0000 (n=49 runs, labels shuffled within harness).
+  Negative = L3 (from scratch) ranks BELOW L2 on error, i.e. from-scratch is better. Harness is a blocking factor, so substrate differences cannot inflate this.
+  SENSITIVITY (median-difference permutation, the originally pre-specified test): delta = -0.2060, p = 0.1791 — same direction, much less power; it uses only one number per cell.
+
+Total measured spend across these tags: $199.76
+Wrote experiments/matrix-v4-20260919/aggregate.csv
+Wrote experiments/matrix-v4-20260919/methodology.csv (one row per run: the chain of methods)
+Wrote experiments/matrix-v4-20260919/methodology_rounds.csv (one row per adaptive round: the decision logic)
+Wrote experiments/matrix-v4-20260919/solution_shape.csv (one row per solution dimension, one column per cell)

@@ -237,6 +237,21 @@ flowchart TD
 
 ---
 
+## Results
+
+`results/matrix-v4-20260919/` holds the tables behind every number in the
+paper — the per-cell aggregate, per-run costs, the method chain each agent
+actually built, and the blind judge scores — with a data dictionary defining
+all 50 aggregate columns and a glossary for every code used. 152 KB, so the
+paper can be checked without re-running a $200 campaign.
+
+The full 17 MB bundle (browsable HTML report, 59 per-run records with
+transcripts) is rebuilt from a campaign directory with:
+
+```bash
+python tools/make_results_bundle.py --tag matrix-v4-20260919
+```
+
 ## Reproducing the paper
 
 The campaign behind the results above is `matrix-v4-20260919`. To rebuild it
