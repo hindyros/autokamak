@@ -135,7 +135,7 @@ output and was deliberately not edited.
 {"" if not missing else chr(10) + "Missing from this bundle (absent from the campaign directory): " + ", ".join(missing) + "." + chr(10)}
 ## Reproducing or extending
 
-The repository is at `https://github.com/hindyros/autotokamak`. Its README
+The repository is at `https://github.com/hindyros/autokamak`. Its README
 covers installing, running the benchmark on a new agent, and rebuilding every
 table and figure in the paper from these artifacts.
 """)

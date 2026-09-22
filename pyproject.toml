@@ -62,9 +62,9 @@ harnesses = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/hindyros/autotokamak"
-Repository = "https://github.com/hindyros/autotokamak"
-Issues = "https://github.com/hindyros/autotokamak/issues"
+Homepage = "https://github.com/hindyros/autokamak"
+Repository = "https://github.com/hindyros/autokamak"
+Issues = "https://github.com/hindyros/autokamak/issues"
 
 # NOTE: this package is intended to be used from a source checkout, not from a
 # wheel. `agent/runners/config.py` resolves REPO_ROOT by walking up for a

@@ -10,7 +10,7 @@ abstract: >-
   agent built.
 type: software
 license: MIT
-repository-code: "https://github.com/hindyros/autotokamak"
+repository-code: "https://github.com/hindyros/autokamak"
 keywords:
   - agent benchmarks
   - large language models
